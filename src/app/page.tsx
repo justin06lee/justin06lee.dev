@@ -9,7 +9,7 @@ import AsciiSpinningDonut from "@/components/AsciiDonut";
 export default function Home() {
 	// null = unknown (prevents hydration flash), boolean once decided
 	const [hasPlayed, setHasPlayed] = useState<null | boolean>(null);
-	// Bump this to force remount so Motion re-runs initial/animate with new delays
+	// Force-remount animated blocks when we toggle intro on/off
 	const [introCycle, setIntroCycle] = useState(0);
 
 	// Decide whether to skip the intro on first load
@@ -20,7 +20,7 @@ export default function Home() {
 		setHasPlayed(did);
 	}, []);
 
-	// Listen for replay requests from Navbar (no reload)
+	// Listen for "Intro" requests from the navbar (no reload)
 	useEffect(() => {
 		const onReplay = () => {
 			setHasPlayed(false);
@@ -34,7 +34,7 @@ export default function Home() {
 
 	return (
 		<div className="w-screen flex justify-center text-center bg-black text-white">
-			{/* key={introCycle} ensures the animations restart when we replay */}
+			{/* key={introCycle} ensures the animations restart when we replay/skip */}
 			<div className="min-h-screen flex flex-col" key={introCycle}>
 				{/* Navbar */}
 				<motion.div
@@ -45,16 +45,17 @@ export default function Home() {
 					<Navbar />
 				</motion.div>
 
-				{hasPlayed &&
-					<HomePage />
-				}
+				{/* Main content shows only after intro (or immediately if already played) */}
+				{hasPlayed && <HomePage />}
 
 				{/* Intro overlay (only when not played) */}
 				{!hasPlayed && (
 					<Intro
 						onDone={() => {
+							// Mark as played and remount so navbar/content appear immediately
 							localStorage.setItem("did_anim", "true");
 							setHasPlayed(true);
+							setIntroCycle((c) => c + 1);
 						}}
 					/>
 				)}
@@ -90,9 +91,11 @@ function Intro({ onDone }: { onDone: () => void }) {
 				</motion.div>
 			</motion.div>
 
-			{/* Lines of intro text */}
-			{/* NOTE: relative + fixed height; each line is absolute so they stack */}
-			<div className="relative text-white text-lg leading-tight" style={{ height: "1.75em", width: "250px" }}>
+			{/* Lines of intro text — stacked so they don’t shift */}
+			<div
+				className="relative text-white text-lg leading-tight"
+				style={{ height: "1.75em", width: "250px" }}
+			>
 				{steps.map((s, i) => (
 					<motion.div
 						key={i}
@@ -100,6 +103,7 @@ function Intro({ onDone }: { onDone: () => void }) {
 						initial={{ opacity: 1, y: 0 }}
 						animate={{ opacity: 0, y: 10 }}
 						transition={{ duration: 1, delay: s.out }}
+						// When the last line finishes, complete the intro
 						onAnimationComplete={i === steps.length - 1 ? onDone : undefined}
 					>
 						<motion.div
@@ -112,6 +116,15 @@ function Intro({ onDone }: { onDone: () => void }) {
 					</motion.div>
 				))}
 			</div>
+
+			{/* Skip button (bottom center) */}
+			<button
+				onClick={onDone}
+				className="fixed bottom-4 left-1/2 -translate-x-1/2 text-xs px-3 py-1 rounded-full border border-white/30 text-white/80 hover:text-white hover:border-white/60 transition"
+				aria-label="Skip intro"
+			>
+				Skip
+			</button>
 		</div>
 	);
 }
