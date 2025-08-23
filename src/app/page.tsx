@@ -5,6 +5,7 @@ import * as motion from "motion/react-client";
 import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
+import { Button } from "@/components/ui/button"
 
 export default function Home() {
 	// null = unknown (prevents hydration flash), boolean once decided
@@ -118,13 +119,14 @@ function Intro({ onDone }: { onDone: () => void }) {
 			</div>
 
 			{/* Skip button (bottom center) */}
-			<button
+			<Button
+				variant="link"
 				onClick={onDone}
-				className="fixed bottom-4 left-1/2 -translate-x-1/2 text-xs px-3 py-1 rounded-full border border-white/30 text-white/80 hover:text-white hover:border-white/60 transition"
+				className="fixed bottom-12"
 				aria-label="Skip intro"
 			>
 				Skip
-			</button>
+			</Button>
 		</div>
 	);
 }
