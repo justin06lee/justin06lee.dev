@@ -60,7 +60,7 @@ export function ItemGallery({
 
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase();
-		let res = items.filter((p) => {
+		const res = items.filter((p) => {
 			const text = `${p.title} ${p.description} ${p.tech.join(" ")}`.toLowerCase();
 			const matchesQ = q === "" || text.includes(q);
 			const matchesTags = selected.length === 0 || selected.every((t) => p.tech.includes(t));
@@ -126,7 +126,7 @@ export function ItemGallery({
 								<span>Sort: {sortLabel(sort)}</span>
 							</Button>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="w-48 border-white/10 border-1">
+						<DropdownMenuContent align="end" className="w-48 border border-white/10">
 							<DropdownMenuLabel>Sort by</DropdownMenuLabel>
 							<DropdownMenuSeparator />
 							<DropdownMenuRadioGroup
@@ -191,20 +191,22 @@ export function ItemGallery({
 			</div>
 
 			{/* Grid */}
-			{filtered.length === 0 ? (
-				<div className="text-center text-white/60 py-24">No items match your filters.</div>
-			) : (
-				<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-					{filtered.map((p, i) => (
-						<ProjectCard key={p.id} p={p} i={i} k={animStart} />
-					))}
-				</div>
-			)}
+			{
+				filtered.length === 0 ? (
+					<div className="text-center text-white/60 py-24">No items match your filters.</div>
+				) : (
+					<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+						{filtered.map((p, i) => (
+							<ProjectCard key={p.id} p={p} i={i} k={animStart} />
+						))}
+					</div>
+				)
+			}
 
 			<div className="mt-10 text-center text-xs text-white/50">
 				Want more details? Ping me and I’ll write deeper docs.
 			</div>
-		</main>
+		</main >
 	);
 }
 

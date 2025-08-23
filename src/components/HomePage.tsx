@@ -1,5 +1,4 @@
 "use client";
-"use client";
 
 import { Button } from "@/components/ui/button";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
@@ -129,8 +128,8 @@ export default function HomePage() {
 						<AsciiSpinningDonut
 							width={120}
 							height={60}
-							R={0.4}
-							r={0.25}
+							R={0.7}
+							r={0.5}
 							K={240}
 							D={7}
 							speed={0.5625}

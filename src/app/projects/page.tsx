@@ -10,7 +10,7 @@ const PROJECTS: GalleryItem[] = [
 		year: 2025,
 		tech: ["next.js", "full-stack", "agentic ai", "llm"],
 		repo: "https://github.com/sehnsucht-nach-einer-ehefrau/1000000x.dev",
-		// notes: "work-in-progress core; CLI stable",
+		notes: "vibe-learning is now real",
 	},
 	{
 		id: "ragpack.top",
@@ -28,9 +28,29 @@ const PROJECTS: GalleryItem[] = [
 		description:
 			"custom makefile-style build orchestration tool for my favorite languages. reads a blacksmith file; fast incremental rebuilds.",
 		year: 2025,
-		tech: ["C", "Go", "Build"],
+		tech: ["c", "rust"],
 		repo: "https://github.com/thaumatech/forge",
-		notes: "in progress!"
+		notes: "currently in c, but migrating to rust."
+	},
+	{
+		id: "takina",
+		title: "takina (beta)",
+		description:
+			"a dynamic llm-powered schedule planner over a time span of your preference.",
+		year: 2025,
+		tech: ["agentic ai", "llm", "app dev", "tauri", "rust"],
+		repo: "https://github.com/sehnsucht-nach-einer-ehefrau/takina-beta",
+		notes: "coming out as a web project?"
+	},
+	{
+		id: "truman",
+		title: "truman (beta)",
+		description:
+			"block-based time tracker and llm-powered statistics generator.",
+		year: 2025,
+		tech: ["agentic ai", "llm", "app dev", "tauri", "rust"],
+		repo: "https://github.com/sehnsucht-nach-einer-ehefrau/truman-beta",
+		notes: "coming out as a web project?"
 	},
 ];
 

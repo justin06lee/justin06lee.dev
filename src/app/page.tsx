@@ -72,13 +72,13 @@ function Intro({ onDone }: { onDone: () => void }) {
 	];
 
 	return (
-		<div className="fixed inset-0 z-50 flex flex-col items-center justify-center -mt-30">
+		<div className="fixed inset-0 z-50 flex flex-col items-center justify-center -mt-8">
 			{/* Donut */}
 			<motion.div
 				initial={{ opacity: 1, y: 0 }}
 				animate={{ opacity: 0, y: 10 }}
 				transition={{ duration: 0.8, delay: 15 }}
-				className="mb-6"
+				className="mb-12"
 			>
 				<motion.div
 					initial={{ opacity: 0, y: -10 }}
