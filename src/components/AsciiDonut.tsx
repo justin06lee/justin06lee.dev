@@ -20,11 +20,11 @@ export type AsciiSpinningDonutProps = {
 
 export default function AsciiSpinningDonut({
 	width = 60,
-	height = 30,
+	height = 40,
 	R = 0.4,
 	r = 0.25,
 	K = 120,
-	D = 6,
+	D = 4,
 	du = 0.035,
 	dv = 0.01,
 	luminanceChars = " ,-~:;=!*#$@",
