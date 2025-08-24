@@ -11,6 +11,7 @@
 
 html {
   overflow: -moz-scrollbars-none; /* Older Firefox */
+  overflow-x: hidden;
   scrollbar-width: none; /* Newer Firefox */
   -webkit-user-select: none;
   -moz-user-select: none;
