@@ -149,7 +149,7 @@ export default function HomePage() {
 								delay: 2
 							}}
 						>
-							<ScrambleText text="im sehnsucht." />
+							<ScrambleText text="im justin." />
 						</motion.div>
 					</div>
 
