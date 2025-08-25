@@ -1,4 +1,4 @@
-# sehnsucht.dev
+# justin06lee.dev
 
 this is my personal dev website. feel free to look around - ill be posting my projects and hobbies here. 
 
