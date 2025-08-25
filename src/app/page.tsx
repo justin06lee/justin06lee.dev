@@ -69,7 +69,7 @@ function Intro({ onDone }: { onDone: () => void }) {
 	// in = fade-in start time; out = fade-out start time (in seconds)
 	const steps = [
 		{ text: "hi.", in: 2, out: 5 },
-		{ text: "im sehnsucht.", in: 6, out: 10 },
+		{ text: "im justin.", in: 6, out: 10 },
 		{ text: "welcome to my website.", in: 11, out: 15 },
 	];
 
@@ -119,14 +119,20 @@ function Intro({ onDone }: { onDone: () => void }) {
 			</div>
 
 			{/* Skip button (bottom center) */}
-			<Button
-				variant="link"
-				onClick={onDone}
-				className="fixed bottom-12"
-				aria-label="Skip intro"
+			<motion.div
+				initial={{ opacity: 1, y: 0 }}
+				animate={{ opacity: 0, y: 10 }}
+				transition={{ duration: 0.8, delay: 15 }}
 			>
-				Skip
-			</Button>
+				<Button
+					variant="link"
+					onClick={onDone}
+					className="fixed bottom-12"
+					aria-label="Skip intro"
+				>
+					Skip
+				</Button>
+			</motion.div>
 		</div>
 	);
 }

@@ -15,7 +15,7 @@ export default function Navbar() {
 				<div className="mt-2 ml-6">
 					{/* Brand: just go home (NO intro replay) */}
 					<Button variant="link" asChild>
-						<Link href="/">sehnsucht.dev</Link>
+						<Link href="/">justin06lee.dev</Link>
 					</Button>
 
 					{/* Intro trigger */}
