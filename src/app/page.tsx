@@ -119,20 +119,14 @@ function Intro({ onDone }: { onDone: () => void }) {
 			</div>
 
 			{/* Skip button (bottom center) */}
-			<motion.div
-				initial={{ opacity: 1, y: 0 }}
-				animate={{ opacity: 0, y: 10 }}
-				transition={{ duration: 0.8, delay: 15 }}
+			<Button
+				variant="link"
+				onClick={onDone}
+				className="fixed bottom-12"
+				aria-label="Skip intro"
 			>
-				<Button
-					variant="link"
-					onClick={onDone}
-					className="fixed bottom-12"
-					aria-label="Skip intro"
-				>
-					Skip
-				</Button>
-			</motion.div>
+				Skip
+			</Button>
 		</div>
 	);
 }
