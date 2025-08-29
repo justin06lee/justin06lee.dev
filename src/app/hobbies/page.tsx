@@ -40,10 +40,10 @@ const HOBBIES: GalleryItem[] = [
 		notes: "in planning phase!"
 	},
 	{
-		id: "palantir drone",
-		title: "palantir drone (non-lethal)",
+		id: "drone",
+		title: "ai-powered drone",
 		description:
-			"an open-source, non-lethal drone-flying reinforcement learning model for danger detection and alerts, and maybe small-scale surveillance.",
+			"an open source, drone-flying reinforcement learning model to make a drone follow me around and come back when I wave at it.",
 		year: 2025,
 		tech: ["hardware", "physics", "embedded software"],
 		notes: "i wanna look cyberpunk."
