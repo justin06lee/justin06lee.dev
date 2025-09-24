@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider"
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://sehnsucht.dev";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://justin06lee.dev";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -18,15 +18,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
 	metadataBase: new URL(SITE_URL),
 	title: {
-		default: "sehnsucht.dev",
-		template: "%s | sehnsucht.dev",
+		default: "justin06lee.dev",
+		template: "%s | justin06lee.dev",
 	},
-	description: "projects, hobbies, and experiments by sehnsucht",
-	applicationName: "sehnsucht.dev",
+	description: "projects, hobbies, and experiments by justin06lee",
+	applicationName: "justin06lee.dev",
 	generator: "Next.js",
 	referrer: "origin-when-cross-origin",
 	keywords: [
-		"sehnsucht",
+		"justin06lee",
 		"portfolio",
 		"projects",
 		"hobbies",
@@ -35,26 +35,26 @@ export const metadata: Metadata = {
 		"react",
 		"web dev",
 	],
-	authors: [{ name: "sehnsucht" }],
-	creator: "sehnsucht",
-	publisher: "sehnsucht",
+	authors: [{ name: "justin06lee" }],
+	creator: "justin06lee",
+	publisher: "justin06lee",
 	category: "personal",
 	alternates: { canonical: "/" },
 	openGraph: {
 		type: "website",
 		locale: "en_US",
 		url: SITE_URL,
-		siteName: "sehnsucht.dev",
-		title: "sehnsucht.dev",
-		description: "projects, hobbies, and experiments by sehnsucht",
+		siteName: "justin06lee.dev",
+		title: "justin06lee.dev",
+		description: "projects, hobbies, and experiments by justin06lee",
 		images: [
-			{ url: "/opengraph-image", width: 1200, height: 630, alt: "sehnsucht.dev" },
+			{ url: "/opengraph-image", width: 1200, height: 630, alt: "justin06lee.dev" },
 		],
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "sehnsucht.dev",
-		description: "projects, hobbies, and experiments by sehnsucht",
+		title: "justin06lee",
+		description: "projects, hobbies, and experiments by justin06lee",
 		images: ["/twitter-image"],
 	},
 	robots: {
@@ -68,10 +68,16 @@ export const metadata: Metadata = {
 		apple: ["/icon.svg"],
 	},
 	manifest: "/manifest.webmanifest",
-	themeColor: [
-		{ media: "(prefers-color-scheme: light)", color: "#ffffff" },
-		{ media: "(prefers-color-scheme: dark)", color: "#000000" },
-	],
+};
+
+// app/layout.tsx (Server Component)
+export const viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)',  color: '#000000' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({

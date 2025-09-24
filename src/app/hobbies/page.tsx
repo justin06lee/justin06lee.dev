@@ -1,7 +1,6 @@
 import Navbar from "@/components/Navbar";
 import { ItemGallery, GalleryItem } from "@/components/ItemGallery";
 
-// Sample hobbies — replace with yours
 const HOBBIES: GalleryItem[] = [
 	{
 		id: "art",
@@ -10,7 +9,6 @@ const HOBBIES: GalleryItem[] = [
 		year: 2025,
 		tech: ["art", "creative"],
 		notes: "not that good at it though.",
-		live: "/art"
 	},
 	{
 		id: "chess",
@@ -21,34 +19,6 @@ const HOBBIES: GalleryItem[] = [
 		notes: "i love it when a plan comes together!",
 	},
 	{
-		id: "fnaf-go",
-		title: "fnaf go!",
-		description:
-			"a fnaf fan game written entirely in go, using the pixel 2.0 library.",
-		year: 2025,
-		tech: ["game dev", "creative", "games"],
-		repo: "https://github.com/sehnsucht-nach-einer-ehefrau/FNAF_GO",
-		notes: "in development!"
-	},
-	{
-		id: "r6 drone",
-		title: "r6 drone",
-		description:
-			"a fully functional drone from rainbow six siege (video game), with cameras, people detection, jumping and remote control.",
-		year: 2025,
-		tech: ["hardware", "physics", "embedded software"],
-		notes: "in planning phase!"
-	},
-	{
-		id: "drone",
-		title: "ai-powered drone",
-		description:
-			"an open source, drone-flying reinforcement learning model to make a drone follow me around and come back when I wave at it.",
-		year: 2025,
-		tech: ["hardware", "physics", "embedded software"],
-		notes: "i wanna look cyberpunk."
-	},
-	{
 		id: "workout",
 		title: "working out",
 		description:
@@ -56,6 +26,70 @@ const HOBBIES: GalleryItem[] = [
 		year: 2025,
 		tech: ["health", "swole"],
 		notes: "healthy body, healthy mind!"
+	},
+	{
+		id: "electrical",
+		title: "electrical engineering(?)",
+		description: "I play around with breadboards every once in a while. still a beginner though.",
+		year: 2025,
+		tech: ["problem-solving", "ee"],
+		notes: "ill build a computer from scratch one day."
+	},
+	{
+		id: "reading",
+		title: "reading",
+		description: "a smart man learns from his mistakes. a wise man learns from the mistakes of others.",
+		year: 2025,
+		tech: ["philosophy"],
+		notes: 'currently reading "the myth of sisyphus" and "this is how they tell me the world ends".',
+	},
+	{
+		id: "abacus",
+		title: "mental arithmetic (abacus)",
+		description: "it always feels inconvenient and amateurish to pull out the calculator app for basic arithmetic.",
+		year: 2025,
+		tech: ["philosophy"],
+		notes: "i should've done this when i was younger...",
+	},
+	{
+		id: "taekwondo",
+		title: "tae-kwondo",
+		description: "i did taekwondo when i as like eight years old... trying to join the ucsc taekwondo club to relearn",
+		year: 2025,
+		tech: ["martial arts", "health"],
+		notes: "im a complete noob though.",
+	},
+	{
+		id: "muaythai",
+		title: "muay-thai",
+		description: "i have never done this in my life... trying to join the ucsc muay thai club to learn",
+		year: 2025,
+		tech: ["martial arts", "health"],
+		notes: "i just hope i dont get whooped",
+	},
+	{
+		id: "judo",
+		title: "judo",
+		description: "i have never done this in my life... trying to join the ucsc judo club to learn",
+		year: 2025,
+		tech: ["martial arts", "health"],
+		notes: "i just hope i dont get whooped",
+	},
+	{
+		id: "fencing",
+		title: "fencing",
+		description: "ive done this for a maximum of like 3 days before... trying to join the ucsc fencing club to relearn",
+		year: 2025,
+		tech: ["martial arts", "health"],
+		notes: "im a complete noob though.",
+	},
+	{
+		id: "wrestling",
+		title: "wrestling",
+		description: "i have never done this in my life... trying to join the ucsc grappling club to learn",
+		year: 2025,
+		tech: ["martial arts", "health"],
+		notes: "i just hope i dont get whooped",
 	},
 ];
 

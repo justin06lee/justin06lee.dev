@@ -17,12 +17,13 @@ import { ListFilter } from "lucide-react";
 export type GalleryItem = {
 	id: string;
 	title: string;
+	link?: string;
 	description: string;
-	year: number;          // used for sorting
-	tech: string[];        // tags/filters
-	repo?: string;         // optional "View Code" link
-	live?: string;         // optional "Live" link
-	notes?: string;        // optional italic note
+	year: number;
+	tech: string[];
+	repo?: string;
+	live?: string;
+	notes?: string;
 };
 
 type SortKey = "newest" | "oldest" | "az" | "za";
@@ -87,7 +88,6 @@ export function ItemGallery({
 
 	return (
 		<main className="max-w-6xl mx-auto px-4 pt-16 pb-24">
-			{/* Header */}
 			<div className="mb-8 flex items-end justify-between gap-4">
 				<div>
 					<motion.div
@@ -107,7 +107,6 @@ export function ItemGallery({
 					</motion.div>
 				</div>
 
-				{/* Sort dropdown (shadcn) */}
 				<motion.div
 					initial={{ opacity: 0, y: -10 }}
 					animate={{ opacity: 1, y: 0 }}
@@ -143,7 +142,6 @@ export function ItemGallery({
 				</motion.div>
 			</div>
 
-			{/* Search */}
 			<div className="mb-5">
 				<motion.div
 					initial={{ opacity: 0, y: -10 }}
@@ -160,7 +158,6 @@ export function ItemGallery({
 				</motion.div>
 			</div>
 
-			{/* Tags */}
 			<div className="flex flex-wrap gap-2 mb-8">
 				{allTags.map((t, i) => (
 					<motion.div
@@ -190,7 +187,6 @@ export function ItemGallery({
 				)}
 			</div>
 
-			{/* Grid */}
 			{
 				filtered.length === 0 ? (
 					<div className="text-center text-white/60 py-24">No items match your filters.</div>
@@ -219,7 +215,8 @@ function ProjectCard({ p, i, k }: { p: GalleryItem; i: number; k: number }) {
 			className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-5 flex flex-col gap-3"
 		>
 			<div className="flex items-start justify-between gap-3">
-				<h3 className="text-lg font-semibold leading-tight">{p.title}</h3>
+                {p.link && <a href={p.link} target="_blank"><h3 className="text-lg font-semibold leading-tight hover:underline underline-offset-5">{p.title}</h3></a>}
+                {!p.link && <h3 className="text-lg font-semibold leading-tight">{p.title}</h3>}
 				<span className="text-xs text-white/60 select-none">{p.year}</span>
 			</div>
 

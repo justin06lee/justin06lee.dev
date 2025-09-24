@@ -2,18 +2,17 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export type AsciiSpinningDonutProps = {
-	width?: number;   // default 60
-	height?: number;  // default 30
-	R?: number;       // default 0.2
-	r?: number;       // default 0.125
-	K?: number;       // default 120
-	D?: number;       // default 3.5
-	du?: number;      // default 0.07
-	dv?: number;      // default 0.02
-	luminanceChars?: string;              // default " ,-~:;=!*#$@"
-	lightDirection?: [number, number, number]; // default [0, 1, -1]
-	speed?: number;   // default 0.75
-	/** Optional manual override. If provided, skips measurement. Typical good value ~0.55 */
+	width?: number;
+	height?: number;
+	R?: number;
+	r?: number;
+	K?: number;
+	D?: number;
+	du?: number;
+	dv?: number;
+	luminanceChars?: string;
+	lightDirection?: [number, number, number];
+	speed?: number;
 	yScaleOverride?: number;
 	className?: string;
 };
@@ -35,15 +34,12 @@ export default function AsciiSpinningDonut({
 }: AsciiSpinningDonutProps) {
 	const preRef = useRef<HTMLPreElement | null>(null);
 
-	// yScale = charWidth / lineHeight  (grid-rows are taller; compress Y)
 	const [yScale, setYScale] = useState<number>(yScaleOverride ?? 0.55);
 
-	// Measure the cell aspect once (or when className/font changes)
 	useLayoutEffect(() => {
 		if (yScaleOverride != null || !preRef.current) return;
 		const pre = preRef.current;
 
-		// Create a hidden probe that inherits font from <pre>
 		const probe = document.createElement("span");
 		probe.textContent = "0";
 		probe.style.position = "absolute";
@@ -52,7 +48,6 @@ export default function AsciiSpinningDonut({
 
 		const charWidth = probe.getBoundingClientRect().width || 1;
 		let lineHeight = parseFloat(getComputedStyle(pre).lineHeight);
-		// Fallback if line-height is 'normal'
 		if (!isFinite(lineHeight) || lineHeight <= 0) {
 			const twoLines = document.createElement("div");
 			twoLines.style.position = "absolute";
@@ -65,7 +60,7 @@ export default function AsciiSpinningDonut({
 		}
 
 		pre.removeChild(probe);
-		setYScale(charWidth / lineHeight); // usually ~0.5–0.6
+		setYScale(charWidth / lineHeight);
 	}, [className, yScaleOverride]);
 
 	useEffect(() => {
@@ -109,7 +104,6 @@ export default function AsciiSpinningDonut({
 				for (let v = 0; v < Math.PI * 2; v += dv) {
 					const cv = Math.cos(v), sv = Math.sin(v);
 
-					// Torus point & normal (object space)
 					const px = (R + r * cv) * cu;
 					const py = (R + r * cv) * su;
 					const pz = r * sv;
@@ -118,13 +112,11 @@ export default function AsciiSpinningDonut({
 					const ny = cv * su;
 					const nz = sv;
 
-					// Rotate
 					let p = rotateX([px, py, pz], ax);
 					p = rotateZ(p, az);
 					let n = rotateX([nx, ny, nz], ax);
 					n = rotateZ(n, az);
 
-					// Project (aspect-corrected Y)
 					const z = p[2] + D;
 					const ooz = 1 / z;
 					const xProj = Math.floor(cx + (K * p[0]) * ooz);
@@ -143,7 +135,6 @@ export default function AsciiSpinningDonut({
 				}
 			}
 
-			// Write to <pre>
 			if (preRef.current) {
 				const lines: string[] = [];
 				for (let y = 0; y < height; y++) {
