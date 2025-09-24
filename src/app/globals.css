@@ -149,3 +149,9 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+html, body {
+}
+html, body {
+  overscroll-behavior: none;   /* prevents scroll chaining & bounce */
+}

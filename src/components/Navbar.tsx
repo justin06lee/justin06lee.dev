@@ -66,8 +66,8 @@ export default function Navbar() {
 
                             <div className="mt-4 flex flex-col items-start gap-2">
                                 <SheetClose asChild>
-                                    <Button variant="link" asChild>
-                                        <Link href="/">justin06lee.dev</Link>
+                                    <Button variant="link" onClick={playIntro}>
+				    intro
                                     </Button>
                                 </SheetClose>
                                 <SheetClose asChild>
