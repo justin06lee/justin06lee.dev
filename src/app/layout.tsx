@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider"
-import { Analytics } from "@vercel/analytics/next"
+import { ThemeProvider } from "@/components/theme-provider";
+import { Analytics } from "@vercel/analytics/next";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://justin06lee.dev";
 
@@ -26,16 +26,7 @@ export const metadata: Metadata = {
 	applicationName: "justin06lee.dev",
 	generator: "Next.js",
 	referrer: "origin-when-cross-origin",
-	keywords: [
-		"justin06lee",
-		"portfolio",
-		"projects",
-		"hobbies",
-		"software",
-		"next.js",
-		"react",
-		"web dev",
-	],
+	keywords: ["justin06lee", "portfolio", "projects", "hobbies", "software", "next.js", "react", "web dev"],
 	authors: [{ name: "justin06lee" }],
 	creator: "justin06lee",
 	publisher: "justin06lee",
@@ -48,9 +39,7 @@ export const metadata: Metadata = {
 		siteName: "justin06lee.dev",
 		title: "justin06lee.dev",
 		description: "projects, hobbies, and experiments by justin06lee",
-		images: [
-			{ url: "/opengraph-image", width: 1200, height: 630, alt: "justin06lee.dev" },
-		],
+		images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "justin06lee.dev" }],
 	},
 	twitter: {
 		card: "summary_large_image",
@@ -73,12 +62,12 @@ export const metadata: Metadata = {
 
 // app/layout.tsx (Server Component)
 export const viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)',  color: '#000000' },
-  ],
-  width: 'device-width',
-  initialScale: 1,
+	themeColor: [
+		{ media: "(prefers-color-scheme: light)", color: "#ffffff" },
+		{ media: "(prefers-color-scheme: dark)", color: "#000000" },
+	],
+	width: "device-width",
+	initialScale: 1,
 };
 
 export default function RootLayout({
@@ -88,16 +77,10 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning className="bg-black">
-			<body
-				className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
-			>
-				<ThemeProvider
-					attribute="class"
-					defaultTheme="dark"
-					enableSystem
-					disableTransitionOnChange
-				>
+			<body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}>
+				<ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
 					{children}
+					<Analytics />
 				</ThemeProvider>
 			</body>
 		</html>
