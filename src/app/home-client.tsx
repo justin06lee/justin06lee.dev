@@ -1,4 +1,3 @@
-
 // app/home-client.tsx
 "use client";
 
@@ -7,10 +6,10 @@ import * as motion from "motion/react-client";
 import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
-import { Button } from "@/components/ui/button";
 import { useSearchParams, useRouter } from "next/navigation";
+import type { SiteConfig } from "@/lib/site-config";
 
-export default function HomeClient() {
+export default function HomeClient({ config }: { config: SiteConfig }) {
   const [hasPlayed, setHasPlayed] = useState<null | boolean>(null);
   const [introCycle, setIntroCycle] = useState(0);
 
@@ -56,7 +55,7 @@ export default function HomeClient() {
           <Navbar />
         </motion.div>
 
-        {hasPlayed && <HomePage />}
+        {hasPlayed && <HomePage config={config} />}
 
         {!hasPlayed && (
           <Intro
@@ -121,14 +120,13 @@ function Intro({ onDone }: { onDone: () => void }) {
         ))}
       </div>
 
-      <Button
-        variant="link"
+      <button
         onClick={onDone}
-        className="fixed bottom-12"
+        className="fixed bottom-12 text-sm text-white underline-offset-4 hover:underline"
         aria-label="Skip intro"
       >
         Skip
-      </Button>
+      </button>
     </div>
   );
 }

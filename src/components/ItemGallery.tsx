@@ -1,17 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import * as motion from "motion/react-client";
-import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuTrigger,
-	DropdownMenuContent,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
 import { ListFilter } from "lucide-react";
 
 export type GalleryItem = {
@@ -30,11 +20,11 @@ type SortKey = "newest" | "oldest" | "az" | "za";
 
 export function ItemGallery({
 	title,
-	subtitle = "A curated list of things I’ve built or explored.",
+	subtitle = "A curated list of things I've built or explored.",
 	items,
 	initialSort = "newest",
-	chipBase = 0.4,        // animation: base delay
-	chipStep = 0.1,        // animation: per-chip stagger
+	chipBase = 0.4,
+	chipStep = 0.1,
 }: {
 	title: string;
 	subtitle?: string;
@@ -46,13 +36,35 @@ export function ItemGallery({
 	const [query, setQuery] = useState("");
 	const [selected, setSelected] = useState<string[]>([]);
 	const [sort, setSort] = useState<SortKey>(initialSort);
+	const [sortOpen, setSortOpen] = useState(false);
+	const sortRef = useRef<HTMLDivElement>(null);
+	const hasAnimated = useRef(false);
+
+	// After first render, mark animations as done
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			hasAnimated.current = true;
+		}, 1500);
+		return () => clearTimeout(timer);
+	}, []);
+
+	// Close sort dropdown on outside click
+	useEffect(() => {
+		if (!sortOpen) return;
+		const handler = (e: MouseEvent) => {
+			if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+				setSortOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", handler);
+		return () => document.removeEventListener("mousedown", handler);
+	}, [sortOpen]);
 
 	const sortLabel = (s: SortKey) =>
 		s === "newest" ? "Newest" :
 			s === "oldest" ? "Oldest" :
 				s === "az" ? "A → Z" : "Z → A";
 
-	// All unique tags from items.tech
 	const allTags = useMemo(() => {
 		const s = new Set<string>();
 		items.forEach((p) => p.tech.forEach((t) => s.add(t)));
@@ -84,7 +96,9 @@ export function ItemGallery({
 		setSelected((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
 	};
 
-	const animStart = chipBase + allTags.length * chipStep;
+	// Only use staggered delays on first render
+	const shouldAnimate = !hasAnimated.current;
+	const animStart = shouldAnimate ? chipBase + allTags.length * chipStep : 0;
 
 	return (
 		<main className="max-w-6xl mx-auto px-4 pt-16 pb-24">
@@ -113,32 +127,33 @@ export function ItemGallery({
 					transition={{ duration: 0.8, delay: 0.3 }}
 					className="text-sm"
 				>
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button
-								variant="outline"
-								size="sm"
-								className="gap-2"
-								aria-label="Open sort menu"
-							>
-								<ListFilter className="h-4 w-4" />
-								<span>Sort: {sortLabel(sort)}</span>
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="w-48 border border-white/10">
-							<DropdownMenuLabel>Sort by</DropdownMenuLabel>
-							<DropdownMenuSeparator />
-							<DropdownMenuRadioGroup
-								value={sort}
-								onValueChange={(v) => setSort(v as SortKey)}
-							>
-								<DropdownMenuRadioItem value="newest">Newest</DropdownMenuRadioItem>
-								<DropdownMenuRadioItem value="oldest">Oldest</DropdownMenuRadioItem>
-								<DropdownMenuRadioItem value="az">A → Z</DropdownMenuRadioItem>
-								<DropdownMenuRadioItem value="za">Z → A</DropdownMenuRadioItem>
-							</DropdownMenuRadioGroup>
-						</DropdownMenuContent>
-					</DropdownMenu>
+					<div ref={sortRef} className="relative">
+						<button
+							onClick={() => setSortOpen((o) => !o)}
+							className="inline-flex items-center gap-2 border border-white/20 bg-transparent px-3 py-1.5 text-sm hover:bg-white/5 transition-colors"
+							aria-label="Open sort menu"
+						>
+							<ListFilter className="h-4 w-4" />
+							<span>Sort: {sortLabel(sort)}</span>
+						</button>
+
+						{sortOpen && (
+							<div className="absolute right-0 top-full mt-1 w-48 border border-white/10 bg-black shadow-md z-50">
+								<div className="px-2 py-1.5 text-sm font-medium text-white/70">Sort by</div>
+								<div className="h-px bg-white/10" />
+								{(["newest", "oldest", "az", "za"] as SortKey[]).map((key) => (
+									<button
+										key={key}
+										onClick={() => { setSort(key); setSortOpen(false); }}
+										className={`w-full text-left px-3 py-1.5 text-sm hover:bg-white/10 transition-colors flex items-center gap-2 ${sort === key ? "text-white" : "text-white/60"}`}
+									>
+										<span className={`inline-block w-2 h-2 border border-current ${sort === key ? "bg-white" : ""}`} />
+										{sortLabel(key)}
+									</button>
+								))}
+							</div>
+						)}
+					</div>
 				</motion.div>
 			</div>
 
@@ -153,7 +168,7 @@ export function ItemGallery({
 						placeholder="Search items, tech…"
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						className="w-full bg-transparent border border-white/20 rounded-xl px-4 py-2 outline-none focus:border-white/40"
+						className="w-full bg-black border border-white/20 px-4 py-2 outline-none focus:border-white/40 text-white placeholder:text-white/40"
 					/>
 				</motion.div>
 			</div>
@@ -162,17 +177,17 @@ export function ItemGallery({
 				{allTags.map((t, i) => (
 					<motion.div
 						key={t}
-						initial={{ opacity: 0, y: -10 }}
+						initial={shouldAnimate ? { opacity: 0, y: -10 } : false}
 						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.8, delay: chipBase + i * chipStep }}
+						transition={{ duration: 0.8, delay: shouldAnimate ? chipBase + i * chipStep : 0 }}
 					>
 						<button
 							onClick={() => toggleTag(t)}
 							className={[
-								"px-3 py-1 rounded-full text-sm border transition",
+								"px-3 py-1 text-sm transition",
 								selected.includes(t)
-									? "bg-white text-black border-white"
-									: "bg-transparent text-white/80 border-white/20 hover:border-white/40",
+									? "bg-white text-black"
+									: "bg-transparent text-white/60 hover:text-white hover:bg-white/10",
 							].join(" ")}
 						>
 							{t}
@@ -181,42 +196,40 @@ export function ItemGallery({
 				))}
 
 				{selected.length > 0 && (
-					<Button onClick={() => setSelected([])} variant="link" className="-mt-1">
+					<button onClick={() => setSelected([])} className="text-sm text-white underline-offset-4 hover:underline px-2 -mt-1">
 						Clear filters
-					</Button>
+					</button>
 				)}
 			</div>
 
-			{
-				filtered.length === 0 ? (
-					<div className="text-center text-white/60 py-24">No items match your filters.</div>
-				) : (
-					<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-						{filtered.map((p, i) => (
-							<ProjectCard key={p.id} p={p} i={i} k={animStart} />
-						))}
-					</div>
-				)
-			}
+			{filtered.length === 0 ? (
+				<div className="text-center text-white/60 py-24">No items match your filters.</div>
+			) : (
+				<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+					{filtered.map((p, i) => (
+						<ProjectCard key={p.id} p={p} i={i} k={animStart} shouldAnimate={shouldAnimate} />
+					))}
+				</div>
+			)}
 
 			<div className="mt-10 text-center text-xs text-white/50">
-				Want more details? Ping me and I’ll write deeper docs.
+				Want more details? Ping me and I&apos;ll write deeper docs.
 			</div>
-		</main >
+		</main>
 	);
 }
 
-function ProjectCard({ p, i, k }: { p: GalleryItem; i: number; k: number }) {
+function ProjectCard({ p, i, k, shouldAnimate }: { p: GalleryItem; i: number; k: number; shouldAnimate: boolean }) {
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: -10 }}
+			initial={shouldAnimate ? { opacity: 0, y: -10 } : false}
 			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.8, delay: k + i * 0.1 }}
-			className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-5 flex flex-col gap-3"
+			transition={{ duration: 0.8, delay: shouldAnimate ? k + i * 0.1 : 0 }}
+			className="border border-white/10 bg-transparent p-5 flex flex-col gap-3"
 		>
 			<div className="flex items-start justify-between gap-3">
-                {p.link && <a href={p.link} target="_blank"><h3 className="text-lg font-semibold leading-tight hover:underline underline-offset-5">{p.title}</h3></a>}
-                {!p.link && <h3 className="text-lg font-semibold leading-tight">{p.title}</h3>}
+				{p.link && <a href={p.link} target="_blank" rel="noreferrer noopener"><h3 className="text-lg font-semibold leading-tight hover:underline underline-offset-5">{p.title}</h3></a>}
+				{!p.link && <h3 className="text-lg font-semibold leading-tight">{p.title}</h3>}
 				<span className="text-xs text-white/60 select-none">{p.year}</span>
 			</div>
 
@@ -227,7 +240,7 @@ function ProjectCard({ p, i, k }: { p: GalleryItem; i: number; k: number }) {
 				{p.tech.map((t) => (
 					<span
 						key={t}
-						className="px-2 py-0.5 rounded-full text-xs border border-white/15 text-white/80"
+						className="px-2 py-0.5 text-xs border border-white/15 text-white/80"
 					>
 						{t}
 					</span>
@@ -236,13 +249,13 @@ function ProjectCard({ p, i, k }: { p: GalleryItem; i: number; k: number }) {
 
 			<div className="mt-3 flex items-center gap-2">
 				{p.repo && (
-					<a href={p.repo} target="_blank" rel="noreferrer noopener" className="inline-flex">
-						<Button variant="link" className="px-2 py-0 h-auto">View Code</Button>
+					<a href={p.repo} target="_blank" rel="noreferrer noopener" className="text-sm text-white underline-offset-4 hover:underline px-2 py-0">
+						View Code
 					</a>
 				)}
 				{p.live && (
-					<a href={p.live} target="_blank" rel="noreferrer noopener" className="inline-flex">
-						<Button variant="link" className="px-2 py-0 h-auto">Live</Button>
+					<a href={p.live} target="_blank" rel="noreferrer noopener" className="text-sm text-white underline-offset-4 hover:underline px-2 py-0">
+						Live
 					</a>
 				)}
 			</div>

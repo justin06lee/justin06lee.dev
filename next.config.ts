@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: [
+    "@libsql/client",
+    "@libsql/hrana-client",
+    "@libsql/isomorphic-ws",
+    "@libsql/isomorphic-fetch",
+    "libsql",
+  ],
 };
 
 export default nextConfig;

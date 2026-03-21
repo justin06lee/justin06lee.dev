@@ -33,8 +33,12 @@ export default function AsciiSpinningDonut({
 	className = "font-mono text-xs leading-[1] whitespace-pre cursor-default select-none",
 }: AsciiSpinningDonutProps) {
 	const preRef = useRef<HTMLPreElement | null>(null);
-
 	const [yScale, setYScale] = useState<number>(yScaleOverride ?? 0.55);
+
+	// Memoize lightDirection to avoid dependency issues
+	const lx = lightDirection[0];
+	const ly = lightDirection[1];
+	const lz = lightDirection[2];
 
 	useLayoutEffect(() => {
 		if (yScaleOverride != null || !preRef.current) return;
@@ -65,83 +69,137 @@ export default function AsciiSpinningDonut({
 
 	useEffect(() => {
 		let rafId = 0;
-
 		let ax = 0;
 		let az = 0;
 
-		const normalize = (v: number[]) => {
-			const m = Math.hypot(v[0], v[1], v[2]) || 1;
-			return [v[0] / m, v[1] / m, v[2] / m];
-		};
-		const rotateX = (v: number[], a: number) => {
-			const [x, y, z] = v;
-			const ca = Math.cos(a), sa = Math.sin(a);
-			return [x, y * ca - z * sa, y * sa + z * ca];
-		};
-		const rotateZ = (v: number[], a: number) => {
-			const [x, y, z] = v;
-			const ca = Math.cos(a), sa = Math.sin(a);
-			return [x * ca - y * sa, x * sa + y * ca, z];
-		};
-		const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+		// Detect low-end device: <=4 logical cores or deviceMemory <= 4GB
+		const cores = navigator.hardwareConcurrency || 2;
+		const memory = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8;
+		const isLowEnd = cores <= 4 || memory <= 4;
 
-		const L = normalize(lightDirection);
+		// Adaptive step sizes — coarser on low-end
+		const adaptiveDu = isLowEnd ? Math.max(du, 0.07) : du;
+		const adaptiveDv = isLowEnd ? Math.max(dv, 0.02) : dv;
+
+		// Throttle to ~30fps on low-end, ~60fps otherwise
+		const frameBudget = isLowEnd ? 33 : 0;
+		let lastFrameTime = 0;
+
+		const lMag = Math.hypot(lx, ly, lz) || 1;
+		const Lx = lx / lMag;
+		const Ly = ly / lMag;
+		const Lz = lz / lMag;
+
 		const chars = luminanceChars.length ? luminanceChars : " ";
+		const charsLen = chars.length;
+		const cx = width >> 1;
+		const cy = height >> 1;
+		const bufSize = width * height;
 
-		const cx = Math.floor(width / 2);
-		const cy = Math.floor(height / 2);
+		// Pre-allocate buffers once
+		const zbuf = new Float32Array(bufSize);
+		const outBuf = new Uint8Array(bufSize); // index into chars
+		const spaceIdx = 0; // chars[0] is space
 
-		function frame() {
+		// Pre-compute trig tables for u and v
+		const uSteps = Math.ceil((Math.PI * 2) / adaptiveDu);
+		const vSteps = Math.ceil((Math.PI * 2) / adaptiveDv);
+		const cosU = new Float32Array(uSteps);
+		const sinU = new Float32Array(uSteps);
+		const cosV = new Float32Array(vSteps);
+		const sinV = new Float32Array(vSteps);
+
+		for (let i = 0; i < uSteps; i++) {
+			const u = i * adaptiveDu;
+			cosU[i] = Math.cos(u);
+			sinU[i] = Math.sin(u);
+		}
+		for (let i = 0; i < vSteps; i++) {
+			const v = i * adaptiveDv;
+			cosV[i] = Math.cos(v);
+			sinV[i] = Math.sin(v);
+		}
+
+		function frame(now: number) {
+			if (frameBudget > 0 && now - lastFrameTime < frameBudget) {
+				rafId = requestAnimationFrame(frame);
+				return;
+			}
+			lastFrameTime = now;
+
 			ax += 0.025 * speed;
 			az += 0.015 * speed;
 
-			const zbuf = new Float32Array(width * height);
+			// Reset buffers
 			zbuf.fill(-Infinity);
-			const out: string[] = Array(width * height).fill(" ");
+			outBuf.fill(spaceIdx);
 
-			for (let u = 0; u < Math.PI * 2; u += du) {
-				const cu = Math.cos(u), su = Math.sin(u);
-				for (let v = 0; v < Math.PI * 2; v += dv) {
-					const cv = Math.cos(v), sv = Math.sin(v);
+			const cosAx = Math.cos(ax), sinAx = Math.sin(ax);
+			const cosAz = Math.cos(az), sinAz = Math.sin(az);
 
-					const px = (R + r * cv) * cu;
-					const py = (R + r * cv) * su;
-					const pz = r * sv;
+			for (let ui = 0; ui < uSteps; ui++) {
+				const cu = cosU[ui], su = sinU[ui];
 
-					const nx = cv * cu;
-					const ny = cv * su;
-					const nz = sv;
+				for (let vi = 0; vi < vSteps; vi++) {
+					const cv = cosV[vi], sv = sinV[vi];
 
-					let p = rotateX([px, py, pz], ax);
-					p = rotateZ(p, az);
-					let n = rotateX([nx, ny, nz], ax);
-					n = rotateZ(n, az);
+					// Torus point
+					const Rcv = R + r * cv;
+					const px0 = Rcv * cu;
+					const py0 = Rcv * su;
+					const pz0 = r * sv;
 
-					const z = p[2] + D;
+					// Normal
+					const nx0 = cv * cu;
+					const ny0 = cv * su;
+					const nz0 = sv;
+
+					// Rotate X then Z (inlined)
+					const px1 = px0;
+					const py1 = py0 * cosAx - pz0 * sinAx;
+					const pz1 = py0 * sinAx + pz0 * cosAx;
+					const px2 = px1 * cosAz - py1 * sinAz;
+					const py2 = px1 * sinAz + py1 * cosAz;
+					const pz2 = pz1;
+
+					const nx1 = nx0;
+					const ny1 = ny0 * cosAx - nz0 * sinAx;
+					const nz1 = ny0 * sinAx + nz0 * cosAx;
+					const nx2 = nx1 * cosAz - ny1 * sinAz;
+					const ny2 = nx1 * sinAz + ny1 * cosAz;
+					const nz2 = nz1;
+
+					const z = pz2 + D;
+					if (z <= 0) continue;
 					const ooz = 1 / z;
-					const xProj = Math.floor(cx + (K * p[0]) * ooz);
-					const yProj = Math.floor(cy - (K * p[1]) * ooz * yScale);
+
+					const xProj = (cx + (K * px2) * ooz) | 0;
+					const yProj = (cy - (K * py2) * ooz * yScale) | 0;
 
 					if (xProj >= 0 && xProj < width && yProj >= 0 && yProj < height) {
 						const idx = xProj + yProj * width;
 						if (ooz > zbuf[idx]) {
 							zbuf[idx] = ooz;
 
-							const lum = Math.max(0, dot(normalize(n), L));
-							const ci = Math.min(chars.length - 1, Math.floor(lum * (chars.length - 1)));
-							out[idx] = chars[ci];
+							// Normalize n inline
+							const nMag = Math.hypot(nx2, ny2, nz2) || 1;
+							const lum = Math.max(0, (nx2 / nMag) * Lx + (ny2 / nMag) * Ly + (nz2 / nMag) * Lz);
+							outBuf[idx] = Math.min(charsLen - 1, (lum * (charsLen - 1)) | 0);
 						}
 					}
 				}
 			}
 
 			if (preRef.current) {
-				const lines: string[] = [];
+				let str = "";
 				for (let y = 0; y < height; y++) {
 					const start = y * width;
-					lines.push(out.slice(start, start + width).join(""));
+					for (let x = 0; x < width; x++) {
+						str += chars[outBuf[start + x]];
+					}
+					if (y < height - 1) str += "\n";
 				}
-				preRef.current.textContent = lines.join("\n");
+				preRef.current.textContent = str;
 			}
 
 			rafId = requestAnimationFrame(frame);
@@ -149,11 +207,7 @@ export default function AsciiSpinningDonut({
 
 		rafId = requestAnimationFrame(frame);
 		return () => cancelAnimationFrame(rafId);
-	}, [
-		width, height, R, r, K, D, du, dv, luminanceChars, speed,
-		lightDirection[0], lightDirection[1], lightDirection[2],
-		yScale
-	]);
+	}, [width, height, R, r, K, D, du, dv, luminanceChars, speed, lx, ly, lz, yScale]);
 
 	return (
 		<pre

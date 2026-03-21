@@ -1,8 +1,8 @@
+"use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   type LucideIcon,
   Github,
@@ -11,14 +11,21 @@ import {
   Youtube,
   Instagram,
   Globe,
-  Twitter,
 } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+
+// X (formerly Twitter) icon
+const XIcon: LucideIcon = Object.assign(
+  React.forwardRef<SVGSVGElement, React.SVGProps<SVGSVGElement>>(
+    function XIcon(props, ref) {
+      return (
+        <svg ref={ref} viewBox="0 0 24 24" fill="currentColor" {...props}>
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+        </svg>
+      );
+    }
+  ),
+  { displayName: "XIcon" }
+) as unknown as LucideIcon;
 
 export type SocialKey =
   | "github"
@@ -34,8 +41,6 @@ export type SocialLinks = Partial<Record<SocialKey, string>>;
 export type SocialBarProps = {
   links: SocialLinks;
   size?: "sm" | "md" | "lg";
-  variant?: "ghost" | "outline" | "secondary" | "default" | "link";
-  rounded?: boolean;
   className?: string;
   gap?: "tight" | "normal" | "loose";
 };
@@ -58,29 +63,93 @@ type SocialItem = {
   key: SocialKey;
   href?: string;
   label: string;
+  tooltip: string;
   Icon: LucideIcon;
 };
 
 const itemsConfig = (links: SocialLinks): SocialItem[] => {
   const items: SocialItem[] = [
-    { key: "github", href: links.github, label: "GitHub", Icon: Github },
-    { key: "linkedin", href: links.linkedin, label: "LinkedIn", Icon: Linkedin },
-    { key: "x", href: links.x, label: "X", Icon: Twitter },
-    { key: "email", href: links.email, label: "Email", Icon: Mail },
-    { key: "youtube", href: links.youtube, label: "YouTube", Icon: Youtube },
-    { key: "instagram", href: links.instagram, label: "Instagram", Icon: Instagram },
-    { key: "website", href: links.website, label: "Website", Icon: Globe },
+    { key: "github", href: links.github, label: "GitHub", tooltip: "GitHub", Icon: Github },
+    { key: "linkedin", href: links.linkedin, label: "LinkedIn", tooltip: "LinkedIn", Icon: Linkedin },
+    { key: "x", href: links.x, label: "X", tooltip: "X", Icon: XIcon },
+    { key: "email", href: links.email, label: "Email", tooltip: "Copy email", Icon: Mail },
+    { key: "youtube", href: links.youtube, label: "YouTube", tooltip: "YouTube", Icon: Youtube },
+    { key: "instagram", href: links.instagram, label: "Instagram", tooltip: "Instagram", Icon: Instagram },
+    { key: "website", href: links.website, label: "Website", tooltip: "Website", Icon: Globe },
   ];
 
-  // keep only those with a non-empty href
   return items.filter((r) => typeof r.href === "string" && r.href.length > 0);
 };
+
+function SocialButton({
+  item,
+  iconSize,
+  btnClass,
+  onCopy,
+}: {
+  item: SocialItem;
+  iconSize: number;
+  btnClass: string;
+  onCopy: (text: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const { key, href, label, tooltip, Icon } = item;
+
+  const tooltipText = key === "email" && copied ? "Copied!" : tooltip;
+
+  const handleEmailClick = () => {
+    if (href) {
+      onCopy(href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
+
+  const inner = (
+    <>
+      <span className="social-tooltip">{tooltipText}</span>
+      <Icon aria-hidden width={iconSize} height={iconSize} />
+      <span className="sr-only">{label}</span>
+    </>
+  );
+
+  if (key === "email" && href) {
+    return (
+      <button
+        className={cn("social-tooltip-wrap", btnClass)}
+        onClick={handleEmailClick}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  const isExternal = typeof href === "string" && !href.startsWith("/");
+
+  if (isExternal) {
+    return (
+      <a
+        href={href}
+        aria-label={label}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn("social-tooltip-wrap", btnClass)}
+      >
+        {inner}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href ?? "#"} aria-label={label} className={cn("social-tooltip-wrap", btnClass)}>
+      {inner}
+    </Link>
+  );
+}
 
 export default function SocialBar({
   links,
   size = "md",
-  variant = "ghost",
-  rounded = true,
   className,
   gap = "normal",
 }: SocialBarProps) {
@@ -97,74 +166,25 @@ export default function SocialBar({
     }
   };
 
+  const btnClass = cn(
+    sizeMap[size],
+    "inline-flex items-center justify-center hover:bg-white/10 transition-shadow hover:shadow-sm"
+  );
+
   return (
-    <TooltipProvider>
-      <nav
-        aria-label="Social links"
-        className={cn("flex flex-wrap items-center", gapMap[gap], className)}
-      >
-        {items.map(({ key, href, label, Icon }) => {
-          if (key === "email" && href) {
-            return (
-              <Tooltip key={key}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={variant}
-                    size="icon"
-                    className={cn(
-                      sizeMap[size],
-                      rounded ? "rounded-full" : "rounded-xl",
-                      "transition-shadow hover:shadow-sm"
-                    )}
-                    onClick={() => handleCopy(href)}
-                  >
-                    <Icon aria-hidden width={iconSize} height={iconSize} />
-                    <span className="sr-only">{label}</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent sideOffset={6}>Copy Email</TooltipContent>
-              </Tooltip>
-            );
-          }
-
-          const isExternal = typeof href === "string" && !href.startsWith("/");
-
-          return (
-            <Tooltip key={key}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={variant}
-                  size="icon"
-                  className={cn(
-                    sizeMap[size],
-                    rounded ? "rounded-full" : "rounded-xl",
-                    "transition-shadow hover:shadow-sm"
-                  )}
-                  asChild
-                >
-                  {isExternal ? (
-                    <a
-                      href={href}
-                      aria-label={label}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Icon aria-hidden width={iconSize} height={iconSize} />
-                      <span className="sr-only">{label}</span>
-                    </a>
-                  ) : (
-                    <Link href={href ?? "#"} aria-label={label}>
-                      <Icon aria-hidden width={iconSize} height={iconSize} />
-                      <span className="sr-only">{label}</span>
-                    </Link>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent sideOffset={6}>{label}</TooltipContent>
-            </Tooltip>
-          );
-        })}
-      </nav>
-    </TooltipProvider>
+    <nav
+      aria-label="Social links"
+      className={cn("flex flex-wrap items-center", gapMap[gap], className)}
+    >
+      {items.map((item) => (
+        <SocialButton
+          key={item.key}
+          item={item}
+          iconSize={iconSize}
+          btnClass={btnClass}
+          onCopy={handleCopy}
+        />
+      ))}
+    </nav>
   );
 }

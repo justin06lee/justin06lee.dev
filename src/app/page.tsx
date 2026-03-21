@@ -1,12 +1,14 @@
-
-// app/page.tsx
 import { Suspense } from "react";
 import HomeClient from "./home-client";
+import { getSiteConfig } from "@/lib/site-config";
 
-export default function Page() {
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  const config = await getSiteConfig();
   return (
     <Suspense fallback={null}>
-      <HomeClient />
+      <HomeClient config={config} />
     </Suspense>
   );
 }
