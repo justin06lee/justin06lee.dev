@@ -61,15 +61,20 @@ export async function getSiteConfig(): Promise<SiteConfig> {
 
   const map = new Map(rows.map((r) => [r.key, r.value]));
   const config: SiteConfig = {
-    description: map.has("description") ? JSON.parse(map.get("description")!) : DEFAULT_CONFIG.description,
-    socials: map.has("socials") ? JSON.parse(map.get("socials")!) : DEFAULT_CONFIG.socials,
+    description: (() => { try { return map.has("description") ? JSON.parse(map.get("description")!) : DEFAULT_CONFIG.description; } catch { return DEFAULT_CONFIG.description; } })(),
+    socials: (() => { try { return map.has("socials") ? JSON.parse(map.get("socials")!) : DEFAULT_CONFIG.socials; } catch { return DEFAULT_CONFIG.socials; } })(),
   };
 
   configCache = { data: config, ts: Date.now() };
   return config;
 }
 
+const ALLOWED_CONFIG_KEYS = ["description", "socials"];
+
 export async function updateSiteConfig(key: string, value: string) {
+  if (!ALLOWED_CONFIG_KEYS.includes(key)) {
+    throw new Error(`Invalid config key: ${key}`);
+  }
   await initDb();
   await db.execute({
     sql: "INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",

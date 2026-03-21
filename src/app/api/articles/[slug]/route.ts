@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
 import { invalidateArticlesCache } from "@/lib/articles";
+import { requireAdmin } from "@/lib/auth";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   await initDb();
   const { slug } = await params;
-  const result = await db.execute({
-    sql: "SELECT * FROM articles WHERE slug = ?",
-    args: [slug],
-  });
+
+  // If admin, return any article; otherwise only published ones
+  const isAdmin = requireAdmin(req) === null;
+  const sql = isAdmin
+    ? "SELECT * FROM articles WHERE slug = ?"
+    : "SELECT * FROM articles WHERE slug = ? AND published = 1";
+
+  const result = await db.execute({ sql, args: [slug] });
   const rows = result.rows;
   if (rows.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -17,14 +22,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
   const { slug } = await params;
-  const body = await req.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const { title, excerpt, content, banner_url, tags, published } = body;
 
   if (!title || !excerpt || !content) {
@@ -62,10 +69,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
   const { slug } = await params;

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
+
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
 
@@ -17,12 +18,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
-  const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"];
+  const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"];
   if (!allowed.includes(file.type)) {
     return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
   }
 
   const buffer = await file.arrayBuffer();
+
+  if (buffer.byteLength > MAX_UPLOAD_SIZE) {
+    return NextResponse.json({ error: "File too large (max 5 MB)" }, { status: 400 });
+  }
   const base64 = Buffer.from(buffer).toString("base64");
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -35,10 +40,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
   const articleSlug = req.nextUrl.searchParams.get("article_slug");

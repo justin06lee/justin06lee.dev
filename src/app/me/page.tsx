@@ -56,11 +56,15 @@ const TABS = [
 ] as const;
 
 function parseItem(raw: RawItem): Item {
-  return { ...raw, tech: JSON.parse(raw.tech) };
+  let tech: string[] = [];
+  try { tech = JSON.parse(raw.tech); } catch { /* malformed */ }
+  return { ...raw, tech };
 }
 
 function parseArticle(raw: RawArticle): ArticleData {
-  return { ...raw, tags: JSON.parse(raw.tags), published: raw.published === 1 };
+  let tags: string[] = [];
+  try { tags = JSON.parse(raw.tags); } catch { /* malformed */ }
+  return { ...raw, tags, published: raw.published === 1 };
 }
 
 function slugify(str: string): string {
@@ -121,18 +125,16 @@ function splitIntoLines(text: string, wordsPerLine = 10): string[] {
 const inputClass = "w-full bg-black border border-white/20 px-3 py-2 outline-none focus:border-white/40 text-sm text-white placeholder:text-white/40";
 
 export default function AdminPage() {
-  const [adminKey, setAdminKey] = useState("");
   const [authed, setAuthed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [activeTab, setActiveTab] = useState("articles");
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("admin_key");
-    if (stored) {
-      setAdminKey(stored);
-      setAuthed(true);
-    }
+    fetch("/api/auth")
+      .then((res) => { setAuthed(res.ok); setAuthChecked(true); })
+      .catch(() => { setAuthChecked(true); });
   }, []);
 
   const handleLogin = async () => {
@@ -143,20 +145,23 @@ export default function AdminPage() {
       body: JSON.stringify({ password: passwordInput }),
     });
     if (res.ok) {
-      setAdminKey(passwordInput);
-      sessionStorage.setItem("admin_key", passwordInput);
       setAuthed(true);
+    } else if (res.status === 429) {
+      setAuthError("Too many attempts. Try again later.");
     } else {
       setAuthError("Wrong password.");
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("admin_key");
-    setAdminKey("");
+  const handleLogout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
     setAuthed(false);
     setPasswordInput("");
   };
+
+  if (!authChecked) {
+    return <div className="min-h-screen bg-black text-white flex items-center justify-center"><p className="text-white/60">Loading...</p></div>;
+  }
 
   if (!authed) {
     return (
@@ -205,10 +210,10 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {activeTab === "articles" && <ArticlesPanel adminKey={adminKey} />}
-        {activeTab === "site-config" && <SiteConfigPanel adminKey={adminKey} />}
+        {activeTab === "articles" && <ArticlesPanel />}
+        {activeTab === "site-config" && <SiteConfigPanel />}
         {activeTab !== "articles" && activeTab !== "site-config" && (
-          <CategoryPanel category={activeTab} adminKey={adminKey} />
+          <CategoryPanel category={activeTab} />
         )}
       </div>
     </div>
@@ -217,7 +222,7 @@ export default function AdminPage() {
 
 /* ───────── Articles Panel ───────── */
 
-function ArticlesPanel({ adminKey }: { adminKey: string }) {
+function ArticlesPanel() {
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ArticleData | null>(null);
@@ -243,7 +248,6 @@ function ArticlesPanel({ adminKey }: { adminKey: string }) {
   const handleDelete = async (slug: string) => {
     await fetch(`/api/articles/${encodeURIComponent(slug)}`, {
       method: "DELETE",
-      headers: { "x-admin-key": adminKey },
     });
     setDeleteTarget(null);
     fetchArticles();
@@ -253,13 +257,13 @@ function ArticlesPanel({ adminKey }: { adminKey: string }) {
     if (isNew) {
       await fetch("/api/articles", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(article),
       });
     } else {
       await fetch(`/api/articles/${encodeURIComponent(article.slug)}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(article),
       });
     }
@@ -274,7 +278,6 @@ function ArticlesPanel({ adminKey }: { adminKey: string }) {
     return (
       <ArticleEditor
         article={editing}
-        adminKey={adminKey}
         existingTags={allExistingTags}
         onSave={(a) => handleSave(a, false)}
         onCancel={() => setEditing(null)}
@@ -285,7 +288,6 @@ function ArticlesPanel({ adminKey }: { adminKey: string }) {
   if (adding) {
     return (
       <ArticleEditor
-        adminKey={adminKey}
         existingTags={allExistingTags}
         onSave={(a) => handleSave(a, true)}
         onCancel={() => setAdding(false)}
@@ -345,13 +347,11 @@ function ArticlesPanel({ adminKey }: { adminKey: string }) {
 
 function ArticleEditor({
   article,
-  adminKey,
   existingTags,
   onSave,
   onCancel,
 }: {
   article?: ArticleData;
-  adminKey: string;
   existingTags: string[];
   onSave: (article: ArticleData) => void;
   onCancel: () => void;
@@ -386,21 +386,26 @@ function ArticleEditor({
   // Fetch uploads for this article
   const fetchUploads = useCallback(async () => {
     if (!articleSlug) return;
-    const res = await fetch(`/api/uploads?article_slug=${encodeURIComponent(articleSlug)}`, {
-      headers: { "x-admin-key": adminKey },
-    });
+    const res = await fetch(`/api/uploads?article_slug=${encodeURIComponent(articleSlug)}`);
     if (res.ok) {
       const rows: UploadMeta[] = await res.json();
       setUploads(rows);
     }
-  }, [articleSlug, adminKey]);
+  }, [articleSlug]);
 
   useEffect(() => {
     if (articleSlug) fetchUploads();
   }, [articleSlug, fetchUploads]);
 
   const renderedContent = useMemo(() => {
-    return marked.parse(content) as string;
+    let html = marked.parse(content) as string;
+    // Sanitize to prevent XSS in preview
+    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+    html = html.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    html = html.replace(/href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"');
+    html = html.replace(/src\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'src=""');
+    html = html.replace(/<\/?(iframe|object|embed|form|base|meta|link)\b[^>]*>/gi, "");
+    return html;
   }, [content]);
 
   const uploadFile = async (file: File, isBanner: boolean) => {
@@ -410,7 +415,6 @@ function ArticleEditor({
     fd.append("article_slug", articleSlug);
     const res = await fetch("/api/uploads", {
       method: "POST",
-      headers: { "x-admin-key": adminKey },
       body: fd,
     });
     if (res.ok) {
@@ -481,7 +485,6 @@ function ArticleEditor({
   const deleteUpload = async (id: string) => {
     const res = await fetch(`/api/uploads/${id}`, {
       method: "DELETE",
-      headers: { "x-admin-key": adminKey },
     });
     if (res.ok) {
       setUploads((prev) => prev.filter((u) => u.id !== id));
@@ -507,7 +510,6 @@ function ArticleEditor({
     fd.append("article_slug", articleSlug);
     const res = await fetch("/api/uploads", {
       method: "POST",
-      headers: { "x-admin-key": adminKey },
       body: fd,
     });
     if (res.ok) {
@@ -769,7 +771,7 @@ function ArticleEditor({
 
 /* ───────── Site Config Panel ───────── */
 
-function SiteConfigPanel({ adminKey }: { adminKey: string }) {
+function SiteConfigPanel() {
   const [config, setConfig] = useState<SiteConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -795,7 +797,7 @@ function SiteConfigPanel({ adminKey }: { adminKey: string }) {
     const lines = splitIntoLines(descText);
     await fetch("/api/config", {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description: lines, socials }),
     });
     setSaving(false);
@@ -845,7 +847,7 @@ function SiteConfigPanel({ adminKey }: { adminKey: string }) {
 
 /* ───────── Category Items Panel ───────── */
 
-function CategoryPanel({ category, adminKey }: { category: string; adminKey: string }) {
+function CategoryPanel({ category }: { category: string }) {
   const [items, setItems] = useState<Item[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -863,7 +865,7 @@ function CategoryPanel({ category, adminKey }: { category: string; adminKey: str
     const allRows: RawItem[] = await allRes.json();
     setItems(rows.map(parseItem));
     const tags = new Set<string>();
-    allRows.forEach((r) => { JSON.parse(r.tech).forEach((t: string) => tags.add(t)); });
+    allRows.forEach((r) => { try { JSON.parse(r.tech).forEach((t: string) => tags.add(t)); } catch { /* skip */ } });
     setAllTags(Array.from(tags).sort((a, b) => a.localeCompare(b)));
     setLoading(false);
   }, [category]);
@@ -871,16 +873,16 @@ function CategoryPanel({ category, adminKey }: { category: string; adminKey: str
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/items/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-admin-key": adminKey } });
+    await fetch(`/api/items/${encodeURIComponent(id)}`, { method: "DELETE" });
     setDeleteTarget(null);
     fetchItems();
   };
 
   const handleSave = async (item: Item, isNew: boolean) => {
     if (isNew) {
-      await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-key": adminKey }, body: JSON.stringify(item) });
+      await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
     } else {
-      await fetch(`/api/items/${encodeURIComponent(item.id)}`, { method: "PUT", headers: { "Content-Type": "application/json", "x-admin-key": adminKey }, body: JSON.stringify(item) });
+      await fetch(`/api/items/${encodeURIComponent(item.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
     }
     setEditing(null);
     setAdding(false);

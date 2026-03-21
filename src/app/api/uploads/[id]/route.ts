@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await initDb();
   const { id } = await params;
+
+  // Validate ID format to prevent enumeration
+  if (!/^[\w-]+$/.test(id)) {
+    return new NextResponse("Not found", { status: 404 });
+  }
 
   const result = await db.execute({
     sql: "SELECT mime_type, data FROM uploads WHERE id = ?",
@@ -21,15 +27,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     headers: {
       "Content-Type": row.mime_type,
       "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
   const { id } = await params;

@@ -20,7 +20,7 @@ function mapArticle(row: DbArticle): Article {
     excerpt: row.excerpt,
     content: row.content,
     banner_url: row.banner_url,
-    tags: JSON.parse(row.tags),
+    tags: (() => { try { return JSON.parse(row.tags); } catch { return []; } })(),
     published: row.published === 1,
     published_at: row.published_at,
     created_at: row.created_at,

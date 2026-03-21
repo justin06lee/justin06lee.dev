@@ -23,7 +23,7 @@ export default function OGImage() {
 				}}
 			>
 				<div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-					<div style={{ fontSize: 96, fontWeight: 800, letterSpacing: -2 }}>sehnsucht.dev</div>
+					<div style={{ fontSize: 96, fontWeight: 800, letterSpacing: -2 }}>justin06lee.dev</div>
 				</div>
 			</div>
 		),

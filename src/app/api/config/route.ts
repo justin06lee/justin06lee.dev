@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSiteConfig, updateSiteConfig } from "@/lib/site-config";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +10,14 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
-  const body = await req.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const { description, socials } = body;
 
   if (description !== undefined) {

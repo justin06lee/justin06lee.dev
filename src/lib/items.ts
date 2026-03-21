@@ -25,7 +25,7 @@ export async function getItemsByCategory(category: string): Promise<GalleryItem[
     title: row.title,
     description: row.description,
     year: row.year,
-    tech: JSON.parse(row.tech),
+    tech: (() => { try { return JSON.parse(row.tech); } catch { return []; } })(),
     link: row.link ?? undefined,
     repo: row.repo ?? undefined,
     live: row.live ?? undefined,

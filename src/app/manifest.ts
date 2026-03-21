@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
 	return {
-		name: "sehnsucht.dev",
-		short_name: "sehnsucht",
-		description: "projects, hobbies, and experiments by sehnsucht",
+		name: "justin06lee.dev",
+		short_name: "justin06lee",
+		description: "projects, hobbies, and experiments by justin06lee",
 		start_url: "/",
 		scope: "/",
 		display: "standalone",

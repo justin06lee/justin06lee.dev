@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
 
 const SEED_DATA = [
   // projects
@@ -123,10 +124,8 @@ const SEED_DATA = [
 ];
 
 export async function POST(req: NextRequest) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
 

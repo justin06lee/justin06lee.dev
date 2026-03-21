@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
 import { invalidateArticlesCache } from "@/lib/articles";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,10 @@ export async function GET(req: NextRequest) {
   const all = req.nextUrl.searchParams.get("all");
 
   if (all === "1") {
-    // Admin: return all articles including drafts
+    // Admin: return all articles including drafts — requires auth
+    const authError = requireAdmin(req);
+    if (authError) return authError;
+
     const result = await db.execute(
       "SELECT * FROM articles ORDER BY created_at DESC"
     );
@@ -23,13 +27,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
-  const body = await req.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const { slug, title, excerpt, content, banner_url, tags, published } = body;
 
   if (!slug || !title || !excerpt || !content) {

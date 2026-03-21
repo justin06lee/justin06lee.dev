@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
 import { invalidateItemsCache } from "@/lib/items";
+import { requireAdmin } from "@/lib/auth";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
   const { id } = await params;
-  const body = await req.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const { category, title, description, year, tech, link, repo, live, notes, sort_order } = body;
 
   if (!category || !title || !description || year == null || !Array.isArray(tech)) {
@@ -31,15 +34,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     ],
   });
 
-  invalidateItemsCache();
+  invalidateItemsCache(category);
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const key = req.headers.get("x-admin-key");
-  if (key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireAdmin(req);
+  if (authError) return authError;
 
   await initDb();
   const { id } = await params;
