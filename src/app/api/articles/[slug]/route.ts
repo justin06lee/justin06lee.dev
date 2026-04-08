@@ -8,7 +8,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const { slug } = await params;
 
   // If admin, return any article; otherwise only published ones
-  const isAdmin = requireAdmin(req) === null;
+  const isAdmin = (await requireAdmin(req)) === null;
   const sql = isAdmin
     ? "SELECT * FROM articles WHERE slug = ?"
     : "SELECT * FROM articles WHERE slug = ? AND published = 1";
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const authError = requireAdmin(req);
+  const authError = await requireAdmin(req);
   if (authError) return authError;
 
   await initDb();
@@ -76,7 +76,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-  const authError = requireAdmin(req);
+  const authError = await requireAdmin(req);
   if (authError) return authError;
 
   await initDb();

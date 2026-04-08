@@ -1,5 +1,6 @@
 import { timingSafeEqual, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { db, initDb } from "./db";
 
 function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -15,38 +16,44 @@ function safeCompare(a: string, b: string): boolean {
   return equal && bufA.length === bufB.length;
 }
 
-/* ── Session store (in-memory, cleared on redeploy) ── */
+/* ── Session store (DB-backed, survives cold starts / redeploys) ── */
 
-const sessions = new Map<string, { createdAt: number }>();
 const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const SESSION_COOKIE = "admin_session";
 
-function pruneExpiredSessions() {
-  const now = Date.now();
-  for (const [token, session] of sessions) {
-    if (now - session.createdAt > SESSION_TTL) sessions.delete(token);
-  }
-}
-
-export function createSession(): string {
-  pruneExpiredSessions();
+export async function createSession(): Promise<string> {
+  await initDb();
+  // Prune expired sessions
+  await db.execute({
+    sql: "DELETE FROM sessions WHERE created_at < ?",
+    args: [Date.now() - SESSION_TTL],
+  });
   const token = randomUUID();
-  sessions.set(token, { createdAt: Date.now() });
+  await db.execute({
+    sql: "INSERT INTO sessions (token, created_at) VALUES (?, ?)",
+    args: [token, Date.now()],
+  });
   return token;
 }
 
-export function validateSession(token: string): boolean {
-  const session = sessions.get(token);
-  if (!session) return false;
-  if (Date.now() - session.createdAt > SESSION_TTL) {
-    sessions.delete(token);
+export async function validateSession(token: string): Promise<boolean> {
+  await initDb();
+  const result = await db.execute({
+    sql: "SELECT created_at FROM sessions WHERE token = ?",
+    args: [token],
+  });
+  if (result.rows.length === 0) return false;
+  const createdAt = result.rows[0].created_at as number;
+  if (Date.now() - createdAt > SESSION_TTL) {
+    await db.execute({ sql: "DELETE FROM sessions WHERE token = ?", args: [token] });
     return false;
   }
   return true;
 }
 
-export function destroySession(token: string) {
-  sessions.delete(token);
+export async function destroySession(token: string) {
+  await initDb();
+  await db.execute({ sql: "DELETE FROM sessions WHERE token = ?", args: [token] });
 }
 
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;
@@ -87,10 +94,10 @@ export function verifyAdminKey(password: string): boolean {
 /**
  * Validate the session cookie. Returns null if valid, or a 401 response if invalid.
  */
-export function requireAdmin(req: NextRequest): NextResponse | null {
+export async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
   const sessionToken = req.cookies.get(SESSION_COOKIE)?.value;
 
-  if (sessionToken && validateSession(sessionToken)) {
+  if (sessionToken && await validateSession(sessionToken)) {
     return null;
   }
 

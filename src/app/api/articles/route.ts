@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   if (all === "1") {
     // Admin: return all articles including drafts — requires auth
-    const authError = requireAdmin(req);
+    const authError = await requireAdmin(req);
     if (authError) return authError;
 
     const result = await db.execute(
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = requireAdmin(req);
+  const authError = await requireAdmin(req);
   if (authError) return authError;
 
   await initDb();

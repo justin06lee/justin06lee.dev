@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  const token = createSession();
+  const token = await createSession();
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 /** Check if the current session is valid */
 export async function GET(req: NextRequest) {
   const sessionToken = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (sessionToken && validateSession(sessionToken)) {
+  if (sessionToken && await validateSession(sessionToken)) {
     return NextResponse.json({ ok: true });
   }
   return NextResponse.json({ ok: false }, { status: 401 });
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 /** Logout — destroy session */
 export async function DELETE(req: NextRequest) {
   const sessionToken = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (sessionToken) destroySession(sessionToken);
+  if (sessionToken) await destroySession(sessionToken);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE_NAME, "", {

@@ -124,7 +124,7 @@ const SEED_DATA = [
 ];
 
 export async function POST(req: NextRequest) {
-  const authError = requireAdmin(req);
+  const authError = await requireAdmin(req);
   if (authError) return authError;
 
   await initDb();

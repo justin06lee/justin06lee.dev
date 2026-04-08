@@ -47,6 +47,10 @@ export async function initDb() {
       article_slug TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     )`,
+    `CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    )`,
   ]);
 }
 

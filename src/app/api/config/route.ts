@@ -10,7 +10,7 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const authError = requireAdmin(req);
+  const authError = await requireAdmin(req);
   if (authError) return authError;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
