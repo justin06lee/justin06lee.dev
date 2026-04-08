@@ -28,16 +28,7 @@ const DEFAULT_CONFIG: SiteConfig = {
   },
 };
 
-let configCache: { data: SiteConfig; ts: number } | null = null;
-const TTL = 24 * 60 * 60 * 1000;
-
-export function invalidateConfigCache() {
-  configCache = null;
-}
-
 export async function getSiteConfig(): Promise<SiteConfig> {
-  if (configCache && Date.now() - configCache.ts < TTL) return configCache.data;
-
   await initDb();
 
   const result = await db.execute("SELECT key, value FROM site_config");
@@ -55,18 +46,14 @@ export async function getSiteConfig(): Promise<SiteConfig> {
         args: ["socials", JSON.stringify(DEFAULT_CONFIG.socials)],
       },
     ]);
-    configCache = { data: DEFAULT_CONFIG, ts: Date.now() };
     return DEFAULT_CONFIG;
   }
 
   const map = new Map(rows.map((r) => [r.key, r.value]));
-  const config: SiteConfig = {
+  return {
     description: (() => { try { return map.has("description") ? JSON.parse(map.get("description")!) : DEFAULT_CONFIG.description; } catch { return DEFAULT_CONFIG.description; } })(),
     socials: (() => { try { return map.has("socials") ? JSON.parse(map.get("socials")!) : DEFAULT_CONFIG.socials; } catch { return DEFAULT_CONFIG.socials; } })(),
   };
-
-  configCache = { data: config, ts: Date.now() };
-  return config;
 }
 
 const ALLOWED_CONFIG_KEYS = ["description", "socials"];
@@ -80,5 +67,4 @@ export async function updateSiteConfig(key: string, value: string) {
     sql: "INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
     args: [key, value],
   });
-  invalidateConfigCache();
 }

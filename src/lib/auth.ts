@@ -2,8 +2,17 @@ import { timingSafeEqual, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  // Pad to equal length to avoid leaking length via timing
+  const maxLen = Math.max(bufA.length, bufB.length);
+  const paddedA = Buffer.alloc(maxLen);
+  const paddedB = Buffer.alloc(maxLen);
+  bufA.copy(paddedA);
+  bufB.copy(paddedB);
+  // Compare padded buffers, but also check original lengths match
+  const equal = timingSafeEqual(paddedA, paddedB);
+  return equal && bufA.length === bufB.length;
 }
 
 /* ── Session store (in-memory, cleared on redeploy) ── */
@@ -40,10 +49,6 @@ export function destroySession(token: string) {
   sessions.delete(token);
 }
 
-export function getSessionCookieOptions() {
-  return `${SESSION_COOKIE}=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL / 1000}; Secure`;
-}
-
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 
 /* ── Rate limiter (in-memory) ── */
@@ -54,6 +59,14 @@ const MAX_ATTEMPTS = 10;
 
 export function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+
+  // Prune expired entries to prevent unbounded memory growth
+  if (loginAttempts.size > 1000) {
+    for (const [key, val] of loginAttempts) {
+      if (now - val.firstAttempt > RATE_WINDOW) loginAttempts.delete(key);
+    }
+  }
+
   const entry = loginAttempts.get(ip);
   if (!entry || now - entry.firstAttempt > RATE_WINDOW) {
     loginAttempts.set(ip, { count: 1, firstAttempt: now });

@@ -254,18 +254,21 @@ function ArticlesPanel() {
   };
 
   const handleSave = async (article: ArticleData, isNew: boolean) => {
-    if (isNew) {
-      await fetch("/api/articles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(article),
-      });
-    } else {
-      await fetch(`/api/articles/${encodeURIComponent(article.slug)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(article),
-      });
+    const res = isNew
+      ? await fetch("/api/articles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(article),
+        })
+      : await fetch(`/api/articles/${encodeURIComponent(article.slug)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(article),
+        });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(`Save failed: ${body.error || res.statusText}`);
+      return;
     }
     setEditing(null);
     setAdding(false);
@@ -879,10 +882,13 @@ function CategoryPanel({ category }: { category: string }) {
   };
 
   const handleSave = async (item: Item, isNew: boolean) => {
-    if (isNew) {
-      await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
-    } else {
-      await fetch(`/api/items/${encodeURIComponent(item.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+    const res = isNew
+      ? await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) })
+      : await fetch(`/api/items/${encodeURIComponent(item.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(`Save failed: ${body.error || res.statusText}`);
+      return;
     }
     setEditing(null);
     setAdding(false);

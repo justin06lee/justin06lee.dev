@@ -38,6 +38,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Validate banner_url if provided: must be a relative path or https URL
+  if (banner_url && typeof banner_url === "string") {
+    if (!banner_url.startsWith("/") && !banner_url.startsWith("https://")) {
+      return NextResponse.json({ error: "banner_url must be a relative path or https URL" }, { status: 400 });
+    }
+  }
+
   // If publishing for the first time, set published_at
   const existing = await db.execute({
     sql: "SELECT published, published_at FROM articles WHERE slug = ?",

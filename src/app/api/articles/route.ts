@@ -42,6 +42,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Validate slug format: only lowercase alphanumeric, hyphens, max 200 chars
+  if (typeof slug !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,198}[a-z0-9])?$/.test(slug)) {
+    return NextResponse.json({ error: "Invalid slug format" }, { status: 400 });
+  }
+
+  // Validate banner_url if provided: must be a relative path or https URL
+  if (banner_url && typeof banner_url === "string") {
+    if (!banner_url.startsWith("/") && !banner_url.startsWith("https://")) {
+      return NextResponse.json({ error: "banner_url must be a relative path or https URL" }, { status: 400 });
+    }
+  }
+
   const publishedAt = published ? new Date().toISOString() : null;
 
   await db.execute({

@@ -13,15 +13,14 @@ marked.setOptions({
 function sanitizeHtml(html: string): string {
   // Remove <script> tags and content
   html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
-  // Remove event handlers (onclick, onerror, onload, etc.)
-  html = html.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-  // Remove javascript: URLs
-  html = html.replace(/href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"');
-  html = html.replace(/src\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'src=""');
-  // Remove <iframe>, <object>, <embed>, <form> tags
-  html = html.replace(/<\/?(iframe|object|embed|form|base|meta|link)\b[^>]*>/gi, "");
-  // Remove data: URIs in src attributes (can execute JS via SVG)
-  html = html.replace(/src\s*=\s*(?:"data:[^"]*"|'data:[^']*')/gi, 'src=""');
+  // Remove <style> tags and content (CSS-based data exfiltration)
+  html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "");
+  // Remove event handlers (onclick, onerror, onload, etc.) — handle whitespace/encoding variants
+  html = html.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
+  // Remove javascript:/vbscript:/data: in href and src (any quoting style)
+  html = html.replace(/(href|src|action|formaction)\s*=\s*(?:"(?:javascript|vbscript|data):[^"]*"|'(?:javascript|vbscript|data):[^']*'|(?:javascript|vbscript|data):[^\s>]*)/gi, '$1=""');
+  // Remove dangerous tags: iframe, object, embed, form, base, meta, link, svg, math
+  html = html.replace(/<\/?(iframe|object|embed|form|base|meta|link|svg|math)\b[^>]*>/gi, "");
   return html;
 }
 
