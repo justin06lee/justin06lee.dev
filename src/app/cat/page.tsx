@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Navbar from "@/components/Navbar";
 
 const TOTAL_FRAMES = 115;
+const SPRITE_COLS = 12;
+const SPRITE_ROWS = 10;
+const SPRITE_URL = "/cat-sprite.jpg";
 const FLUSH_INTERVAL_MS = 2500;
 const POLL_INTERVAL_MS = 5000;
 const EDGE_LEFT = 0.22;
 const EDGE_RIGHT = 0.78;
-
-const frameSrc = (i: number) => `/cat-frames/frame-${String(i + 1).padStart(3, "0")}.jpg`;
 
 // Map mouse X position (0 = left, 1 = right) to a frame index.
 // Left side of image = later in the animation (forward play as mouse moves left).
@@ -19,34 +20,22 @@ const relXToFrame = (relX: number) => {
 };
 
 export default function CatPage() {
-    const imgRef = useRef<HTMLImageElement>(null);
+    const spriteRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const rafRef = useRef<number | null>(null);
     const pendingFrameRef = useRef<number | null>(null);
-    const currentFrameRef = useRef(0);
+    const currentFrameRef = useRef(-1);
     const lastEdgeRef = useRef<"left" | "right" | null>(null);
     const pendingPatsRef = useRef(0);
     const [pats, setPats] = useState(0);
-    const [loadedCount, setLoadedCount] = useState(0);
-    const ready = loadedCount >= TOTAL_FRAMES;
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
-        let loaded = 0;
-        for (let i = 0; i < TOTAL_FRAMES; i++) {
-            const img = new Image();
-            img.onload = () => {
-                if (cancelled) return;
-                loaded += 1;
-                setLoadedCount(loaded);
-            };
-            img.onerror = () => {
-                if (cancelled) return;
-                loaded += 1;
-                setLoadedCount(loaded);
-            };
-            img.src = frameSrc(i);
-        }
+        const img = new Image();
+        img.onload = () => { if (!cancelled) setReady(true); };
+        img.onerror = () => { if (!cancelled) setReady(true); };
+        img.src = SPRITE_URL;
         return () => { cancelled = true; };
     }, []);
 
@@ -85,6 +74,7 @@ export default function CatPage() {
         };
         load();
         const poll = window.setInterval(() => {
+            if (document.visibilityState !== "visible") return;
             if (pendingPatsRef.current === 0) load();
         }, POLL_INTERVAL_MS);
         const flushTimer = window.setInterval(flush, FLUSH_INTERVAL_MS);
@@ -111,10 +101,14 @@ export default function CatPage() {
     const applyFrame = () => {
         rafRef.current = null;
         const idx = pendingFrameRef.current;
-        if (idx === null || !imgRef.current) return;
+        if (idx === null || !spriteRef.current) return;
         if (idx === currentFrameRef.current) return;
         currentFrameRef.current = idx;
-        imgRef.current.src = frameSrc(idx);
+        const col = idx % SPRITE_COLS;
+        const row = Math.floor(idx / SPRITE_COLS);
+        const x = (col / (SPRITE_COLS - 1)) * 100;
+        const y = (row / (SPRITE_ROWS - 1)) * 100;
+        spriteRef.current.style.backgroundPosition = `${x}% ${y}%`;
     };
 
     const scheduleFrame = (idx: number) => {
@@ -168,33 +162,38 @@ export default function CatPage() {
                         {pats.toLocaleString()}
                     </div>
                     <div className="text-xs text-white/50 uppercase tracking-widest">
-                        {pats === 1 ? "pat worldwide" : "pats worldwide"}
+                        {pats === 1 ? "time bothered, globally" : "times bothered, globally"}
                     </div>
                 </div>
 
                 <div
                     ref={containerRef}
-                    className="relative select-none cursor-grab active:cursor-grabbing"
+                    className="relative select-none cursor-grab active:cursor-grabbing max-w-[480px] w-[80vw] aspect-square border border-white/15"
                     onMouseEnter={handleEnter}
                     onMouseMove={handleMove}
+                    role="img"
+                    aria-label="cat"
                 >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        ref={imgRef}
-                        src={frameSrc(0)}
-                        alt="cat"
-                        draggable={false}
-                        className="max-w-[480px] w-[80vw] aspect-square object-cover border border-white/15 pointer-events-none"
+                    <div
+                        ref={spriteRef}
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: `url(${SPRITE_URL})`,
+                            backgroundSize: `${SPRITE_COLS * 100}% ${SPRITE_ROWS * 100}%`,
+                            backgroundPosition: "0% 0%",
+                            backgroundRepeat: "no-repeat",
+                            imageRendering: "auto",
+                        }}
                     />
                     {!ready && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/60 text-xs">
-                            loading frames {loadedCount}/{TOTAL_FRAMES}...
+                            loading...
                         </div>
                     )}
                 </div>
 
                 <p className="text-xs text-white/50 text-center max-w-xs">
-                    move left to play, right to reverse. pet the cat.
+                    pet the cat.
                 </p>
             </main>
         </div>

@@ -61,6 +61,11 @@ export async function initDb() {
       count INTEGER NOT NULL DEFAULT 0
     )`,
     `INSERT OR IGNORE INTO pat_counter (id, count) VALUES (1, 0)`,
+    `CREATE TABLE IF NOT EXISTS pat_rate (
+      ip TEXT PRIMARY KEY,
+      window_start INTEGER NOT NULL,
+      pats INTEGER NOT NULL
+    )`,
   ]);
 }
 
