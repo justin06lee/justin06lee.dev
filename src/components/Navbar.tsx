@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
+import type { Pfp } from "@/lib/site-config";
 
 function RainbowCat() {
     const chars = "^cat^".split("");
@@ -18,10 +19,43 @@ function RainbowCat() {
     );
 }
 
-export default function Navbar() {
+function NavPfp({ pfp }: { pfp: Pfp }) {
+    return (
+        <Link href="/" aria-label="home" className="inline-flex items-center">
+            <span className="relative inline-block size-7 overflow-hidden align-middle border border-white/70">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                    src={pfp.url}
+                    alt="pfp"
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    style={{
+                        transform: `translate(${pfp.x}%, ${pfp.y}%) scale(${pfp.scale})`,
+                        transformOrigin: "center",
+                    }}
+                />
+            </span>
+        </Link>
+    );
+}
+
+export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
     const [open, setOpen] = useState(false);
+    const [fetchedPfp, setFetchedPfp] = useState<Pfp | undefined>(pfp);
     const router = useRouter();
     const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (pfp) { setFetchedPfp(pfp); return; }
+        let cancelled = false;
+        fetch("/api/config")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+                if (!cancelled && data?.pfp?.url) setFetchedPfp(data.pfp);
+            })
+            .catch(() => { });
+        return () => { cancelled = true; };
+    }, [pfp]);
 
     const playIntro = () => {
         setOpen(false);
@@ -50,13 +84,18 @@ export default function Navbar() {
             <div className="flex items-center w-full px-4 sm:px-6 py-2">
                 {/* Left: site name + intro — pinned left */}
                 <div className="flex items-center gap-6 mr-auto">
-                    <Link href="/" className="text-sm text-white underline-offset-4 hover:underline whitespace-nowrap">
+                    <Link href="/" className="text-sm text-white underline-offset-4 hover:underline whitespace-nowrap hidden lg:inline-flex">
                         justin06lee.dev
                     </Link>
-                    <button onClick={playIntro} className="text-sm text-white underline-offset-4 hover:underline hidden md:inline-flex whitespace-nowrap">
+                    {fetchedPfp?.url && (
+                        <span className="inline-flex lg:hidden">
+                            <NavPfp pfp={fetchedPfp} />
+                        </span>
+                    )}
+                    <button onClick={playIntro} className="text-sm text-white underline-offset-4 hover:underline hidden lg:inline-flex whitespace-nowrap">
                         intro
                     </button>
-                    <Link href="/cat" className="text-sm underline-offset-4 hover:underline hidden md:inline-flex whitespace-nowrap">
+                    <Link href="/cat" className="text-sm underline-offset-4 hover:underline inline-flex whitespace-nowrap">
                         <RainbowCat />
                     </Link>
                 </div>

@@ -140,8 +140,39 @@ function useBreakpointScale() {
     return s;
 }
 
+function useResponsiveAscii() {
+    const [ascii, setAscii] = useState("");
+    useEffect(() => {
+        let cancelled = false;
+        const pickFile = () => {
+            const w = window.innerWidth;
+            if (w >= 1280) return null;
+            if (w >= 1024) return "ascii9.txt";
+            if (w >= 768) return "ascii3.txt";
+            if (w >= 640) return "ascii4.txt";
+            return "ascii1.txt";
+        };
+        let currentFile: string | null = null;
+        const load = () => {
+            const file = pickFile();
+            if (file === currentFile) return;
+            currentFile = file;
+            if (!file) { setAscii(""); return; }
+            fetch(`/ascii/${file}`)
+                .then((r) => (r.ok ? r.text() : ""))
+                .then((t) => { if (!cancelled) setAscii(t); })
+                .catch(() => { });
+        };
+        load();
+        window.addEventListener("resize", load);
+        return () => { cancelled = true; window.removeEventListener("resize", load); };
+    }, []);
+    return ascii;
+}
+
 export default function HomePage({ config }: { config: SiteConfig }) {
     const s = useBreakpointScale();
+    const ascii = useResponsiveAscii();
     const BASE_W = 120,
         BASE_H = 60;
 
@@ -207,6 +238,18 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                         ))}
                     </div>
 
+                    <div className="xl:hidden flex justify-center">
+                        <motion.pre
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: ascii ? 1 : 0, y: 0 }}
+                            transition={{ duration: 0.6, delay: 2 }}
+                            className="font-mono text-lg md:text-base leading-tight whitespace-pre text-left text-white/80 select-none inline-block"
+                            aria-hidden
+                        >
+                            {ascii}
+                        </motion.pre>
+                    </div>
+
                     <div>
                         <div className="mt-4 mb-2">
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 2.7 }}>
@@ -223,7 +266,7 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                                     projects
                                 </Link>
                             </motion.div>
-                            <div className="md:hidden block self-center mt-120 absolute text-sm text-white/50">
+                            <div className="md:hidden block self-center mt-120 absolute text-sm text-white opacity-50">
                                 <h1 className="mb-4">...or check out my socials.</h1>
                                 <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 scale-120 cursor-pointer" onClick={handleScroll}>
                                     <ArrowDown />

@@ -52,7 +52,7 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: hasPlayed ? 0 : 16 }}
         >
-          <Navbar />
+          <Navbar pfp={config.pfp} />
         </motion.div>
 
         {hasPlayed && <HomePage config={config} />}

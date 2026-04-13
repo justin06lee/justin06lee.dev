@@ -152,17 +152,28 @@ export default function CatPage() {
         }
     };
 
-    const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType !== "mouse" && e.buttons === 0) return;
         updateFromClientX(e.clientX);
     };
 
-    const handleEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleEnter = (e: React.PointerEvent<HTMLDivElement>) => {
         const c = containerRef.current;
         if (!c) return;
         const rect = c.getBoundingClientRect();
         const relX = (e.clientX - rect.left) / rect.width;
         lastEdgeRef.current = relX < 0.5 ? "left" : "right";
         updateFromClientX(e.clientX);
+    };
+
+    const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
+        handleEnter(e);
+    };
+
+    const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        (e.currentTarget as HTMLDivElement).releasePointerCapture?.(e.pointerId);
+        if (e.pointerType !== "mouse") lastEdgeRef.current = null;
     };
 
     return (
@@ -180,9 +191,12 @@ export default function CatPage() {
 
                 <div
                     ref={containerRef}
-                    className="relative select-none cursor-grab active:cursor-grabbing max-w-[480px] w-[80vw] aspect-square border border-white/15"
-                    onMouseEnter={handleEnter}
-                    onMouseMove={handleMove}
+                    className="relative select-none cursor-grab active:cursor-grabbing max-w-[480px] w-[80vw] aspect-square border border-white/15 touch-none"
+                    onPointerEnter={handleEnter}
+                    onPointerMove={handleMove}
+                    onPointerDown={handleDown}
+                    onPointerUp={handleUp}
+                    onPointerCancel={handleUp}
                     role="img"
                     aria-label="cat"
                 >
