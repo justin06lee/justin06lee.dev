@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
-import { invalidateItemsCache } from "@/lib/items";
 import { requireAdmin } from "@/lib/auth";
+
+const ALLOWED_CATEGORIES = ["projects", "hobbies", "in-development"] as const;
+type Category = (typeof ALLOWED_CATEGORIES)[number];
+
+function isCategory(value: unknown): value is Category {
+  return typeof value === "string" && (ALLOWED_CATEGORIES as readonly string[]).includes(value);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +16,7 @@ export async function GET(req: NextRequest) {
   const category = req.nextUrl.searchParams.get("category");
 
   if (category) {
-    const allowedCategories = ["projects", "hobbies", "in-development"];
-    if (!allowedCategories.includes(category)) {
+    if (!isCategory(category)) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
     const result = await db.execute({
@@ -30,19 +35,27 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   await initDb();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
-  try { body = await req.json(); } catch {
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const { id, category, title, description, year, tech, link, repo, live, notes, sort_order } = body;
 
-  if (!id || !category || !title || !description || year == null || !Array.isArray(tech)) {
+  if (
+    typeof id !== "string" ||
+    typeof title !== "string" ||
+    typeof description !== "string" ||
+    typeof year !== "number" ||
+    !Array.isArray(tech) ||
+    !tech.every((t) => typeof t === "string")
+  ) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const allowedCategories = ["projects", "hobbies", "in-development"];
-  if (!allowedCategories.includes(category)) {
+  if (!isCategory(category)) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
 
@@ -50,11 +63,19 @@ export async function POST(req: NextRequest) {
     sql: `INSERT INTO items (id, category, title, description, year, tech, link, repo, live, notes, sort_order)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
-      id, category, title, description, year, JSON.stringify(tech),
-      link || null, repo || null, live || null, notes || null, sort_order ?? 0,
+      id,
+      category,
+      title,
+      description,
+      year,
+      JSON.stringify(tech),
+      typeof link === "string" ? link : null,
+      typeof repo === "string" ? repo : null,
+      typeof live === "string" ? live : null,
+      typeof notes === "string" ? notes : null,
+      typeof sort_order === "number" ? sort_order : 0,
     ],
   });
 
-  invalidateItemsCache(category);
   return NextResponse.json({ ok: true });
 }

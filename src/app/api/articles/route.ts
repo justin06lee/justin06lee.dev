@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
-import { invalidateArticlesCache } from "@/lib/articles";
 import { requireAdmin } from "@/lib/auth";
+
+const UPLOAD_PATH_RE = /^\/api\/uploads\/[0-9a-f-]{36}$/i;
+
+function isValidBannerUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (value.startsWith("https://")) return true;
+  return UPLOAD_PATH_RE.test(value);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +17,6 @@ export async function GET(req: NextRequest) {
   const all = req.nextUrl.searchParams.get("all");
 
   if (all === "1") {
-    // Admin: return all articles including drafts — requires auth
     const authError = await requireAdmin(req);
     if (authError) return authError;
 
@@ -31,27 +37,38 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   await initDb();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
-  try { body = await req.json(); } catch {
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const { slug, title, excerpt, content, banner_url, tags, published } = body;
 
-  if (!slug || !title || !excerpt || !content) {
+  if (
+    typeof slug !== "string" ||
+    typeof title !== "string" ||
+    typeof excerpt !== "string" ||
+    typeof content !== "string"
+  ) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Validate slug format: only lowercase alphanumeric, hyphens, max 200 chars
-  if (typeof slug !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,198}[a-z0-9])?$/.test(slug)) {
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,198}[a-z0-9])?$/.test(slug)) {
     return NextResponse.json({ error: "Invalid slug format" }, { status: 400 });
   }
 
-  // Validate banner_url if provided: must be a relative path or https URL
-  if (banner_url && typeof banner_url === "string") {
-    if (!banner_url.startsWith("/") && !banner_url.startsWith("https://")) {
-      return NextResponse.json({ error: "banner_url must be a relative path or https URL" }, { status: 400 });
+  if (banner_url !== undefined && banner_url !== null && banner_url !== "" && !isValidBannerUrl(banner_url)) {
+    return NextResponse.json({ error: "banner_url must be an https URL or /api/uploads/<uuid>" }, { status: 400 });
+  }
+
+  let tagsArray: string[] = [];
+  if (tags !== undefined && tags !== null) {
+    if (!Array.isArray(tags) || !tags.every((t) => typeof t === "string")) {
+      return NextResponse.json({ error: "tags must be an array of strings" }, { status: 400 });
     }
+    tagsArray = tags;
   }
 
   const publishedAt = published ? new Date().toISOString() : null;
@@ -64,13 +81,12 @@ export async function POST(req: NextRequest) {
       title,
       excerpt,
       content,
-      banner_url || null,
-      JSON.stringify(tags || []),
+      (typeof banner_url === "string" && banner_url) || null,
+      JSON.stringify(tagsArray),
       published ? 1 : 0,
       publishedAt,
     ],
   });
 
-  invalidateArticlesCache();
   return NextResponse.json({ ok: true });
 }

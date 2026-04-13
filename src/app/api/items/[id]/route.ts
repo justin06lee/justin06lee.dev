@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
-import { invalidateItemsCache } from "@/lib/items";
 import { requireAdmin } from "@/lib/auth";
+
+const ALLOWED_CATEGORIES = ["projects", "hobbies", "in-development"] as const;
+type Category = (typeof ALLOWED_CATEGORIES)[number];
+
+function isCategory(value: unknown): value is Category {
+  return typeof value === "string" && (ALLOWED_CATEGORIES as readonly string[]).includes(value);
+}
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const authError = await requireAdmin(req);
@@ -9,19 +15,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   await initDb();
   const { id } = await params;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
-  try { body = await req.json(); } catch {
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const { category, title, description, year, tech, link, repo, live, notes, sort_order } = body;
 
-  if (!category || !title || !description || year == null || !Array.isArray(tech)) {
+  if (
+    typeof title !== "string" ||
+    typeof description !== "string" ||
+    typeof year !== "number" ||
+    !Array.isArray(tech) ||
+    !tech.every((t) => typeof t === "string")
+  ) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const allowedCategories = ["projects", "hobbies", "in-development"];
-  if (!allowedCategories.includes(category)) {
+  if (!isCategory(category)) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
 
@@ -29,12 +42,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     sql: `UPDATE items SET category=?, title=?, description=?, year=?, tech=?, link=?, repo=?, live=?, notes=?, sort_order=?, updated_at=datetime('now')
           WHERE id=?`,
     args: [
-      category, title, description, year, JSON.stringify(tech),
-      link || null, repo || null, live || null, notes || null, sort_order ?? 0, id,
+      category,
+      title,
+      description,
+      year,
+      JSON.stringify(tech),
+      typeof link === "string" ? link : null,
+      typeof repo === "string" ? repo : null,
+      typeof live === "string" ? live : null,
+      typeof notes === "string" ? notes : null,
+      typeof sort_order === "number" ? sort_order : 0,
+      id,
     ],
   });
 
-  invalidateItemsCache(category);
   return NextResponse.json({ ok: true });
 }
 
@@ -46,6 +67,5 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
   await db.execute({ sql: "DELETE FROM items WHERE id = ?", args: [id] });
 
-  invalidateItemsCache();
   return NextResponse.json({ ok: true });
 }

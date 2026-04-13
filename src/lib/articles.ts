@@ -28,11 +28,6 @@ function mapArticle(row: DbArticle): Article {
   };
 }
 
-// Keep the invalidation export so existing API route imports don't break
-export function invalidateArticlesCache() {
-  // no-op — articles are always fetched fresh since pages are force-dynamic
-}
-
 export async function getPublishedArticles(): Promise<Article[]> {
   await initDb();
   const result = await db.execute(

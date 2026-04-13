@@ -1,6 +1,26 @@
 import { timingSafeEqual, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { db, initDb } from "./db";
+import { db, initDb } from "@/lib/db";
+
+/**
+ * Resolve the client IP from proxy headers. Prefers x-real-ip (set by Vercel
+ * and most reverse proxies and not forwarded from the client), falling back to
+ * the rightmost value of x-forwarded-for (the hop nearest to us, not the
+ * client-controlled leftmost value). Returns "unknown" if neither is present.
+ */
+export function getClientIp(req: NextRequest): string {
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
+
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) {
+    const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last;
+  }
+
+  return "unknown";
+}
 
 function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -58,29 +78,42 @@ export async function destroySession(token: string) {
 
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 
-/* ── Rate limiter (in-memory) ── */
+/* ── Rate limiter (DB-backed; survives serverless cold starts) ── */
 
-const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
 const RATE_WINDOW = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 10;
 
-export function checkRateLimit(ip: string): boolean {
+export async function checkRateLimit(ip: string): Promise<boolean> {
+  await initDb();
   const now = Date.now();
+  const windowStart = now - RATE_WINDOW;
 
-  // Prune expired entries to prevent unbounded memory growth
-  if (loginAttempts.size > 1000) {
-    for (const [key, val] of loginAttempts) {
-      if (now - val.firstAttempt > RATE_WINDOW) loginAttempts.delete(key);
-    }
-  }
+  // Prune expired entries
+  await db.execute({
+    sql: "DELETE FROM login_attempts WHERE first_attempt < ?",
+    args: [windowStart],
+  });
 
-  const entry = loginAttempts.get(ip);
-  if (!entry || now - entry.firstAttempt > RATE_WINDOW) {
-    loginAttempts.set(ip, { count: 1, firstAttempt: now });
+  const result = await db.execute({
+    sql: "SELECT count, first_attempt FROM login_attempts WHERE ip = ?",
+    args: [ip],
+  });
+
+  const row = result.rows[0] as unknown as { count: number; first_attempt: number } | undefined;
+  if (!row || row.first_attempt < windowStart) {
+    await db.execute({
+      sql: "INSERT OR REPLACE INTO login_attempts (ip, count, first_attempt) VALUES (?, 1, ?)",
+      args: [ip, now],
+    });
     return true;
   }
-  entry.count++;
-  return entry.count <= MAX_ATTEMPTS;
+
+  const nextCount = row.count + 1;
+  await db.execute({
+    sql: "UPDATE login_attempts SET count = ? WHERE ip = ?",
+    args: [nextCount, ip],
+  });
+  return nextCount <= MAX_ATTEMPTS;
 }
 
 /* ── Admin verification ── */
@@ -91,15 +124,16 @@ export function verifyAdminKey(password: string): boolean {
   return safeCompare(password, adminKey);
 }
 
+export async function isAdmin(req: NextRequest): Promise<boolean> {
+  const sessionToken = req.cookies.get(SESSION_COOKIE)?.value;
+  if (!sessionToken) return false;
+  return validateSession(sessionToken);
+}
+
 /**
  * Validate the session cookie. Returns null if valid, or a 401 response if invalid.
  */
 export async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
-  const sessionToken = req.cookies.get(SESSION_COOKIE)?.value;
-
-  if (sessionToken && await validateSession(sessionToken)) {
-    return null;
-  }
-
+  if (await isAdmin(req)) return null;
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }

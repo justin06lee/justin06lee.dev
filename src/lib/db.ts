@@ -51,6 +51,11 @@ export async function initDb() {
       token TEXT PRIMARY KEY,
       created_at INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS login_attempts (
+      ip TEXT PRIMARY KEY,
+      count INTEGER NOT NULL,
+      first_attempt INTEGER NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS pat_counter (
       id INTEGER PRIMARY KEY,
       count INTEGER NOT NULL DEFAULT 0

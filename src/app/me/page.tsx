@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Pencil, Trash2, Plus, LogOut, Save, Eye, EyeOff, Bold, Italic, Code, Link2, List, Heading, Quote, Upload, Copy, X } from "lucide-react";
 import { marked } from "marked";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 type Item = {
   id: string;
@@ -410,16 +411,10 @@ function ArticleEditor({
     if (articleSlug) fetchUploads();
   }, [articleSlug, fetchUploads]);
 
-  const renderedContent = useMemo(() => {
-    let html = marked.parse(content) as string;
-    // Sanitize to prevent XSS in preview
-    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
-    html = html.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-    html = html.replace(/href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"');
-    html = html.replace(/src\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'src=""');
-    html = html.replace(/<\/?(iframe|object|embed|form|base|meta|link)\b[^>]*>/gi, "");
-    return html;
-  }, [content]);
+  const renderedContent = useMemo(
+    () => sanitizeHtml(marked.parse(content) as string),
+    [content],
+  );
 
   const uploadFile = async (file: File, isBanner: boolean) => {
     setUploading(true);

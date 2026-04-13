@@ -5,13 +5,14 @@ import {
   validateSession,
   destroySession,
   checkRateLimit,
+  getClientIp,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(req);
 
-  if (!checkRateLimit(ip)) {
+  if (!(await checkRateLimit(ip))) {
     return NextResponse.json(
       { ok: false, error: "Too many attempts. Try again later." },
       { status: 429 }

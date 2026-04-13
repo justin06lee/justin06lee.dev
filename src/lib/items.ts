@@ -1,9 +1,6 @@
 import { db, initDb, type DbItem } from "./db";
 import type { GalleryItem } from "@/components/ItemGallery";
 
-// No-op kept so existing API route imports don't break
-export function invalidateItemsCache(_category?: string) {}
-
 export async function getItemsByCategory(category: string): Promise<GalleryItem[]> {
   await initDb();
   const result = await db.execute({
