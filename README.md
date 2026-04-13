@@ -1,7 +1,5 @@
 # justin06lee.dev
 
-this is my personal dev website. feel free to look around - ill be posting my projects and hobbies here. 
+this is my personal dev website. feel free to look around - ill be posting my projects, hobbies, articles (probably) and other stuff idk
 
-easy to use: go on the website and start browsing. 
-
-dev: its a next.js project with zero backend, so you just have to clone the repo if you want to edit it. no license here use it however you want.
+dev: do whatever you want it's turso sqlite db with drizzle orm. lowk used claude code hella
