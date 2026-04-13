@@ -3,9 +3,9 @@ import { db, initDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-const MAX_DELTA_PER_REQUEST = 5;
+const MAX_DELTA_PER_REQUEST = 50;
 const RATE_WINDOW_MS = 10_000;
-const RATE_MAX_PATS = 20;
+const RATE_MAX_PATS = 100;
 
 const getIp = (req: NextRequest) => {
   const fwd = req.headers.get("x-forwarded-for");

@@ -7,7 +7,7 @@ const TOTAL_FRAMES = 115;
 const SPRITE_COLS = 12;
 const SPRITE_ROWS = 10;
 const SPRITE_URL = "/cat-sprite.jpg";
-const FLUSH_INTERVAL_MS = 2500;
+const FLUSH_INTERVAL_MS = 1000;
 const POLL_INTERVAL_MS = 5000;
 const EDGE_LEFT = 0.22;
 const EDGE_RIGHT = 0.78;
@@ -27,6 +27,7 @@ export default function CatPage() {
     const currentFrameRef = useRef(-1);
     const lastEdgeRef = useRef<"left" | "right" | null>(null);
     const pendingPatsRef = useRef(0);
+    const flushingRef = useRef(false);
     const [pats, setPats] = useState(0);
     const [ready, setReady] = useState(false);
 
@@ -40,8 +41,10 @@ export default function CatPage() {
     }, []);
 
     const flush = async () => {
+        if (flushingRef.current) return;
         const delta = pendingPatsRef.current;
         if (delta <= 0) return;
+        flushingRef.current = true;
         pendingPatsRef.current = 0;
         try {
             const res = await fetch("/api/pats", {
@@ -51,12 +54,16 @@ export default function CatPage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (typeof data.count === "number") setPats(data.count);
+                if (typeof data.count === "number") {
+                    setPats((p) => Math.max(p, data.count));
+                }
             } else {
                 pendingPatsRef.current += delta;
             }
         } catch {
             pendingPatsRef.current += delta;
+        } finally {
+            flushingRef.current = false;
         }
     };
 
@@ -111,6 +118,13 @@ export default function CatPage() {
         spriteRef.current.style.backgroundPosition = `${x}% ${y}%`;
     };
 
+    const registerPat = () => {
+        const wasIdle = pendingPatsRef.current === 0;
+        pendingPatsRef.current += 1;
+        setPats((p) => p + 1);
+        if (wasIdle && !flushingRef.current) flush();
+    };
+
     const scheduleFrame = (idx: number) => {
         pendingFrameRef.current = idx;
         if (rafRef.current === null) {
@@ -127,14 +141,12 @@ export default function CatPage() {
 
         if (relX <= EDGE_LEFT) {
             if (lastEdgeRef.current === "right") {
-                pendingPatsRef.current += 1;
-                setPats((p) => p + 1);
+                registerPat();
             }
             lastEdgeRef.current = "left";
         } else if (relX >= EDGE_RIGHT) {
             if (lastEdgeRef.current === "left") {
-                pendingPatsRef.current += 1;
-                setPats((p) => p + 1);
+                registerPat();
             }
             lastEdgeRef.current = "right";
         }
