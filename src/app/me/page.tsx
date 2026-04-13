@@ -20,10 +20,20 @@ type Item = {
 
 type RawItem = Omit<Item, "tech"> & { tech: string };
 
+type Pfp = {
+  url: string;
+  scale: number;
+  x: number;
+  y: number;
+};
+
 type SiteConfig = {
   description: string[];
   socials: Record<string, string>;
+  pfp: Pfp;
 };
+
+const DEFAULT_PFP: Pfp = { url: "/justin-pfp-ghibli.png", scale: 1, x: 0, y: 0 };
 
 type ArticleData = {
   slug: string;
@@ -772,6 +782,147 @@ function ArticleEditor({
   );
 }
 
+/* ───────── Pfp Cropper ───────── */
+
+function PfpCropper({ pfp, onChange }: { pfp: Pfp; onChange: (p: Pfp) => void }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const dragState = useRef<{ startX: number; startY: number; origX: number; origY: number; w: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const clampScale = (s: number) => Math.min(4, Math.max(0.5, s));
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (!boxRef.current) return;
+    const rect = boxRef.current.getBoundingClientRect();
+    dragState.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: pfp.x,
+      origY: pfp.y,
+      w: rect.width,
+    };
+    const move = (ev: MouseEvent) => {
+      const d = dragState.current;
+      if (!d) return;
+      const dxPct = ((ev.clientX - d.startX) / d.w) * 100;
+      const dyPct = ((ev.clientY - d.startY) / d.w) * 100;
+      onChange({ ...pfp, x: d.origX + dxPct, y: d.origY + dyPct });
+    };
+    const up = () => {
+      dragState.current = null;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.002;
+    onChange({ ...pfp, scale: clampScale(pfp.scale + delta) });
+  };
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/uploads", { method: "POST", body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        onChange({ ...pfp, url: data.url, x: 0, y: 0, scale: 1 });
+      }
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="font-semibold mb-3">Profile Picture</h3>
+      <p className="text-xs text-white/50 mb-3">Drag to reposition. Scroll or use the slider to zoom.</p>
+      <div className="flex flex-col sm:flex-row gap-6 items-start">
+        <div className="flex flex-col gap-3">
+          <div
+            ref={boxRef}
+            onMouseDown={onMouseDown}
+            onWheel={onWheel}
+            className="relative size-60 overflow-hidden border border-white/20 bg-white/5 cursor-grab active:cursor-grabbing select-none touch-none"
+          >
+            {pfp.url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={pfp.url}
+                alt="pfp"
+                draggable={false}
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                style={{
+                  transform: `translate(${pfp.x}%, ${pfp.y}%) scale(${pfp.scale})`,
+                  transformOrigin: "center",
+                }}
+              />
+            )}
+            <div className="absolute inset-0 pointer-events-none ring-1 ring-inset ring-white/30 rounded-full" />
+          </div>
+          <div className="text-xs text-white/50">Circle shows the visible crop on the homepage.</div>
+        </div>
+
+        <div className="flex flex-col gap-4 flex-1 w-full">
+          <div>
+            <label className="text-xs text-white/60 mb-1 block">Image URL</label>
+            <input
+              value={pfp.url}
+              onChange={(e) => onChange({ ...pfp, url: e.target.value })}
+              placeholder="/justin-pfp-ghibli.png or https://..."
+              className={inputClass}
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" id="pfp-upload" />
+              <label htmlFor="pfp-upload" className="inline-flex items-center gap-2 border border-white/20 px-3 py-1.5 text-xs cursor-pointer hover:bg-white/10">
+                <Upload className="h-3.5 w-3.5" /> {uploading ? "Uploading..." : "Upload image"}
+              </label>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-white/60 mb-1 block">Zoom: {pfp.scale.toFixed(2)}x</label>
+            <input
+              type="range"
+              min={0.5}
+              max={4}
+              step={0.01}
+              value={pfp.scale}
+              onChange={(e) => onChange({ ...pfp, scale: parseFloat(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-white/60 mb-1 block">X: {pfp.x.toFixed(0)}%</label>
+              <input type="range" min={-100} max={100} step={0.5} value={pfp.x} onChange={(e) => onChange({ ...pfp, x: parseFloat(e.target.value) })} className="w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-white/60 mb-1 block">Y: {pfp.y.toFixed(0)}%</label>
+              <input type="range" min={-100} max={100} step={0.5} value={pfp.y} onChange={(e) => onChange({ ...pfp, y: parseFloat(e.target.value) })} className="w-full" />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onChange({ ...pfp, x: 0, y: 0, scale: 1 })}
+            className="self-start text-xs border border-white/20 px-3 py-1.5 hover:bg-white/10"
+          >
+            Reset position & zoom
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ───────── Site Config Panel ───────── */
 
 function SiteConfigPanel() {
@@ -780,6 +931,7 @@ function SiteConfigPanel() {
   const [saving, setSaving] = useState(false);
   const [descText, setDescText] = useState("");
   const [socials, setSocials] = useState<Record<string, string>>({});
+  const [pfp, setPfp] = useState<Pfp>(DEFAULT_PFP);
   const [status, setStatus] = useState("");
 
   const fetchConfig = useCallback(async () => {
@@ -789,6 +941,7 @@ function SiteConfigPanel() {
     setConfig(data);
     setDescText(data.description.join("\n"));
     setSocials(data.socials);
+    setPfp({ ...DEFAULT_PFP, ...(data.pfp ?? {}) });
     setLoading(false);
   }, []);
 
@@ -801,7 +954,7 @@ function SiteConfigPanel() {
     await fetch("/api/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: lines, socials }),
+      body: JSON.stringify({ description: lines, socials, pfp }),
     });
     setSaving(false);
     setStatus("Saved!");
@@ -814,6 +967,7 @@ function SiteConfigPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PfpCropper pfp={pfp} onChange={setPfp} />
       <div>
         <h3 className="font-semibold mb-3">Homepage Description</h3>
         <p className="text-xs text-white/50 mb-3">Write your description as a single block of text. It will be automatically split into animated lines (~10 words each).</p>

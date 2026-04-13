@@ -1,5 +1,12 @@
 import { db, initDb } from "./db";
 
+export type Pfp = {
+  url: string;
+  scale: number;
+  x: number;
+  y: number;
+};
+
 export type SiteConfig = {
   description: string[];
   socials: {
@@ -9,6 +16,7 @@ export type SiteConfig = {
     email: string;
     instagram: string;
   };
+  pfp: Pfp;
 };
 
 const DEFAULT_CONFIG: SiteConfig = {
@@ -25,6 +33,12 @@ const DEFAULT_CONFIG: SiteConfig = {
     x: "https://x.com/justin06lee",
     email: "justin.leehuiyun@gmail.com",
     instagram: "https://instagram.com/justin06lee",
+  },
+  pfp: {
+    url: "/justin-pfp-ghibli.png",
+    scale: 1,
+    x: 0,
+    y: 0,
   },
 };
 
@@ -45,6 +59,10 @@ export async function getSiteConfig(): Promise<SiteConfig> {
         sql: "INSERT OR IGNORE INTO site_config (key, value) VALUES (?, ?)",
         args: ["socials", JSON.stringify(DEFAULT_CONFIG.socials)],
       },
+      {
+        sql: "INSERT OR IGNORE INTO site_config (key, value) VALUES (?, ?)",
+        args: ["pfp", JSON.stringify(DEFAULT_CONFIG.pfp)],
+      },
     ]);
     return DEFAULT_CONFIG;
   }
@@ -53,10 +71,11 @@ export async function getSiteConfig(): Promise<SiteConfig> {
   return {
     description: (() => { try { return map.has("description") ? JSON.parse(map.get("description")!) : DEFAULT_CONFIG.description; } catch { return DEFAULT_CONFIG.description; } })(),
     socials: (() => { try { return map.has("socials") ? JSON.parse(map.get("socials")!) : DEFAULT_CONFIG.socials; } catch { return DEFAULT_CONFIG.socials; } })(),
+    pfp: (() => { try { return map.has("pfp") ? { ...DEFAULT_CONFIG.pfp, ...JSON.parse(map.get("pfp")!) } : DEFAULT_CONFIG.pfp; } catch { return DEFAULT_CONFIG.pfp; } })(),
   };
 }
 
-const ALLOWED_CONFIG_KEYS = ["description", "socials"];
+const ALLOWED_CONFIG_KEYS = ["description", "socials", "pfp"];
 
 export async function updateSiteConfig(key: string, value: string) {
   if (!ALLOWED_CONFIG_KEYS.includes(key)) {

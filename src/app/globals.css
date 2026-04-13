@@ -202,6 +202,50 @@ html, body {
   transform: translateX(-50%) translateY(-4px);
 }
 
+/* Pfp tile hover effects */
+.pfp-tile {
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: transform;
+}
+.pfp-tile:hover {
+  transform: rotate(4deg) scale(1.05);
+}
+.pfp-shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  transform: translateX(-220%);
+  opacity: 0;
+  background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.65) 50%, transparent 80%);
+  filter: blur(1px);
+  mix-blend-mode: screen;
+}
+.pfp-tile:hover .pfp-shine {
+  animation: pfp-shine-sweep 0.9s ease-in-out;
+}
+@keyframes pfp-shine-sweep {
+  0% { transform: translateX(-220%); opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateX(320%); opacity: 0; }
+}
+
+/* Rainbow cycling text (per-char staggered) */
+@keyframes rainbow-cycle {
+  0%   { color: hsl(0,   95%, 65%); }
+  20%  { color: hsl(60,  95%, 65%); }
+  40%  { color: hsl(120, 80%, 60%); }
+  60%  { color: hsl(200, 95%, 65%); }
+  80%  { color: hsl(280, 90%, 70%); }
+  100% { color: hsl(360, 95%, 65%); }
+}
+.rainbow-text > span {
+  display: inline-block;
+  animation: rainbow-cycle 3s linear infinite;
+}
+
 /* Prevent browser autofill yellow background */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,

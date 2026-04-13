@@ -7,6 +7,17 @@ import { useRouter } from "next/navigation";
 import * as motion from "motion/react-client";
 import { AnimatePresence } from "motion/react";
 
+function RainbowCat() {
+    const chars = "^cat^".split("");
+    return (
+        <span className="rainbow-text font-mono tracking-tight" aria-label="cat">
+            {chars.map((c, i) => (
+                <span key={i} style={{ animationDelay: `${-0.25 * i}s` }}>{c}</span>
+            ))}
+        </span>
+    );
+}
+
 export default function Navbar() {
     const [open, setOpen] = useState(false);
     const router = useRouter();
@@ -45,6 +56,9 @@ export default function Navbar() {
                     <button onClick={playIntro} className="text-sm text-white underline-offset-4 hover:underline hidden md:inline-flex whitespace-nowrap">
                         intro
                     </button>
+                    <Link href="/cat" className="text-sm underline-offset-4 hover:underline hidden md:inline-flex whitespace-nowrap">
+                        <RainbowCat />
+                    </Link>
                 </div>
 
                 {/* Right: nav links — pinned right */}
@@ -110,6 +124,9 @@ export default function Navbar() {
                                 <button onClick={playIntro} className="text-sm text-white underline-offset-4 hover:underline py-1">
                                     intro
                                 </button>
+                                <Link href="/cat" onClick={() => setOpen(false)} className="text-sm underline-offset-4 hover:underline py-1">
+                                    <RainbowCat />
+                                </Link>
                                 <Link href="/articles" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
                                     articles
                                 </Link>

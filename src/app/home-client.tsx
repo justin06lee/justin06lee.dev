@@ -59,6 +59,7 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
 
         {!hasPlayed && (
           <Intro
+            config={config}
             onDone={() => {
               localStorage.setItem("did_anim", "true");
               setHasPlayed(true);
@@ -71,11 +72,36 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
   );
 }
 
-function Intro({ onDone }: { onDone: () => void }) {
-  const steps = [
-    { text: "hi.", in: 2, out: 5 },
-    { text: "im justin.", in: 6, out: 10 },
-    { text: "welcome to my website.", in: 11, out: 15 },
+function Intro({ config, onDone }: { config: SiteConfig; onDone: () => void }) {
+  const justinStep = (
+    <span className="inline-flex items-center gap-1.5">
+      <span>im justin.</span>
+      {config.pfp?.url && (
+        <span className="inline-flex items-center gap-0.5">
+          <span>(</span>
+          <span className="relative inline-block size-7 overflow-hidden align-middle">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={config.pfp.url}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              style={{
+                transform: `translate(${config.pfp.x}%, ${config.pfp.y}%) scale(${config.pfp.scale})`,
+                transformOrigin: "center",
+              }}
+            />
+          </span>
+          <span>)</span>
+        </span>
+      )}
+    </span>
+  );
+
+  const steps: { node: React.ReactNode; in: number; out: number }[] = [
+    { node: "hi.", in: 2, out: 5 },
+    { node: justinStep, in: 6, out: 10 },
+    { node: "welcome to my website.", in: 11, out: 15 },
   ];
 
   return (
@@ -114,7 +140,7 @@ function Intro({ onDone }: { onDone: () => void }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, delay: s.in }}
             >
-              <div>{s.text}</div>
+              <div>{s.node}</div>
             </motion.div>
           </motion.div>
         ))}

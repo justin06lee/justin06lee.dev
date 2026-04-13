@@ -6,6 +6,7 @@ import * as motion from "motion/react-client";
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import SocialBar from "@/components/Socials";
+import PfpTile from "@/components/PfpTile";
 import type { SiteConfig } from "@/lib/site-config";
 
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
@@ -176,6 +177,18 @@ export default function HomePage({ config }: { config: SiteConfig }) {
             <div className="h-screen flex flex-col justify-center">
                 <div className="flex flex-col gap-4">
                     <div className="xl:block hidden">
+                        {config.pfp?.url && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.8, delay: 1.8 }}
+                                className="inline-block mb-6"
+                            >
+                                <Link href="/cat" aria-label="pet the cat">
+                                    <PfpTile pfp={config.pfp} />
+                                </Link>
+                            </motion.div>
+                        )}
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
