@@ -53,9 +53,9 @@ export const metadata: Metadata = {
 		googleBot: { index: true, follow: true },
 	},
 	icons: {
-		icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-		shortcut: ["/icon.svg"],
-		apple: ["/icon.svg"],
+		icon: [{ url: "/justin06leefav.png", type: "image/png" }],
+		shortcut: ["/justin06leefav.png"],
+		apple: ["/justin06leefav.png"],
 	},
 	manifest: "/manifest.webmanifest",
 };

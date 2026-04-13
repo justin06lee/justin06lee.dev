@@ -34,7 +34,7 @@ type SiteConfig = {
   pfp: Pfp;
 };
 
-const DEFAULT_PFP: Pfp = { url: "/justin-pfp-ghibli.png", scale: 1, x: 0, y: 0 };
+const DEFAULT_PFP: Pfp = { url: "", scale: 1, x: 0, y: 0 };
 
 type ArticleData = {
   slug: string;
