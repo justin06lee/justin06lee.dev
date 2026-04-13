@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { animate, useMotionValue, useMotionValueEvent } from "motion/react";
 import Navbar from "@/components/Navbar";
 
 const TOTAL_FRAMES = 115;
@@ -29,7 +30,21 @@ export default function CatPage() {
     const pendingPatsRef = useRef(0);
     const flushingRef = useRef(false);
     const [pats, setPats] = useState(0);
+    const [displayPats, setDisplayPats] = useState(0);
     const [ready, setReady] = useState(false);
+    const patsMotion = useMotionValue(0);
+
+    useMotionValueEvent(patsMotion, "change", (v) => {
+        setDisplayPats(Math.round(v));
+    });
+
+    useEffect(() => {
+        const controls = animate(patsMotion, pats, {
+            duration: 0.5,
+            ease: [0.22, 1, 0.36, 1],
+        });
+        return () => controls.stop();
+    }, [pats, patsMotion]);
 
     useEffect(() => {
         let cancelled = false;
@@ -182,10 +197,10 @@ export default function CatPage() {
             <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
                 <div className="flex flex-col items-center gap-2">
                     <div className="font-mono text-5xl sm:text-6xl tracking-tight tabular-nums">
-                        {pats.toLocaleString()}
+                        {displayPats.toLocaleString()}
                     </div>
                     <div className="text-xs text-white/50 uppercase tracking-widest">
-                        {pats === 1 ? "time bothered, globally" : "times bothered, globally"}
+                        {displayPats === 1 ? "time bothered, globally" : "times bothered, globally"}
                     </div>
                 </div>
 
