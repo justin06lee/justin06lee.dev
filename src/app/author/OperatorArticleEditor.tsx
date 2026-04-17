@@ -21,7 +21,6 @@ import { OperatorDrawingWindow } from "./OperatorDrawingWindow";
 import {
   deleteImageAction,
   saveArticleAction,
-  uploadImageAction,
   type OperatorFormState,
 } from "./content-actions";
 
@@ -451,16 +450,22 @@ export function OperatorArticleEditor({
           return;
         }
         for (const file of imageFiles) {
-          const buffer = await file.arrayBuffer();
-          const base64 = btoa(
-            new Uint8Array(buffer).reduce((s, b) => s + String.fromCharCode(b), "")
-          );
-          const asset = await uploadImageAction({
-            articlePath,
-            data: base64,
-            filename: file.name,
-            mimeType: file.type,
+          const form = new FormData();
+          form.append("file", file);
+          form.append("articlePath", articlePath.join("/"));
+          const response = await fetch("/api/operator/upload", {
+            method: "POST",
+            body: form,
           });
+          if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as
+              | { error?: string }
+              | null;
+            throw new Error(
+              body?.error || `Upload failed (status ${response.status}).`
+            );
+          }
+          const asset = (await response.json()) as OperatorImageAsset;
           handleAssetCreated(asset);
           insertTextAtCursor(`\n![${asset.displayName}](${asset.markdownPath})\n`);
         }

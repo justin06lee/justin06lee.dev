@@ -9,7 +9,6 @@ import {
   deleteOperatorArticleByPath,
   deleteOperatorImageAssetByPath,
   saveOperatorArticleByPath,
-  uploadOperatorImageByPath,
 } from "@/lib/operator-content";
 
 export type OperatorFormState =
@@ -118,16 +117,6 @@ export async function deleteImageAction(input: {
 }) {
   await requireAdminServer();
   await deleteOperatorImageAssetByPath(input);
-}
-
-export async function uploadImageAction(input: {
-  articlePath: string[];
-  data: string;
-  filename: string;
-  mimeType: string;
-}) {
-  await requireAdminServer();
-  return uploadOperatorImageByPath(input);
 }
 
 export async function deleteOperatorEntryAction(input: {
