@@ -26,6 +26,11 @@ body {
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -39,11 +44,25 @@ body {
 :root {
   --background: #000000;
   --foreground: #ffffff;
+  --surface: #0a0a0a;
+  --surface-alt: #141414;
+  --border: rgba(255, 255, 255, 0.12);
+  --muted: rgba(255, 255, 255, 0.6);
+  --accent: #ffffff;
+  --paper-border: rgba(255, 255, 255, 0.18);
+  --sticky-header-offset: 80px;
 }
 
 .dark {
   --background: #000000;
   --foreground: #ffffff;
+  --surface: #0a0a0a;
+  --surface-alt: #141414;
+  --border: rgba(255, 255, 255, 0.12);
+  --muted: rgba(255, 255, 255, 0.6);
+  --accent: #ffffff;
+  --paper-border: rgba(255, 255, 255, 0.18);
+  --sticky-header-offset: 80px;
 }
 
 html, body {

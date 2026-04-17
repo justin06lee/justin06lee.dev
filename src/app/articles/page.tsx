@@ -1,11 +1,9 @@
 import Navbar from "@/components/Navbar";
 import ArticleList from "@/components/ArticleList";
-import { getPublishedArticles } from "@/lib/articles";
-
-export const dynamic = "force-dynamic";
+import { listArticleSummaries } from "@/lib/github";
 
 export default async function ArticlesPage() {
-  const articles = await getPublishedArticles();
+  const articles = await listArticleSummaries();
 
   return (
     <>
@@ -14,10 +12,10 @@ export default async function ArticlesPage() {
         articles={articles.map((a) => ({
           slug: a.slug,
           title: a.title,
-          excerpt: a.excerpt,
-          banner_url: a.banner_url,
+          excerpt: a.excerpt ?? "",
+          banner_url: a.coverUrl,
           tags: a.tags,
-          published_at: a.published_at,
+          published_at: null,
         }))}
       />
     </>

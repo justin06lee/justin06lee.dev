@@ -3,8 +3,21 @@
 import * as motion from "motion/react-client";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import MarkdownRenderer from "@/components/MarkdownRenderer";
-import type { Article } from "@/lib/articles";
+import { CollapsibleMarkdown } from "@/components/article/collapsible-markdown";
+
+export type ArticleViewData = {
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  banner_url: string | null;
+  tags: string[];
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  imageBaseUrl: string;
+};
 
 function formatDate(iso: string | null): string {
   if (!iso) return "";
@@ -12,7 +25,7 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-export default function ArticleView({ article }: { article: Article }) {
+export default function ArticleView({ article }: { article: ArticleViewData }) {
   return (
     <main className="max-w-3xl mx-auto px-4 pt-16 pb-24">
       <motion.div
@@ -22,7 +35,7 @@ export default function ArticleView({ article }: { article: Article }) {
       >
         <Link
           href="/articles"
-          className="inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white transition-colors mb-8"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors mb-8"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to articles
@@ -34,7 +47,7 @@ export default function ArticleView({ article }: { article: Article }) {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.15 }}
-          className="mb-8 overflow-hidden border border-white/10"
+          className="mb-8 overflow-hidden border border-border"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -54,14 +67,14 @@ export default function ArticleView({ article }: { article: Article }) {
           {article.title}
         </h1>
 
-        <div className="flex items-center gap-3 mt-3 text-sm text-white/50">
+        <div className="flex items-center gap-3 mt-3 text-sm text-muted">
           {article.published_at && <time>{formatDate(article.published_at)}</time>}
           {article.tags.length > 0 && (
             <>
-              <span className="text-white/20">|</span>
+              {article.published_at && <span className="text-border">|</span>}
               <div className="flex gap-1.5">
                 {article.tags.map((t) => (
-                  <span key={t} className="px-2 py-0.5 text-xs border border-white/15 text-white/50">
+                  <span key={t} className="px-2 py-0.5 text-xs border border-border text-muted">
                     {t}
                   </span>
                 ))}
@@ -77,7 +90,10 @@ export default function ArticleView({ article }: { article: Article }) {
         transition={{ duration: 0.8, delay: 0.4 }}
         className="mt-10"
       >
-        <MarkdownRenderer content={article.content} />
+        <CollapsibleMarkdown
+          content={article.content}
+          imageBaseUrl={article.imageBaseUrl}
+        />
       </motion.div>
     </main>
   );
