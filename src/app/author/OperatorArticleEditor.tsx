@@ -437,11 +437,20 @@ export function OperatorArticleEditor({
     event.preventDefault();
 
     setUploadingFile(true);
+    setAssetError("");
 
     startTransition(async () => {
       try {
-        for (const file of Array.from(files)) {
-          if (!file.type.startsWith("image/")) continue;
+        const imageFiles = Array.from(files).filter((file) =>
+          file.type.startsWith("image/")
+        );
+        if (imageFiles.length === 0) {
+          setAssetError(
+            "Only image files can be dropped here (png, jpeg, gif, webp, svg)."
+          );
+          return;
+        }
+        for (const file of imageFiles) {
           const buffer = await file.arrayBuffer();
           const base64 = btoa(
             new Uint8Array(buffer).reduce((s, b) => s + String.fromCharCode(b), "")
@@ -858,6 +867,11 @@ export function OperatorArticleEditor({
           {state?.message ? (
             <p className="mt-4 text-sm text-foreground">{state.message}</p>
           ) : null}
+          {assetError && !assetToDelete ? (
+            <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+              {assetError}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid min-h-[70vh] gap-0 xl:grid-cols-[18rem_1fr]">
@@ -938,9 +952,11 @@ export function OperatorArticleEditor({
             </div>
           </aside>
 
-          <div className="grid min-h-[70vh] gap-0 xl:grid-cols-2">
+          <div className="grid min-h-[70vh] gap-0 xl:h-[70vh] xl:grid-cols-2">
             {mode !== "preview" ? (
-              <div className={mode === "split" ? "border-r border-border" : ""}>
+              <div
+                className={`min-h-0 ${mode === "split" ? "border-r border-border" : ""}`}
+              >
                 <textarea
                   ref={textareaRef}
                   name="raw"
@@ -962,8 +978,8 @@ export function OperatorArticleEditor({
             ) : null}
 
             {mode !== "edit" ? (
-              <div className="bg-background">
-                <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
+              <div className="min-h-0 bg-background xl:overflow-y-auto">
+                <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Live preview
                 </div>
                 <div className="px-4 py-6 lg:px-8">

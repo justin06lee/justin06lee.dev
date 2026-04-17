@@ -1,6 +1,6 @@
 export const ARTICLES_REPO_OWNER = "justin06lee";
 export const ARTICLES_REPO_NAME = "articles.justin06lee.dev";
-export const ARTICLES_REPO_BRANCH = "main";
+export const ARTICLES_REPO_BRANCH = "master";
 
 const API_BASE = `https://api.github.com/repos/${ARTICLES_REPO_OWNER}/${ARTICLES_REPO_NAME}`;
 const RAW_BASE = `https://raw.githubusercontent.com/${ARTICLES_REPO_OWNER}/${ARTICLES_REPO_NAME}/${ARTICLES_REPO_BRANCH}`;
