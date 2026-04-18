@@ -7,6 +7,13 @@ export type Pfp = {
   y: number;
 };
 
+export type PrayerLocation = {
+  city: string;
+  country: string;
+  method: number;
+  timezone: string;
+};
+
 export type SiteConfig = {
   description: string[];
   socials: {
@@ -17,12 +24,14 @@ export type SiteConfig = {
     instagram: string;
   };
   pfp: Pfp;
+  prayerLocation: PrayerLocation;
 };
 
 const EMPTY_CONFIG: SiteConfig = {
   description: [],
   socials: { github: "", linkedin: "", x: "", email: "", instagram: "" },
   pfp: { url: "", scale: 1, x: 0, y: 0 },
+  prayerLocation: { city: "", country: "", method: 2, timezone: "America/New_York" },
 };
 
 export async function getSiteConfig(): Promise<SiteConfig> {
@@ -36,10 +45,11 @@ export async function getSiteConfig(): Promise<SiteConfig> {
     description: (() => { try { return map.has("description") ? JSON.parse(map.get("description")!) : EMPTY_CONFIG.description; } catch { return EMPTY_CONFIG.description; } })(),
     socials: (() => { try { return map.has("socials") ? JSON.parse(map.get("socials")!) : EMPTY_CONFIG.socials; } catch { return EMPTY_CONFIG.socials; } })(),
     pfp: (() => { try { return map.has("pfp") ? { ...EMPTY_CONFIG.pfp, ...JSON.parse(map.get("pfp")!) } : EMPTY_CONFIG.pfp; } catch { return EMPTY_CONFIG.pfp; } })(),
+    prayerLocation: (() => { try { return map.has("prayerLocation") ? { ...EMPTY_CONFIG.prayerLocation, ...JSON.parse(map.get("prayerLocation")!) } : EMPTY_CONFIG.prayerLocation; } catch { return EMPTY_CONFIG.prayerLocation; } })(),
   };
 }
 
-const ALLOWED_CONFIG_KEYS = ["description", "socials", "pfp"];
+const ALLOWED_CONFIG_KEYS = ["description", "socials", "pfp", "prayerLocation"];
 
 export async function updateSiteConfig(key: string, value: string) {
   if (!ALLOWED_CONFIG_KEYS.includes(key)) {

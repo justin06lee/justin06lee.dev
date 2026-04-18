@@ -53,5 +53,28 @@ export async function PUT(req: NextRequest) {
     await updateSiteConfig("pfp", JSON.stringify(pfp));
   }
 
+  if (body.prayerLocation !== undefined) {
+    const loc = body.prayerLocation as Record<string, unknown>;
+    if (
+      typeof loc !== "object" ||
+      loc === null ||
+      typeof loc.city !== "string" ||
+      typeof loc.country !== "string" ||
+      typeof loc.method !== "number" ||
+      typeof loc.timezone !== "string"
+    ) {
+      return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone }" }, { status: 400 });
+    }
+    const prev = (await getSiteConfig()).prayerLocation;
+    await updateSiteConfig("prayerLocation", JSON.stringify(loc));
+    const changed =
+      prev.city !== loc.city || prev.country !== loc.country || prev.method !== loc.method;
+    if (changed) {
+      const { db, initDb } = await import("@/lib/db");
+      await initDb();
+      await db.execute("DELETE FROM prayer_times_cache");
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
