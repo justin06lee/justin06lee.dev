@@ -66,6 +66,29 @@ export async function initDb() {
       window_start INTEGER NOT NULL,
       pats INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS calendar_tasks (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      title TEXT NOT NULL,
+      notes TEXT,
+      start_time TEXT,
+      end_time TEXT,
+      done INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_calendar_tasks_date ON calendar_tasks(date)`,
+    `CREATE TABLE IF NOT EXISTS prayer_times_cache (
+      cache_key TEXT PRIMARY KEY,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      city TEXT NOT NULL,
+      country TEXT NOT NULL,
+      method INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    )`,
   ]);
 }
 
@@ -94,4 +117,28 @@ export type DbItem = {
   live: string | null;
   notes: string | null;
   sort_order: number;
+};
+
+export type DbCalendarTask = {
+  id: string;
+  date: string;
+  title: string;
+  notes: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  done: number;
+  position: number;
+  created_at: number;
+  updated_at: number;
+};
+
+export type DbPrayerTimesCache = {
+  cache_key: string;
+  year: number;
+  month: number;
+  city: string;
+  country: string;
+  method: number;
+  data: string;
+  fetched_at: number;
 };
