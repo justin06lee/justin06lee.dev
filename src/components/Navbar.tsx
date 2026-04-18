@@ -102,6 +102,9 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
 
                 {/* Right: nav links — pinned right */}
                 <div className="hidden md:flex items-center gap-1 ml-auto">
+                    <Link href="/calendar" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
+                        calendar
+                    </Link>
                     <Link href="/articles" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
                         articles
                     </Link>
@@ -165,6 +168,9 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                                 </button>
                                 <Link href="/cat" onClick={() => setOpen(false)} className="text-sm underline-offset-4 hover:underline py-1">
                                     <RainbowCat />
+                                </Link>
+                                <Link href="/calendar" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
+                                    calendar
                                 </Link>
                                 <Link href="/articles" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
                                     articles
