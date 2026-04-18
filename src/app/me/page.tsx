@@ -26,13 +26,22 @@ type Pfp = {
   y: number;
 };
 
+type PrayerLocation = {
+  city: string;
+  country: string;
+  method: number;
+  timezone: string;
+};
+
 type SiteConfig = {
   description: string[];
   socials: Record<string, string>;
   pfp: Pfp;
+  prayerLocation: PrayerLocation;
 };
 
 const DEFAULT_PFP: Pfp = { url: "", scale: 1, x: 0, y: 0 };
+const DEFAULT_PRAYER_LOCATION: PrayerLocation = { city: "", country: "", method: 2, timezone: "America/New_York" };
 
 const TABS = [
   { key: "projects", label: "Projects" },
@@ -349,6 +358,7 @@ function SiteConfigPanel() {
   const [descText, setDescText] = useState("");
   const [socials, setSocials] = useState<Record<string, string>>({});
   const [pfp, setPfp] = useState<Pfp>(DEFAULT_PFP);
+  const [prayerLocation, setPrayerLocation] = useState<PrayerLocation>(DEFAULT_PRAYER_LOCATION);
   const [status, setStatus] = useState("");
 
   const fetchConfig = useCallback(async () => {
@@ -359,6 +369,7 @@ function SiteConfigPanel() {
     setDescText(data.description.join("\n"));
     setSocials(data.socials);
     setPfp({ ...DEFAULT_PFP, ...(data.pfp ?? {}) });
+    setPrayerLocation({ ...DEFAULT_PRAYER_LOCATION, ...(data.prayerLocation ?? {}) });
     setLoading(false);
   }, []);
 
@@ -371,7 +382,7 @@ function SiteConfigPanel() {
     await fetch("/api/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: lines, socials, pfp }),
+      body: JSON.stringify({ description: lines, socials, pfp, prayerLocation }),
     });
     setSaving(false);
     setStatus("Saved!");
@@ -407,6 +418,28 @@ function SiteConfigPanel() {
               <input value={socials[key] ?? ""} onChange={(e) => setSocials({ ...socials, [key]: e.target.value })} placeholder={key === "email" ? "you@example.com" : "https://..."} className={inputClass} />
             </div>
           ))}
+        </div>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-3">Prayer Location</h3>
+        <p className="text-xs text-white/50 mb-3">Used to fetch daily prayer times from Aladhan. Changing city, country, or method clears the cached times.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-white/60 mb-1 block">City</label>
+            <input value={prayerLocation.city} onChange={(e) => setPrayerLocation({ ...prayerLocation, city: e.target.value })} placeholder="New York" className={inputClass} />
+          </div>
+          <div>
+            <label className="text-xs text-white/60 mb-1 block">Country</label>
+            <input value={prayerLocation.country} onChange={(e) => setPrayerLocation({ ...prayerLocation, country: e.target.value })} placeholder="US" className={inputClass} />
+          </div>
+          <div>
+            <label className="text-xs text-white/60 mb-1 block">Aladhan Method (integer — see Aladhan docs)</label>
+            <input type="number" value={prayerLocation.method} onChange={(e) => setPrayerLocation({ ...prayerLocation, method: Number(e.target.value) })} className={inputClass} />
+          </div>
+          <div>
+            <label className="text-xs text-white/60 mb-1 block">Timezone (IANA)</label>
+            <input value={prayerLocation.timezone} onChange={(e) => setPrayerLocation({ ...prayerLocation, timezone: e.target.value })} placeholder="America/New_York" className={inputClass} />
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-3">
