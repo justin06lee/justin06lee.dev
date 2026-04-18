@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { deleteTask, updateTask, type CalendarTaskPatch } from "@/lib/calendar";
-import { isValidDateString } from "@/components/calendar/date-utils";
+import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils";
+
+export const dynamic = "force-dynamic";
 
 export async function PATCH(
   req: NextRequest,
@@ -35,13 +37,13 @@ export async function PATCH(
     patch.notes = typeof body.notes === "string" ? sanitizeHtml(body.notes) : null;
   }
   if (body.startTime !== undefined) {
-    if (body.startTime !== null && (typeof body.startTime !== "string" || !/^\d{2}:\d{2}$/.test(body.startTime))) {
+    if (body.startTime !== null && (typeof body.startTime !== "string" || !isValidHhmm(body.startTime))) {
       return NextResponse.json({ error: "startTime must be HH:MM or null" }, { status: 400 });
     }
     patch.startTime = (body.startTime as string | null) ?? null;
   }
   if (body.endTime !== undefined) {
-    if (body.endTime !== null && (typeof body.endTime !== "string" || !/^\d{2}:\d{2}$/.test(body.endTime))) {
+    if (body.endTime !== null && (typeof body.endTime !== "string" || !isValidHhmm(body.endTime))) {
       return NextResponse.json({ error: "endTime must be HH:MM or null" }, { status: 400 });
     }
     patch.endTime = (body.endTime as string | null) ?? null;

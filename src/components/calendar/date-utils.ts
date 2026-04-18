@@ -35,6 +35,11 @@ export function isValidYearString(s: string): boolean {
   return /^\d{4}$/.test(s);
 }
 
+/** Validates an HH:MM string (00:00–23:59). */
+export function isValidHhmm(s: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+}
+
 /** Adds days to a YYYY-MM-DD string; returns YYYY-MM-DD. */
 export function addDays(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number);

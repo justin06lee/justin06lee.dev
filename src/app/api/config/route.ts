@@ -66,12 +66,13 @@ export async function PUT(req: NextRequest) {
     ) {
       return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone }" }, { status: 400 });
     }
+    const typedLoc = loc as { city: string; country: string; method: number; timezone: string };
     const prev = (await getSiteConfig()).prayerLocation;
-    await updateSiteConfig("prayerLocation", JSON.stringify(loc));
     const changed =
-      prev.city !== (loc as { city: string }).city ||
-      prev.country !== (loc as { country: string }).country ||
-      prev.method !== (loc as { method: number }).method;
+      prev.city !== typedLoc.city ||
+      prev.country !== typedLoc.country ||
+      prev.method !== typedLoc.method;
+    await updateSiteConfig("prayerLocation", JSON.stringify(typedLoc));
     if (changed) {
       const { db, initDb } = await import("@/lib/db");
       await initDb();

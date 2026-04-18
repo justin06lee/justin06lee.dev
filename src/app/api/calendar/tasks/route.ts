@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { createTask, getTasksInRange } from "@/lib/calendar";
-import { isValidDateString } from "@/components/calendar/date-utils";
+import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +34,10 @@ export async function POST(req: NextRequest) {
   if (typeof title !== "string" || title.trim().length === 0) {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
-  if (startTime !== undefined && startTime !== null && (typeof startTime !== "string" || !/^\d{2}:\d{2}$/.test(startTime))) {
+  if (startTime !== undefined && startTime !== null && (typeof startTime !== "string" || !isValidHhmm(startTime))) {
     return NextResponse.json({ error: "startTime must be HH:MM" }, { status: 400 });
   }
-  if (endTime !== undefined && endTime !== null && (typeof endTime !== "string" || !/^\d{2}:\d{2}$/.test(endTime))) {
+  if (endTime !== undefined && endTime !== null && (typeof endTime !== "string" || !isValidHhmm(endTime))) {
     return NextResponse.json({ error: "endTime must be HH:MM" }, { status: 400 });
   }
 
