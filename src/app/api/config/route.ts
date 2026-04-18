@@ -54,21 +54,24 @@ export async function PUT(req: NextRequest) {
   }
 
   if (body.prayerLocation !== undefined) {
-    const loc = body.prayerLocation as Record<string, unknown>;
+    const loc = body.prayerLocation;
     if (
       typeof loc !== "object" ||
       loc === null ||
-      typeof loc.city !== "string" ||
-      typeof loc.country !== "string" ||
-      typeof loc.method !== "number" ||
-      typeof loc.timezone !== "string"
+      Array.isArray(loc) ||
+      typeof (loc as { city?: unknown }).city !== "string" ||
+      typeof (loc as { country?: unknown }).country !== "string" ||
+      typeof (loc as { method?: unknown }).method !== "number" ||
+      typeof (loc as { timezone?: unknown }).timezone !== "string"
     ) {
       return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone }" }, { status: 400 });
     }
     const prev = (await getSiteConfig()).prayerLocation;
     await updateSiteConfig("prayerLocation", JSON.stringify(loc));
     const changed =
-      prev.city !== loc.city || prev.country !== loc.country || prev.method !== loc.method;
+      prev.city !== (loc as { city: string }).city ||
+      prev.country !== (loc as { country: string }).country ||
+      prev.method !== (loc as { method: number }).method;
     if (changed) {
       const { db, initDb } = await import("@/lib/db");
       await initDb();
