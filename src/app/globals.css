@@ -265,6 +265,53 @@ html, body {
   animation: rainbow-cycle 3s linear infinite;
 }
 
+/* Custom range slider — matches site's black/white minimal aesthetic */
+.range-custom {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  cursor: pointer;
+}
+.range-custom::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.range-custom::-moz-range-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+}
+.range-custom::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.range-custom::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.range-custom::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+.range-custom::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+.range-custom:focus {
+  outline: none;
+}
+
 /* Prevent browser autofill yellow background */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,

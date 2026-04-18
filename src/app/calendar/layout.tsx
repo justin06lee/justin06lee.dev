@@ -1,3 +1,4 @@
+import Navbar from "@/components/Navbar";
 import CalendarShell from "@/components/calendar/CalendarShell";
 import { getSiteConfig } from "@/lib/site-config";
 import { todayInTz } from "@/components/calendar/date-utils";
@@ -10,8 +11,11 @@ export default async function CalendarLayout({ children }: { children: React.Rea
   const today = todayInTz(tz);
   const [y, m] = today.split("-");
   return (
-    <CalendarShell today={today} todayMonth={`${y}-${m}`} todayYear={y}>
-      {children}
-    </CalendarShell>
+    <>
+      <Navbar />
+      <CalendarShell today={today} todayMonth={`${y}-${m}`} todayYear={y}>
+        {children}
+      </CalendarShell>
+    </>
   );
 }

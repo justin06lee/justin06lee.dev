@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Pencil, Trash2, Plus, LogOut, Save, Upload } from "lucide-react";
+import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin } from "lucide-react";
 
 type Item = {
   id: string;
@@ -323,17 +323,17 @@ function PfpCropper({ pfp, onChange }: { pfp: Pfp; onChange: (p: Pfp) => void })
               step={0.01}
               value={pfp.scale}
               onChange={(e) => onChange({ ...pfp, scale: parseFloat(e.target.value) })}
-              className="w-full"
+              className="range-custom w-full"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-white/60 mb-1 block">X: {pfp.x.toFixed(0)}%</label>
-              <input type="range" min={-100} max={100} step={0.5} value={pfp.x} onChange={(e) => onChange({ ...pfp, x: parseFloat(e.target.value) })} className="w-full" />
+              <input type="range" min={-100} max={100} step={0.5} value={pfp.x} onChange={(e) => onChange({ ...pfp, x: parseFloat(e.target.value) })} className="range-custom w-full" />
             </div>
             <div>
               <label className="text-xs text-white/60 mb-1 block">Y: {pfp.y.toFixed(0)}%</label>
-              <input type="range" min={-100} max={100} step={0.5} value={pfp.y} onChange={(e) => onChange({ ...pfp, y: parseFloat(e.target.value) })} className="w-full" />
+              <input type="range" min={-100} max={100} step={0.5} value={pfp.y} onChange={(e) => onChange({ ...pfp, y: parseFloat(e.target.value) })} className="range-custom w-full" />
             </div>
           </div>
           <button
@@ -344,6 +344,122 @@ function PfpCropper({ pfp, onChange }: { pfp: Pfp; onChange: (p: Pfp) => void })
             Reset position & zoom
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────── Prayer Location Picker ───────── */
+
+const ALADHAN_METHODS = [
+  { id: 2, label: "Islamic Society of North America" },
+  { id: 1, label: "Umm al-Qura (Makkah)" },
+  { id: 3, label: "Muslim World League" },
+  { id: 4, label: "Egyptian General Authority" },
+  { id: 5, label: "University of Islamic Sciences, Karachi" },
+  { id: 7, label: "Institute of Geophysics, Tehran" },
+  { id: 8, label: "Gulf Region" },
+  { id: 9, label: "Kuwait" },
+  { id: 10, label: "Qatar" },
+  { id: 11, label: "Majlis Ugama Islam Singapura" },
+  { id: 12, label: "Union Organization Islamic de France" },
+  { id: 13, label: "Diyanet İşleri Başkanlığı, Turkey" },
+  { id: 14, label: "Spiritual Administration of Muslims of Russia" },
+];
+
+type NominatimAddress = {
+  city?: string;
+  town?: string;
+  village?: string;
+  municipality?: string;
+  county?: string;
+  state?: string;
+  country?: string;
+  country_code?: string;
+};
+
+function PrayerLocationPicker({
+  value,
+  onChange,
+}: {
+  value: PrayerLocation;
+  onChange: (p: PrayerLocation) => void;
+}) {
+  const [detecting, setDetecting] = useState(false);
+  const [error, setError] = useState("");
+
+  const detect = () => {
+    if (!("geolocation" in navigator)) {
+      setError("Geolocation not supported in this browser.");
+      return;
+    }
+    setError("");
+    setDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en&zoom=10`,
+          );
+          if (!res.ok) throw new Error(`Reverse geocode failed: ${res.status}`);
+          const data = (await res.json()) as { address?: NominatimAddress };
+          const a = data.address ?? {};
+          const city = a.city || a.town || a.village || a.municipality || a.county || a.state || "";
+          const country = (a.country_code || "").toUpperCase() || a.country || "";
+          if (!city || !country) {
+            setError("Couldn't resolve your location to a city. Try again.");
+            return;
+          }
+          onChange({ ...value, city, country, timezone: tz });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Location lookup failed.");
+        } finally {
+          setDetecting(false);
+        }
+      },
+      (err) => {
+        setDetecting(false);
+        setError(err.message || "Permission denied.");
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    );
+  };
+
+  const hasLocation = Boolean(value.city && value.country);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={detect}
+          disabled={detecting}
+          className="inline-flex items-center gap-2 border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors disabled:opacity-50"
+        >
+          <MapPin className="h-4 w-4" /> {detecting ? "Detecting..." : "Use my location"}
+        </button>
+        {hasLocation && (
+          <span className="text-sm text-white/70">
+            {value.city}, {value.country} · <span className="text-white/40">{value.timezone}</span>
+          </span>
+        )}
+      </div>
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      <div>
+        <label className="text-xs text-white/60 mb-1 block">Calculation Method</label>
+        <select
+          value={value.method}
+          onChange={(e) => onChange({ ...value, method: Number(e.target.value) })}
+          className={inputClass}
+        >
+          {ALADHAN_METHODS.map((m) => (
+            <option key={m.id} value={m.id} className="bg-black">
+              {m.id} — {m.label}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
@@ -422,25 +538,8 @@ function SiteConfigPanel() {
       </div>
       <div>
         <h3 className="font-semibold mb-3">Prayer Location</h3>
-        <p className="text-xs text-white/50 mb-3">Used to fetch daily prayer times from Aladhan. Changing city, country, or method clears the cached times.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-white/60 mb-1 block">City</label>
-            <input value={prayerLocation.city} onChange={(e) => setPrayerLocation({ ...prayerLocation, city: e.target.value })} placeholder="New York" className={inputClass} />
-          </div>
-          <div>
-            <label className="text-xs text-white/60 mb-1 block">Country</label>
-            <input value={prayerLocation.country} onChange={(e) => setPrayerLocation({ ...prayerLocation, country: e.target.value })} placeholder="US" className={inputClass} />
-          </div>
-          <div>
-            <label className="text-xs text-white/60 mb-1 block">Aladhan Method (integer — see Aladhan docs)</label>
-            <input type="number" value={prayerLocation.method} onChange={(e) => setPrayerLocation({ ...prayerLocation, method: Number(e.target.value) })} className={inputClass} />
-          </div>
-          <div>
-            <label className="text-xs text-white/60 mb-1 block">Timezone (IANA)</label>
-            <input value={prayerLocation.timezone} onChange={(e) => setPrayerLocation({ ...prayerLocation, timezone: e.target.value })} placeholder="America/New_York" className={inputClass} />
-          </div>
-        </div>
+        <p className="text-xs text-white/50 mb-3">Click the button to use your current location for Aladhan prayer times. Your browser will ask for permission.</p>
+        <PrayerLocationPicker value={prayerLocation} onChange={setPrayerLocation} />
       </div>
       <div className="flex items-center gap-3">
         <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 bg-white text-black px-4 py-1.5 text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-50">
