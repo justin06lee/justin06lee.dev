@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSiteConfig, updateSiteConfig } from "@/lib/site-config";
+import { getSiteConfig, updateSiteConfig, validatePrayerLocation } from "@/lib/site-config";
 import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -54,43 +54,11 @@ export async function PUT(req: NextRequest) {
   }
 
   if (body.prayerLocation !== undefined) {
-    const loc = body.prayerLocation;
-    const lat = (loc as { latitude?: unknown })?.latitude;
-    const lon = (loc as { longitude?: unknown })?.longitude;
-    if (
-      typeof loc !== "object" ||
-      loc === null ||
-      Array.isArray(loc) ||
-      typeof (loc as { city?: unknown }).city !== "string" ||
-      typeof (loc as { country?: unknown }).country !== "string" ||
-      typeof (loc as { method?: unknown }).method !== "number" ||
-      typeof (loc as { timezone?: unknown }).timezone !== "string" ||
-      (lat !== null && typeof lat !== "number") ||
-      (lon !== null && typeof lon !== "number")
-    ) {
+    const loc = validatePrayerLocation(body.prayerLocation);
+    if (!loc) {
       return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone, latitude, longitude }" }, { status: 400 });
     }
-    const typedLoc = loc as {
-      city: string;
-      country: string;
-      method: number;
-      timezone: string;
-      latitude: number | null;
-      longitude: number | null;
-    };
-    const prev = (await getSiteConfig()).prayerLocation;
-    const changed =
-      prev.city !== typedLoc.city ||
-      prev.country !== typedLoc.country ||
-      prev.method !== typedLoc.method ||
-      prev.latitude !== typedLoc.latitude ||
-      prev.longitude !== typedLoc.longitude;
-    await updateSiteConfig("prayerLocation", JSON.stringify(typedLoc));
-    if (changed) {
-      const { db, initDb } = await import("@/lib/db");
-      await initDb();
-      await db.execute("DELETE FROM prayer_times_cache");
-    }
+    await updateSiteConfig("prayerLocation", JSON.stringify(loc));
   }
 
   return NextResponse.json({ ok: true });

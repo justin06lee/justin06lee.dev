@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT } from "./date-utils";
 
 type Props = {
   year: number;
@@ -16,31 +17,26 @@ function intensityClass(count: number): string {
   return "bg-white/85";
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
-
 function MonthGrid({ year, month, heatmap, today }: { year: number; month: number; heatmap: Record<string, number>; today: string }) {
-  const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
   const mm = String(month).padStart(2, "0");
+  const cells = buildMonthGrid(`${year}-${mm}`);
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="font-mono text-[11px] uppercase tracking-widest text-white/70">{MONTHS[month - 1]}</div>
+      <Link
+        href={`/calendar/month/${year}-${mm}`}
+        className="font-mono text-[11px] uppercase tracking-widest text-white/70 hover:text-white transition self-start"
+      >
+        {MONTH_NAMES_SHORT[month - 1]}
+      </Link>
       <div className="grid grid-cols-7 gap-[3px] text-[9px] font-mono text-white/30">
-        {WEEKDAYS.map((w, i) => (
+        {WEEKDAY_LETTERS.map((w, i) => (
           <div key={i} className="flex items-center justify-center h-3">{w}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-[3px]">
-        {Array.from({ length: totalCells }, (_, i) => {
-          const dayNum = i - firstWeekday + 1;
-          if (dayNum < 1 || dayNum > daysInMonth) {
-            return <div key={i} className="aspect-square" />;
-          }
-          const dd = String(dayNum).padStart(2, "0");
-          const date = `${year}-${mm}-${dd}`;
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} className="aspect-square" />;
           const count = heatmap[date] ?? 0;
           const isToday = date === today;
           return (
@@ -61,7 +57,7 @@ export default function YearView({ year, heatmap, today }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-        {MONTHS.map((_, idx) => (
+        {MONTH_NAMES_SHORT.map((_, idx) => (
           <MonthGrid key={idx} year={year} month={idx + 1} heatmap={heatmap} today={today} />
         ))}
       </div>

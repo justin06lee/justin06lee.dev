@@ -2,31 +2,13 @@
 
 import Link from "next/link";
 import type { CalendarTask } from "@/lib/calendar";
+import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT } from "./date-utils";
 
 type Props = {
   yyyymm: string;
   tasks: CalendarTask[];
   today: string;
 };
-
-const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function buildGrid(yyyymm: string): (string | null)[] {
-  const [y, m] = yyyymm.split("-").map(Number);
-  const first = new Date(Date.UTC(y, m - 1, 1));
-  const firstDow = first.getUTCDay();
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const cells: (string | null)[] = [];
-  for (let i = 0; i < firstDow; i++) cells.push(null);
-  for (let d = 1; d <= lastDay; d++) {
-    const mm = String(m).padStart(2, "0");
-    const dd = String(d).padStart(2, "0");
-    cells.push(`${y}-${mm}-${dd}`);
-  }
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
 
 function intensityClass(count: number): string {
   if (count <= 0) return "";
@@ -36,7 +18,7 @@ function intensityClass(count: number): string {
 }
 
 export default function MonthView({ yyyymm, tasks, today }: Props) {
-  const cells = buildGrid(yyyymm);
+  const cells = buildMonthGrid(yyyymm);
   const [y, m] = yyyymm.split("-").map(Number);
   const byDate = new Map<string, CalendarTask[]>();
   for (const t of tasks) {
@@ -48,10 +30,10 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="font-mono text-sm uppercase tracking-widest text-white/70">
-        {MONTH_NAMES[m - 1]} {y}
+        {MONTH_NAMES_SHORT[m - 1]} {y}
       </h2>
       <div className="grid grid-cols-7 gap-[3px] text-[10px] font-mono uppercase tracking-widest text-white/40">
-        {WEEKDAYS.map((w, i) => (
+        {WEEKDAY_LETTERS.map((w, i) => (
           <div key={i} className="px-2 py-1">{w}</div>
         ))}
       </div>
@@ -64,7 +46,7 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
           const day = Number(date.split("-")[2]);
           const isToday = date === today;
           const visible = dayTasks.slice(0, 3);
-          const extra = dayTasks.length - visible.length;
+          const extra = total - visible.length;
           return (
             <Link
               key={date}

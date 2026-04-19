@@ -1,7 +1,4 @@
-/**
- * Formats a Date into YYYY-MM-DD in a given IANA timezone.
- */
-export function formatDateInTz(date: Date, timezone: string): string {
+function formatDateInTz(date: Date, timezone: string): string {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
@@ -60,6 +57,32 @@ export function monthRange(yyyymm: string): { from: string; to: string } {
     from: `${y}-${mm}-01`,
     to: `${y}-${mm}-${String(lastDay).padStart(2, "0")}`,
   };
+}
+
+export const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
+
+export const MONTH_NAMES_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/**
+ * Returns a Sunday-aligned grid of YYYY-MM-DD strings for the given month,
+ * with nulls for leading and trailing padding cells. Length is always a
+ * multiple of 7.
+ */
+export function buildMonthGrid(yyyymm: string): (string | null)[] {
+  const [y, m] = yyyymm.split("-").map(Number);
+  const firstDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const mm = String(m).padStart(2, "0");
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= lastDay; d++) {
+    cells.push(`${y}-${mm}-${String(d).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
 }
 
 /** Parses HH:MM and returns minutes since midnight (0–1439), or null if invalid. */

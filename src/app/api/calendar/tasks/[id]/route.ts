@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { sanitizeHtml } from "@/lib/sanitize";
 import { deleteTask, updateTask, type CalendarTaskPatch } from "@/lib/calendar";
 import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils";
 
@@ -28,13 +27,13 @@ export async function PATCH(
     if (typeof body.title !== "string" || body.title.trim().length === 0) {
       return NextResponse.json({ error: "title must be non-empty string" }, { status: 400 });
     }
-    patch.title = sanitizeHtml(body.title);
+    patch.title = body.title.trim();
   }
   if (body.notes !== undefined) {
     if (body.notes !== null && typeof body.notes !== "string") {
       return NextResponse.json({ error: "notes must be string or null" }, { status: 400 });
     }
-    patch.notes = typeof body.notes === "string" ? sanitizeHtml(body.notes) : null;
+    patch.notes = typeof body.notes === "string" ? body.notes : null;
   }
   if (body.startTime !== undefined) {
     if (body.startTime !== null && (typeof body.startTime !== "string" || !isValidHhmm(body.startTime))) {

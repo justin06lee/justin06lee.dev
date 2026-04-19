@@ -125,6 +125,7 @@ export default function DayView({ date, tasks, prayers, isAdmin }: Props) {
 
       {editing && (
         <TaskEditor
+          key={editing === "new" ? "new" : editing.id}
           date={date}
           task={editing === "new" ? undefined : editing}
           onClose={() => setEditing(null)}

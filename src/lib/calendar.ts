@@ -12,7 +12,7 @@ export type CalendarTask = {
   position: number;
 };
 
-export type NewCalendarTask = {
+type NewCalendarTask = {
   date: string;
   title: string;
   notes?: string | null;
@@ -92,7 +92,7 @@ export async function createTask(input: NewCalendarTask): Promise<CalendarTask> 
   return task;
 }
 
-export async function getTaskById(id: string): Promise<CalendarTask | null> {
+async function getTaskById(id: string): Promise<CalendarTask | null> {
   await initDb();
   const result = await db.execute({
     sql: "SELECT * FROM calendar_tasks WHERE id = ?",

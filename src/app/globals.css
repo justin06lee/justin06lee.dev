@@ -265,7 +265,6 @@ html, body {
   animation: rainbow-cycle 3s linear infinite;
 }
 
-/* Custom range slider — matches site's black/white minimal aesthetic */
 .range-custom {
   -webkit-appearance: none;
   appearance: none;

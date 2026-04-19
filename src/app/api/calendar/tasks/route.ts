@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { sanitizeHtml } from "@/lib/sanitize";
 import { createTask, getTasksInRange } from "@/lib/calendar";
 import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils";
 
@@ -43,8 +42,8 @@ export async function POST(req: NextRequest) {
 
   const task = await createTask({
     date,
-    title: sanitizeHtml(title),
-    notes: typeof notes === "string" ? sanitizeHtml(notes) : null,
+    title: title.trim(),
+    notes: typeof notes === "string" ? notes : null,
     startTime: typeof startTime === "string" ? startTime : null,
     endTime: typeof endTime === "string" ? endTime : null,
     position: typeof position === "number" ? position : 0,
