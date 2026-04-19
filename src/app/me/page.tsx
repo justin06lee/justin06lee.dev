@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin } from "lucide-react";
-import { DEFAULT_TIMEZONE } from "@/lib/site-config";
 
 type Item = {
   id: string;
@@ -44,7 +43,7 @@ type SiteConfig = {
 };
 
 const DEFAULT_PFP: Pfp = { url: "", scale: 1, x: 0, y: 0 };
-const DEFAULT_PRAYER_LOCATION: PrayerLocation = { city: "", country: "", method: 2, timezone: DEFAULT_TIMEZONE, latitude: null, longitude: null };
+const DEFAULT_PRAYER_LOCATION: PrayerLocation = { city: "", country: "", method: 2, timezone: "America/New_York", latitude: null, longitude: null };
 
 const TABS = [
   { key: "projects", label: "Projects" },
