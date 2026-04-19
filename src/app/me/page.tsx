@@ -367,17 +367,6 @@ const ALADHAN_METHODS = [
   { id: 14, label: "Spiritual Administration of Muslims of Russia" },
 ];
 
-type NominatimAddress = {
-  city?: string;
-  town?: string;
-  village?: string;
-  municipality?: string;
-  county?: string;
-  state?: string;
-  country?: string;
-  country_code?: string;
-};
-
 function PrayerLocationPicker({
   value,
   onChange,
@@ -400,18 +389,12 @@ function PrayerLocationPicker({
         try {
           const { latitude, longitude } = pos.coords;
           const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en&zoom=10`,
-          );
-          if (!res.ok) throw new Error(`Reverse geocode failed: ${res.status}`);
-          const data = (await res.json()) as { address?: NominatimAddress };
-          const a = data.address ?? {};
-          const city = a.city || a.town || a.village || a.municipality || a.county || a.state || "";
-          const country = (a.country_code || "").toUpperCase() || a.country || "";
-          if (!city || !country) {
-            setError("Couldn't resolve your location to a city. Try again.");
-            return;
+          const res = await fetch(`/api/geocode/reverse?lat=${latitude}&lon=${longitude}`);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || `Reverse geocode failed: ${res.status}`);
           }
+          const { city, country } = (await res.json()) as { city: string; country: string };
           onChange({ ...value, city, country, timezone: tz });
         } catch (err) {
           setError(err instanceof Error ? err.message : "Location lookup failed.");
