@@ -6,6 +6,7 @@ import type { CalendarTask } from "@/lib/calendar";
 type Props = {
   yyyymm: string;
   tasks: CalendarTask[];
+  today: string;
 };
 
 function buildGrid(yyyymm: string): (string | null)[] {
@@ -24,7 +25,7 @@ function buildGrid(yyyymm: string): (string | null)[] {
   return cells;
 }
 
-export default function MonthView({ yyyymm, tasks }: Props) {
+export default function MonthView({ yyyymm, tasks, today }: Props) {
   const cells = buildGrid(yyyymm);
   const byDate = new Map<string, { total: number; done: number }>();
   for (const t of tasks) {
@@ -46,13 +47,14 @@ export default function MonthView({ yyyymm, tasks }: Props) {
           if (!date) return <div key={i} className="bg-black/50 min-h-24" />;
           const stats = byDate.get(date);
           const day = Number(date.split("-")[2]);
+          const isToday = date === today;
           return (
             <Link
               key={date}
               href={`/calendar/day/${date}`}
-              className="bg-black min-h-24 p-2 hover:bg-white/5 transition flex flex-col"
+              className={`bg-black min-h-24 p-2 hover:bg-white/5 transition flex flex-col ${isToday ? "ring-1 ring-inset ring-white/80" : ""}`}
             >
-              <span className="font-mono text-xs text-white/80">{day}</span>
+              <span className={`font-mono text-xs ${isToday ? "text-white font-semibold" : "text-white/80"}`}>{day}</span>
               {stats && (
                 <span className="mt-auto font-mono text-[10px] text-white/50">
                   {stats.done}/{stats.total}

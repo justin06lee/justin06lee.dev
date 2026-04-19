@@ -5,6 +5,7 @@ import Link from "next/link";
 type Props = {
   year: number;
   heatmap: Record<string, number>;
+  today: string;
 };
 
 function intensityClass(count: number): string {
@@ -18,7 +19,7 @@ function intensityClass(count: number): string {
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
-function MonthGrid({ year, month, heatmap }: { year: number; month: number; heatmap: Record<string, number> }) {
+function MonthGrid({ year, month, heatmap, today }: { year: number; month: number; heatmap: Record<string, number>; today: string }) {
   const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
@@ -41,12 +42,13 @@ function MonthGrid({ year, month, heatmap }: { year: number; month: number; heat
           const dd = String(dayNum).padStart(2, "0");
           const date = `${year}-${mm}-${dd}`;
           const count = heatmap[date] ?? 0;
+          const isToday = date === today;
           return (
             <Link
               key={i}
               href={`/calendar/day/${date}`}
-              title={`${date} — ${count} task${count === 1 ? "" : "s"} done`}
-              className={`aspect-square ${intensityClass(count)} hover:ring-1 hover:ring-white/60 transition`}
+              title={`${date} — ${count} task${count === 1 ? "" : "s"} done${isToday ? " (today)" : ""}`}
+              className={`aspect-square ${intensityClass(count)} ${isToday ? "ring-1 ring-white" : "hover:ring-1 hover:ring-white/60"} transition`}
             />
           );
         })}
@@ -55,12 +57,12 @@ function MonthGrid({ year, month, heatmap }: { year: number; month: number; heat
   );
 }
 
-export default function YearView({ year, heatmap }: Props) {
+export default function YearView({ year, heatmap, today }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
         {MONTHS.map((_, idx) => (
-          <MonthGrid key={idx} year={year} month={idx + 1} heatmap={heatmap} />
+          <MonthGrid key={idx} year={year} month={idx + 1} heatmap={heatmap} today={today} />
         ))}
       </div>
       <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-white/40">
