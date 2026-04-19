@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSiteConfig, updateSiteConfig } from "@/lib/site-config";
+import { getSiteConfig, updateSiteConfig, validatePrayerLocation } from "@/lib/site-config";
 import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,14 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "pfp must have { url, scale, x, y }" }, { status: 400 });
     }
     await updateSiteConfig("pfp", JSON.stringify(pfp));
+  }
+
+  if (body.prayerLocation !== undefined) {
+    const loc = validatePrayerLocation(body.prayerLocation);
+    if (!loc) {
+      return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone, latitude, longitude }" }, { status: 400 });
+    }
+    await updateSiteConfig("prayerLocation", JSON.stringify(loc));
   }
 
   return NextResponse.json({ ok: true });

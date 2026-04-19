@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Pencil, Trash2, Plus, LogOut, Save, Upload } from "lucide-react";
+import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin } from "lucide-react";
+import { DEFAULT_TIMEZONE } from "@/lib/site-config";
 
 type Item = {
   id: string;
@@ -26,13 +27,24 @@ type Pfp = {
   y: number;
 };
 
+type PrayerLocation = {
+  city: string;
+  country: string;
+  method: number;
+  timezone: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 type SiteConfig = {
   description: string[];
   socials: Record<string, string>;
   pfp: Pfp;
+  prayerLocation: PrayerLocation;
 };
 
 const DEFAULT_PFP: Pfp = { url: "", scale: 1, x: 0, y: 0 };
+const DEFAULT_PRAYER_LOCATION: PrayerLocation = { city: "", country: "", method: 2, timezone: DEFAULT_TIMEZONE, latitude: null, longitude: null };
 
 const TABS = [
   { key: "projects", label: "Projects" },
@@ -314,17 +326,17 @@ function PfpCropper({ pfp, onChange }: { pfp: Pfp; onChange: (p: Pfp) => void })
               step={0.01}
               value={pfp.scale}
               onChange={(e) => onChange({ ...pfp, scale: parseFloat(e.target.value) })}
-              className="w-full"
+              className="range-custom w-full"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-white/60 mb-1 block">X: {pfp.x.toFixed(0)}%</label>
-              <input type="range" min={-100} max={100} step={0.5} value={pfp.x} onChange={(e) => onChange({ ...pfp, x: parseFloat(e.target.value) })} className="w-full" />
+              <input type="range" min={-100} max={100} step={0.5} value={pfp.x} onChange={(e) => onChange({ ...pfp, x: parseFloat(e.target.value) })} className="range-custom w-full" />
             </div>
             <div>
               <label className="text-xs text-white/60 mb-1 block">Y: {pfp.y.toFixed(0)}%</label>
-              <input type="range" min={-100} max={100} step={0.5} value={pfp.y} onChange={(e) => onChange({ ...pfp, y: parseFloat(e.target.value) })} className="w-full" />
+              <input type="range" min={-100} max={100} step={0.5} value={pfp.y} onChange={(e) => onChange({ ...pfp, y: parseFloat(e.target.value) })} className="range-custom w-full" />
             </div>
           </div>
           <button
@@ -340,6 +352,124 @@ function PfpCropper({ pfp, onChange }: { pfp: Pfp; onChange: (p: Pfp) => void })
   );
 }
 
+/* ───────── Prayer Location Picker ───────── */
+
+const ALADHAN_METHODS = [
+  { id: 2, label: "Islamic Society of North America" },
+  { id: 1, label: "Umm al-Qura (Makkah)" },
+  { id: 3, label: "Muslim World League" },
+  { id: 4, label: "Egyptian General Authority" },
+  { id: 5, label: "University of Islamic Sciences, Karachi" },
+  { id: 7, label: "Institute of Geophysics, Tehran" },
+  { id: 8, label: "Gulf Region" },
+  { id: 9, label: "Kuwait" },
+  { id: 10, label: "Qatar" },
+  { id: 11, label: "Majlis Ugama Islam Singapura" },
+  { id: 12, label: "Union Organization Islamic de France" },
+  { id: 13, label: "Diyanet İşleri Başkanlığı, Turkey" },
+  { id: 14, label: "Spiritual Administration of Muslims of Russia" },
+];
+
+function PrayerLocationPicker({
+  value,
+  onChange,
+}: {
+  value: PrayerLocation;
+  onChange: (p: PrayerLocation) => void;
+}) {
+  const [detecting, setDetecting] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const detect = () => {
+    if (!("geolocation" in navigator)) {
+      setError("Geolocation not supported in this browser.");
+      return;
+    }
+    setError("");
+    setSaved(false);
+    setDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          const res = await fetch(`/api/geocode/reverse?lat=${latitude}&lon=${longitude}`);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || `Reverse geocode failed: ${res.status}`);
+          }
+          const { city, country } = (await res.json()) as { city: string; country: string };
+          const next: PrayerLocation = { ...value, city, country, timezone: tz, latitude, longitude };
+          onChange(next);
+          const saveRes = await fetch("/api/config", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prayerLocation: next }),
+          });
+          if (!saveRes.ok) {
+            const body = await saveRes.json().catch(() => ({}));
+            throw new Error(body.error || `Save failed: ${saveRes.status}`);
+          }
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2000);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Location lookup failed.");
+        } finally {
+          setDetecting(false);
+        }
+      },
+      (err) => {
+        setDetecting(false);
+        setError(err.message || "Permission denied.");
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    );
+  };
+
+  const hasLocation = Boolean(value.city && value.country);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={detect}
+          disabled={detecting}
+          className="inline-flex items-center gap-2 border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors disabled:opacity-50"
+        >
+          <MapPin className="h-4 w-4" /> {detecting ? "Detecting..." : "Use my location"}
+        </button>
+        {hasLocation && (
+          <span className="text-sm text-white/70">
+            {value.city}, {value.country}
+            {value.latitude !== null && value.longitude !== null && (
+              <span className="text-white/40"> · {value.latitude.toFixed(4)}, {value.longitude.toFixed(4)}</span>
+            )}
+            <span className="text-white/40"> · {value.timezone}</span>
+          </span>
+        )}
+      </div>
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      {saved && <p className="text-sm text-green-400">Location saved.</p>}
+      <div>
+        <label className="text-xs text-white/60 mb-1 block">Calculation Method</label>
+        <select
+          value={value.method}
+          onChange={(e) => onChange({ ...value, method: Number(e.target.value) })}
+          className={inputClass}
+        >
+          {ALADHAN_METHODS.map((m) => (
+            <option key={m.id} value={m.id} className="bg-black">
+              {m.id} — {m.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 /* ───────── Site Config Panel ───────── */
 
 function SiteConfigPanel() {
@@ -349,6 +479,7 @@ function SiteConfigPanel() {
   const [descText, setDescText] = useState("");
   const [socials, setSocials] = useState<Record<string, string>>({});
   const [pfp, setPfp] = useState<Pfp>(DEFAULT_PFP);
+  const [prayerLocation, setPrayerLocation] = useState<PrayerLocation>(DEFAULT_PRAYER_LOCATION);
   const [status, setStatus] = useState("");
 
   const fetchConfig = useCallback(async () => {
@@ -359,6 +490,7 @@ function SiteConfigPanel() {
     setDescText(data.description.join("\n"));
     setSocials(data.socials);
     setPfp({ ...DEFAULT_PFP, ...(data.pfp ?? {}) });
+    setPrayerLocation({ ...DEFAULT_PRAYER_LOCATION, ...(data.prayerLocation ?? {}) });
     setLoading(false);
   }, []);
 
@@ -371,7 +503,7 @@ function SiteConfigPanel() {
     await fetch("/api/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: lines, socials, pfp }),
+      body: JSON.stringify({ description: lines, socials, pfp, prayerLocation }),
     });
     setSaving(false);
     setStatus("Saved!");
@@ -408,6 +540,11 @@ function SiteConfigPanel() {
             </div>
           ))}
         </div>
+      </div>
+      <div>
+        <h3 className="font-semibold mb-3">Prayer Location</h3>
+        <p className="text-xs text-white/50 mb-3">Click the button to use your current location for Aladhan prayer times. Your browser will ask for permission.</p>
+        <PrayerLocationPicker value={prayerLocation} onChange={setPrayerLocation} />
       </div>
       <div className="flex items-center gap-3">
         <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 bg-white text-black px-4 py-1.5 text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-50">
