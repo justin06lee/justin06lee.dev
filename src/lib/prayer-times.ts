@@ -17,7 +17,9 @@ type AladhanDay = {
 type AladhanResponse = { code: number; status: string; data: AladhanDay[] };
 
 function cacheKey(year: number, month: number, loc: PrayerLocation): string {
-  return `${year}-${String(month).padStart(2, "0")}|${loc.city}|${loc.method}`;
+  const hasCoords = loc.latitude !== null && loc.longitude !== null;
+  const where = hasCoords ? `${loc.latitude!.toFixed(4)},${loc.longitude!.toFixed(4)}` : `${loc.city}|${loc.country}`;
+  return `${year}-${String(month).padStart(2, "0")}|${where}|${loc.method}`;
 }
 
 /** Strips " (XXX)" timezone suffix and anything past "HH:MM". */
@@ -46,12 +48,20 @@ async function fetchAladhanMonth(
   month: number,
   loc: PrayerLocation,
 ): Promise<Record<string, PrayerTimes>> {
-  const url = new URL(`https://api.aladhan.com/v1/calendarByCity/${year}/${month}`);
-  url.searchParams.set("city", loc.city);
-  url.searchParams.set("country", loc.country);
+  const hasCoords = loc.latitude !== null && loc.longitude !== null;
+  const url = hasCoords
+    ? new URL(`https://api.aladhan.com/v1/calendar/${year}/${month}`)
+    : new URL(`https://api.aladhan.com/v1/calendarByCity/${year}/${month}`);
+  if (hasCoords) {
+    url.searchParams.set("latitude", String(loc.latitude));
+    url.searchParams.set("longitude", String(loc.longitude));
+  } else {
+    url.searchParams.set("city", loc.city);
+    url.searchParams.set("country", loc.country);
+  }
   url.searchParams.set("method", String(loc.method));
   const res = await fetch(url.toString(), { next: { revalidate: 0 } });
-  if (!res.ok) throw new Error(`Aladhan HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Aladhan HTTP ${res.status} for ${url.toString()}`);
   const json = (await res.json()) as AladhanResponse;
   if (json.code !== 200 || !Array.isArray(json.data)) {
     throw new Error(`Aladhan bad payload: ${json.status}`);
@@ -66,7 +76,9 @@ export async function getPrayerTimesForDate(date: string): Promise<PrayerTimes |
   const day = dStr;
   const config = await getSiteConfig();
   const loc = config.prayerLocation;
-  if (!loc.city || !loc.country) return null;
+  const hasCoords = loc.latitude !== null && loc.longitude !== null;
+  const hasCity = Boolean(loc.city && loc.country);
+  if (!hasCoords && !hasCity) return null;
 
   await initDb();
   const key = cacheKey(year, month, loc);
@@ -94,7 +106,8 @@ export async function getPrayerTimesForDate(date: string): Promise<PrayerTimes |
       args: [key, year, month, loc.city, loc.country, loc.method, JSON.stringify(monthMap), Date.now()],
     });
     return monthMap[day] ?? null;
-  } catch {
+  } catch (err) {
+    console.error("[prayer-times] fetch failed:", err);
     return null;
   }
 }

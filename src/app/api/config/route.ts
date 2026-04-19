@@ -55,6 +55,8 @@ export async function PUT(req: NextRequest) {
 
   if (body.prayerLocation !== undefined) {
     const loc = body.prayerLocation;
+    const lat = (loc as { latitude?: unknown })?.latitude;
+    const lon = (loc as { longitude?: unknown })?.longitude;
     if (
       typeof loc !== "object" ||
       loc === null ||
@@ -62,16 +64,27 @@ export async function PUT(req: NextRequest) {
       typeof (loc as { city?: unknown }).city !== "string" ||
       typeof (loc as { country?: unknown }).country !== "string" ||
       typeof (loc as { method?: unknown }).method !== "number" ||
-      typeof (loc as { timezone?: unknown }).timezone !== "string"
+      typeof (loc as { timezone?: unknown }).timezone !== "string" ||
+      (lat !== null && typeof lat !== "number") ||
+      (lon !== null && typeof lon !== "number")
     ) {
-      return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone }" }, { status: 400 });
+      return NextResponse.json({ error: "prayerLocation must have { city, country, method, timezone, latitude, longitude }" }, { status: 400 });
     }
-    const typedLoc = loc as { city: string; country: string; method: number; timezone: string };
+    const typedLoc = loc as {
+      city: string;
+      country: string;
+      method: number;
+      timezone: string;
+      latitude: number | null;
+      longitude: number | null;
+    };
     const prev = (await getSiteConfig()).prayerLocation;
     const changed =
       prev.city !== typedLoc.city ||
       prev.country !== typedLoc.country ||
-      prev.method !== typedLoc.method;
+      prev.method !== typedLoc.method ||
+      prev.latitude !== typedLoc.latitude ||
+      prev.longitude !== typedLoc.longitude;
     await updateSiteConfig("prayerLocation", JSON.stringify(typedLoc));
     if (changed) {
       const { db, initDb } = await import("@/lib/db");

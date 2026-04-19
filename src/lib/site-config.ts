@@ -12,6 +12,8 @@ export type PrayerLocation = {
   country: string;
   method: number;
   timezone: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type SiteConfig = {
@@ -31,7 +33,7 @@ const EMPTY_CONFIG: SiteConfig = {
   description: [],
   socials: { github: "", linkedin: "", x: "", email: "", instagram: "" },
   pfp: { url: "", scale: 1, x: 0, y: 0 },
-  prayerLocation: { city: "", country: "", method: 2, timezone: "America/New_York" },
+  prayerLocation: { city: "", country: "", method: 2, timezone: "America/New_York", latitude: null, longitude: null },
 };
 
 export async function getSiteConfig(): Promise<SiteConfig> {
