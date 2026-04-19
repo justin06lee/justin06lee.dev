@@ -90,24 +90,24 @@ export default function TaskEditor({ date, task, onClose }: Props) {
           />
         </label>
         <div className="flex gap-3">
-          <label className="flex flex-col gap-1 flex-1">
+          <label className="flex flex-col gap-1 flex-1 min-w-0">
             <span className="text-white/60 text-xs">start (HH:MM)</span>
             <input
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               placeholder="09:00"
               pattern="\d{2}:\d{2}"
-              className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
+              className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
             />
           </label>
-          <label className="flex flex-col gap-1 flex-1">
+          <label className="flex flex-col gap-1 flex-1 min-w-0">
             <span className="text-white/60 text-xs">end (HH:MM)</span>
             <input
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               placeholder="10:00"
               pattern="\d{2}:\d{2}"
-              className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
+              className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
             />
           </label>
         </div>

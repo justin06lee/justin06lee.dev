@@ -65,6 +65,12 @@ export default function CalendarShell({
     view === "month" && next ? monthHref(next) :
     view === "year" && next ? yearHref(next) : "#";
   const todayHref = view === "month" ? monthHref(todayMonth) : view === "year" ? yearHref(todayYear) : dayHref(today);
+  const currentToken =
+    view === "day" ? today :
+    view === "month" ? todayMonth :
+    todayYear;
+  const isOnCurrent = token === currentToken;
+  const middleLabel = isOnCurrent ? "today" : (token ?? "today");
 
   return (
     <div className="min-h-screen bg-black text-white pt-16 pb-16 px-4 sm:px-6">
@@ -77,7 +83,7 @@ export default function CalendarShell({
           </div>
           <div className="flex items-center gap-3 text-sm">
             <Link href={prevHref} className="text-white/60 hover:text-white">‹</Link>
-            <Link href={todayHref} className="text-white/60 hover:text-white underline-offset-4 hover:underline">today</Link>
+            <Link href={todayHref} title={isOnCurrent ? "today" : "jump to today"} className="text-white/60 hover:text-white underline-offset-4 hover:underline font-mono tabular-nums">{middleLabel}</Link>
             <Link href={nextHref} className="text-white/60 hover:text-white">›</Link>
           </div>
         </div>
