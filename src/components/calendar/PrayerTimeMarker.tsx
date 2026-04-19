@@ -16,7 +16,7 @@ export default function PrayerTimeMarker({
       style={{ top: `${top}%` }}
     >
       <div className="h-px flex-1 bg-white/40" />
-      <div className="ml-2 font-mono text-[10px] uppercase tracking-widest text-white/70 whitespace-nowrap">
+      <div className="mx-2 font-mono text-[10px] uppercase tracking-widest text-white/70 whitespace-nowrap">
         {name} {time}
       </div>
     </div>
