@@ -17,5 +17,6 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
     isAdminServer(),
     getSiteConfig(),
   ]);
-  return <DayView date={date} tasks={tasks} prayers={prayers} isAdmin={admin} today={todayInTz(resolveTimezone(config))} />;
+  const tz = resolveTimezone(config);
+  return <DayView date={date} tasks={tasks} prayers={prayers} isAdmin={admin} today={todayInTz(tz)} timezone={tz} />;
 }

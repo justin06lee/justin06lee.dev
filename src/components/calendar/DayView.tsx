@@ -15,6 +15,7 @@ type Props = {
   prayers: PrayerTimes | null;
   isAdmin: boolean;
   today: string;
+  timezone: string;
 };
 
 function TimedBlock({
@@ -37,7 +38,7 @@ function TimedBlock({
   return (
     <button
       onClick={onClick}
-      className={`group absolute left-14 right-2 border text-left text-xs overflow-hidden transition ${base} ${collapsed ? "flex items-center justify-center" : "px-2 py-1"}`}
+      className={`group absolute left-14 right-2 border text-left text-xs transition ${base} ${collapsed ? "flex items-center justify-center overflow-visible" : "px-2 py-1 overflow-hidden"}`}
       style={{ top: `${top}%`, height: `${height}%` }}
     >
       {collapsed ? (
@@ -57,27 +58,32 @@ function TimedBlock({
   );
 }
 
-function useNowMinutes(enabled: boolean) {
-  const [minutes, setMinutes] = useState(() => {
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
-  });
+function useNowMinutes(enabled: boolean, timezone: string) {
+  const [minutes, setMinutes] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) return;
     const tick = () => {
-      const now = new Date();
-      setMinutes(now.getHours() * 60 + now.getMinutes());
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(new Date());
+      const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+      const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+      setMinutes(h * 60 + m);
     };
+    tick();
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
-  }, [enabled]);
-  return enabled ? minutes : null;
+  }, [enabled, timezone]);
+  return minutes;
 }
 
-export default function DayView({ date, tasks, prayers, isAdmin, today }: Props) {
+export default function DayView({ date, tasks, prayers, isAdmin, today, timezone }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<CalendarTask | "new" | null>(null);
-  const nowMinutes = useNowMinutes(date === today);
+  const nowMinutes = useNowMinutes(date === today, timezone);
 
   const timed = tasks.filter((t) => t.startTime);
   const sorted = [...tasks].sort((a, b) => {
