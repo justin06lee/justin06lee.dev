@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarTask } from "@/lib/calendar";
 import type { PrayerTimes } from "@/lib/prayer-times";
@@ -13,6 +13,7 @@ type Props = {
   tasks: CalendarTask[];
   prayers: PrayerTimes | null;
   isAdmin: boolean;
+  today: string;
 };
 
 function TimedBlock({
@@ -30,7 +31,7 @@ function TimedBlock({
   return (
     <button
       onClick={onClick}
-      className={`absolute left-14 right-32 border px-2 py-1 text-left text-xs overflow-hidden transition ${
+      className={`absolute left-14 right-2 border px-2 py-1 text-left text-xs overflow-hidden transition ${
         task.done ? "bg-white/15 border-white/30 line-through text-white/60" : "bg-white/5 border-white/30 hover:bg-white/10"
       }`}
       style={{ top: `${top}%`, height: `${height}%` }}
@@ -40,12 +41,34 @@ function TimedBlock({
   );
 }
 
-export default function DayView({ date, tasks, prayers, isAdmin }: Props) {
+function useNowMinutes(enabled: boolean) {
+  const [minutes, setMinutes] = useState(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    const tick = () => {
+      const now = new Date();
+      setMinutes(now.getHours() * 60 + now.getMinutes());
+    };
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [enabled]);
+  return enabled ? minutes : null;
+}
+
+export default function DayView({ date, tasks, prayers, isAdmin, today }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<CalendarTask | "new" | null>(null);
+  const nowMinutes = useNowMinutes(date === today);
 
   const timed = tasks.filter((t) => t.startTime);
-  const untimed = tasks.filter((t) => !t.startTime);
+  const sorted = [...tasks].sort((a, b) => {
+    const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
+    const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
+    return aMin - bMin;
+  });
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   const toggleDone = async (task: CalendarTask) => {
@@ -88,6 +111,16 @@ export default function DayView({ date, tasks, prayers, isAdmin }: Props) {
             </div>
           )}
 
+          {nowMinutes != null && (
+            <div
+              className="absolute left-0 right-0 z-10 pointer-events-none flex items-center"
+              style={{ top: `${(nowMinutes / 1440) * 100}%` }}
+            >
+              <div className="size-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+              <div className="h-px flex-1 bg-red-500" />
+            </div>
+          )}
+
           {timed.map((task) => (
             <TimedBlock key={task.id} task={task} onClick={() => isAdmin && setEditing(task)} />
           ))}
@@ -101,10 +134,10 @@ export default function DayView({ date, tasks, prayers, isAdmin }: Props) {
             <button onClick={() => setEditing("new")} className="text-xs underline-offset-4 hover:underline text-white/80">+ add</button>
           )}
         </div>
-        {untimed.length === 0 && (
-          <div className="text-xs text-white/40">no untimed tasks</div>
+        {sorted.length === 0 && (
+          <div className="text-xs text-white/40">no tasks</div>
         )}
-        {untimed.map((task) => (
+        {sorted.map((task) => (
           <div key={task.id} className="flex items-start gap-2 border border-white/10 p-2">
             <button
               onClick={() => isAdmin && toggleDone(task)}
@@ -113,7 +146,14 @@ export default function DayView({ date, tasks, prayers, isAdmin }: Props) {
               aria-label={task.done ? "mark not done" : "mark done"}
             />
             <div className="flex-1 min-w-0">
-              <div className={`text-sm ${task.done ? "line-through text-white/50" : "text-white"}`}>{task.title}</div>
+              <div className={`text-sm ${task.done ? "line-through text-white/50" : "text-white"}`}>
+                {task.startTime && (
+                  <span className="font-mono text-white/40 text-xs mr-1.5">
+                    {task.startTime}{task.endTime ? `–${task.endTime}` : ""}
+                  </span>
+                )}
+                {task.title}
+              </div>
               {task.notes && <div className="text-xs text-white/50 mt-1">{task.notes}</div>}
             </div>
             {isAdmin && (

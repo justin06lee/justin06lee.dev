@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { CalendarTask } from "@/lib/calendar";
-import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT } from "./date-utils";
+import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT, hhmmToMinutes } from "./date-utils";
 
 type Props = {
   yyyymm: string;
@@ -40,7 +40,11 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
       <div className="grid grid-cols-7 gap-[3px]">
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="min-h-28" />;
-          const dayTasks = byDate.get(date) ?? [];
+          const dayTasks = (byDate.get(date) ?? []).sort((a, b) => {
+            const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
+            const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
+            return aMin - bMin;
+          });
           const done = dayTasks.filter((t) => t.done).length;
           const total = dayTasks.length;
           const day = Number(date.split("-")[2]);
