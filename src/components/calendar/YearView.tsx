@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import * as motion from "motion/react-client";
 import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT } from "./date-utils";
 
 type Props = {
@@ -58,10 +59,22 @@ export default function YearView({ year, heatmap, today }: Props) {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
         {MONTH_NAMES_SHORT.map((_, idx) => (
-          <MonthGrid key={idx} year={year} month={idx + 1} heatmap={heatmap} today={today} />
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: idx * 0.03 }}
+          >
+            <MonthGrid year={year} month={idx + 1} heatmap={heatmap} today={today} />
+          </motion.div>
         ))}
       </div>
-      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-white/40">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.4 }}
+        className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-white/40"
+      >
         <span>less</span>
         <span className="w-3 h-3 bg-white/[0.04]" />
         <span className="w-3 h-3 bg-white/15" />
@@ -69,7 +82,7 @@ export default function YearView({ year, heatmap, today }: Props) {
         <span className="w-3 h-3 bg-white/55" />
         <span className="w-3 h-3 bg-white/85" />
         <span>more</span>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import * as motion from "motion/react-client";
 import type { CalendarTask } from "@/lib/calendar";
 import type { PrayerTimes } from "@/lib/prayer-times";
 import { hhmmToMinutes } from "./date-utils";
@@ -26,17 +27,32 @@ function TimedBlock({
   const start = hhmmToMinutes(task.startTime);
   const end = hhmmToMinutes(task.endTime) ?? (start !== null ? start + 30 : null);
   if (start == null || end == null) return null;
+  const duration = end - start;
   const top = (start / 1440) * 100;
   const height = Math.max(((end - start) / 1440) * 100, 0.8);
+  const collapsed = duration < 30;
+  const base = task.done
+    ? "bg-white/15 border-white/30 line-through text-white/60"
+    : "bg-white/5 border-white/30 hover:bg-white/10";
   return (
     <button
       onClick={onClick}
-      className={`absolute left-14 right-2 border px-2 py-1 text-left text-xs overflow-hidden transition ${
-        task.done ? "bg-white/15 border-white/30 line-through text-white/60" : "bg-white/5 border-white/30 hover:bg-white/10"
-      }`}
+      className={`group absolute left-14 right-2 border text-left text-xs overflow-hidden transition ${base} ${collapsed ? "flex items-center justify-center" : "px-2 py-1"}`}
       style={{ top: `${top}%`, height: `${height}%` }}
     >
-      <span className="font-mono">{task.startTime}–{task.endTime ?? "?"}</span> {task.title}
+      {collapsed ? (
+        <>
+          <span className="text-white/40 tracking-widest">···</span>
+          <div className="absolute left-0 top-full mt-1 z-20 bg-black border border-white/20 px-3 py-2 text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">
+            <span className="font-mono text-white/60">{task.startTime}–{task.endTime ?? "?"}</span>{" "}
+            {task.title}
+          </div>
+        </>
+      ) : (
+        <>
+          <span className="font-mono">{task.startTime}–{task.endTime ?? "?"}</span> {task.title}
+        </>
+      )}
     </button>
   );
 }
@@ -82,7 +98,12 @@ export default function DayView({ date, tasks, prayers, isAdmin, today }: Props)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-      <div className="relative border border-white/10 bg-white/[0.02] min-h-[960px]">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative border border-white/10 bg-white/[0.02] min-h-[960px]"
+      >
         <div className="absolute inset-0">
           {hours.map((h) => (
             <div
@@ -125,9 +146,14 @@ export default function DayView({ date, tasks, prayers, isAdmin, today }: Props)
             <TimedBlock key={task.id} task={task} onClick={() => isAdmin && setEditing(task)} />
           ))}
         </div>
-      </div>
+      </motion.div>
 
-      <aside className="flex flex-col gap-3">
+      <motion.aside
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="flex flex-col gap-3"
+      >
         <div className="flex items-center justify-between">
           <span className="font-mono uppercase tracking-widest text-xs text-white/60">checklist</span>
           {isAdmin && (
@@ -161,7 +187,7 @@ export default function DayView({ date, tasks, prayers, isAdmin, today }: Props)
             )}
           </div>
         ))}
-      </aside>
+      </motion.aside>
 
       {editing && (
         <TaskEditor

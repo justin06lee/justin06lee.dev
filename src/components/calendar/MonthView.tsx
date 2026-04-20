@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import * as motion from "motion/react-client";
 import type { CalendarTask } from "@/lib/calendar";
 import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT, hhmmToMinutes } from "./date-utils";
 
@@ -29,15 +30,30 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="font-mono text-sm uppercase tracking-widest text-white/70">
+      <motion.h2
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="font-mono text-sm uppercase tracking-widest text-white/70"
+      >
         {MONTH_NAMES_SHORT[m - 1]} {y}
-      </h2>
-      <div className="grid grid-cols-7 gap-[3px] text-[10px] font-mono uppercase tracking-widest text-white/40">
+      </motion.h2>
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        className="grid grid-cols-7 gap-[3px] text-[10px] font-mono uppercase tracking-widest text-white/40"
+      >
         {WEEKDAY_LETTERS.map((w, i) => (
           <div key={i} className="px-2 py-1">{w}</div>
         ))}
-      </div>
-      <div className="grid grid-cols-7 gap-[3px]">
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="grid grid-cols-7 gap-[3px]"
+      >
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="min-h-28" />;
           const dayTasks = (byDate.get(date) ?? []).sort((a, b) => {
@@ -84,7 +100,7 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
             </Link>
           );
         })}
-      </div>
+      </motion.div>
     </div>
   );
 }
