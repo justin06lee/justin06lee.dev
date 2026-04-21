@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { getArticleByPath, resolveArticleSegment } from "@/lib/github";
+import { isAdminServer } from "@/lib/auth-server";
 import ArticleView from "./article-view";
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -11,6 +12,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const article = await getArticleByPath([actualName]);
   if (!article) notFound();
 
+  const isAdmin = await isAdminServer();
+
   const coverUrl = article.cover
     ? `${article.rawPath}/${article.cover.replace(/^\.?\/+/, "")}`
     : null;
@@ -19,6 +22,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <>
       <Navbar />
       <ArticleView
+        isAdmin={isAdmin}
         article={{
           slug,
           title: article.title,
