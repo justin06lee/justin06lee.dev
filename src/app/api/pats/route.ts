@@ -7,6 +7,12 @@ const MAX_DELTA_PER_REQUEST = 50;
 const RATE_WINDOW_MS = 10_000;
 const RATE_MAX_PATS = 100;
 
+const ALLOWED_ORIGINS = new Set([
+  "https://justin06lee.dev",
+  "https://www.justin06lee.dev",
+  "http://localhost:3000",
+]);
+
 const getIp = (req: NextRequest) => {
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
@@ -56,6 +62,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   await initDb();
 
   let body: unknown;

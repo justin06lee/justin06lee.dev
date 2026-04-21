@@ -1,3 +1,4 @@
+import "server-only";
 import { timingSafeEqual, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";

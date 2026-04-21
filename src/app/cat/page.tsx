@@ -101,8 +101,9 @@ export default function CatPage() {
         }, POLL_INTERVAL_MS);
         const flushTimer = window.setInterval(flush, FLUSH_INTERVAL_MS);
         const onUnload = () => {
+            if (flushingRef.current || pendingPatsRef.current <= 0) return;
             const delta = pendingPatsRef.current;
-            if (delta <= 0) return;
+            pendingPatsRef.current = 0;
             try {
                 navigator.sendBeacon?.(
                     "/api/pats",

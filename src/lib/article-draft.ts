@@ -62,7 +62,10 @@ export function parseArticleDraft(
 
     const coverMatch = line.match(/^cover:\s*(.+)$/i);
     if (coverMatch) {
-      cover = coverMatch[1].trim();
+      let raw = coverMatch[1].trim();
+      const mdImg = raw.match(/^!\[.*?\]\((.+?)\)$/);
+      if (mdImg) raw = mdImg[1];
+      cover = raw;
       cursor += 1;
       continue;
     }

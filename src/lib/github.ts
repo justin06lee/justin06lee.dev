@@ -211,7 +211,7 @@ export async function listArticleSummaries(
         title: article.title,
         excerpt: article.excerpt,
         coverUrl: article.cover
-          ? rawUrl(entry.name, article.cover)
+          ? rawUrl(entry.name, ...article.cover.split("/"))
           : null,
         tags: article.tags,
         pathSegments: [entry.name],
