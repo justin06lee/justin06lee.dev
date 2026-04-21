@@ -131,6 +131,9 @@ export async function isAdmin(req: NextRequest): Promise<boolean> {
   return validateSession(sessionToken);
 }
 
+/** Alias for isAdmin – matches naming convention used by annotation routes. */
+export const isAdminRequest = isAdmin;
+
 /**
  * Validate the session cookie. Returns null if valid, or a 401 response if invalid.
  */
