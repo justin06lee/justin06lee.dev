@@ -308,6 +308,7 @@ export default function AnnotatedContent({
 
       if (!paragraphEl) {
         setPositionPicker(null);
+        setToolbar(null);
         onPendingMargin(null);
         return;
       }
