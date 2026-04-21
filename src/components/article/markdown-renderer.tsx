@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,6 +10,7 @@ import rehypeSlug from "rehype-slug";
 import type { Components } from "react-markdown";
 import { useTheme } from "next-themes";
 import { getThemeImageVariant, isThemeManagedImage } from "@/lib/theme-images";
+import { CopyCodeButton } from "./CopyCodeButton";
 import "katex/dist/katex.min.css";
 
 interface MarkdownRendererProps {
@@ -29,6 +31,20 @@ function isResolvedImageSrc(src: string): boolean {
   );
 }
 
+function PreBlock({ children, ...props }: React.ComponentPropsWithoutRef<"pre">) {
+  const preRef = useRef<HTMLPreElement>(null);
+  return (
+    <pre
+      ref={preRef}
+      className="group relative mb-4 overflow-x-auto border border-border bg-surface-alt p-0"
+      {...props}
+    >
+      {children}
+      <CopyCodeButton codeRef={preRef} />
+    </pre>
+  );
+}
+
 export function MarkdownRenderer({
   content,
   imageBaseUrl,
@@ -36,9 +52,15 @@ export function MarkdownRenderer({
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
 
+  const paragraphIndexRef = useRef(0);
+  // Reset on each render
+  paragraphIndexRef.current = 0;
+  const nextIndex = () => paragraphIndexRef.current++;
+
   const components: Components = {
     h1: ({ children, ...props }) => (
       <h1
+        data-paragraph-index={nextIndex()}
         className="mb-6 mt-10 text-4xl font-normal leading-tight tracking-tight text-foreground first:mt-0"
         style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
         {...props}
@@ -48,6 +70,7 @@ export function MarkdownRenderer({
     ),
     h2: ({ children, ...props }) => (
       <h2
+        data-paragraph-index={nextIndex()}
         className="mb-4 mt-8 text-3xl font-normal leading-snug text-foreground"
         style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
         {...props}
@@ -57,6 +80,7 @@ export function MarkdownRenderer({
     ),
     h3: ({ children, ...props }) => (
       <h3
+        data-paragraph-index={nextIndex()}
         className="mb-3 mt-6 text-2xl font-normal leading-snug text-foreground"
         style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
         {...props}
@@ -66,6 +90,7 @@ export function MarkdownRenderer({
     ),
     h4: ({ children, ...props }) => (
       <h4
+        data-paragraph-index={nextIndex()}
         className="mb-2 mt-5 text-xl font-normal text-foreground"
         style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
         {...props}
@@ -75,6 +100,7 @@ export function MarkdownRenderer({
     ),
     h5: ({ children, ...props }) => (
       <h5
+        data-paragraph-index={nextIndex()}
         className="mb-2 mt-4 text-lg font-normal text-foreground"
         style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
         {...props}
@@ -84,6 +110,7 @@ export function MarkdownRenderer({
     ),
     h6: ({ children, ...props }) => (
       <h6
+        data-paragraph-index={nextIndex()}
         className="mb-2 mt-4 text-base font-normal text-muted"
         style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
         {...props}
@@ -92,7 +119,7 @@ export function MarkdownRenderer({
       </h6>
     ),
     p: ({ children, ...props }) => (
-      <p className="mb-4 text-base leading-7 text-foreground" {...props}>
+      <p data-paragraph-index={nextIndex()} className="mb-4 text-base leading-7 text-foreground" {...props}>
         {children}
       </p>
     ),
@@ -129,12 +156,13 @@ export function MarkdownRenderer({
       );
     },
     ul: ({ children, ...props }) => (
-      <ul className="mb-4 ml-6 list-disc space-y-1 text-foreground" {...props}>
+      <ul data-paragraph-index={nextIndex()} className="mb-4 ml-6 list-disc space-y-1 text-foreground" {...props}>
         {children}
       </ul>
     ),
     ol: ({ children, ...props }) => (
       <ol
+        data-paragraph-index={nextIndex()}
         className="mb-4 ml-6 list-decimal space-y-1 text-foreground"
         {...props}
       >
@@ -148,6 +176,7 @@ export function MarkdownRenderer({
     ),
     blockquote: ({ children, ...props }) => (
       <blockquote
+        data-paragraph-index={nextIndex()}
         className="mb-4 border-l-4 border-accent pl-4 italic text-muted"
         {...props}
       >
@@ -182,16 +211,9 @@ export function MarkdownRenderer({
         </code>
       );
     },
-    pre: ({ children, ...props }) => (
-      <pre
-        className="mb-4 overflow-x-auto border border-border bg-surface-alt p-0"
-        {...props}
-      >
-        {children}
-      </pre>
-    ),
+    pre: (props) => <PreBlock {...props} data-paragraph-index={nextIndex()} />,
     table: ({ children, ...props }) => (
-      <div className="mb-4 overflow-x-auto">
+      <div data-paragraph-index={nextIndex()} className="mb-4 overflow-x-auto">
         <table
           className="w-full border-collapse border border-border text-sm"
           {...props}
@@ -213,7 +235,7 @@ export function MarkdownRenderer({
         {children}
       </td>
     ),
-    hr: (props) => <hr className="my-8 border-border" {...props} />,
+    hr: (props) => <hr data-paragraph-index={nextIndex()} className="my-8 border-border" {...props} />,
     img: ({ src, alt, ...props }) => {
       const srcStr = typeof src === "string" ? src : "";
       const themedSrc = isThemeManagedImage(srcStr)
@@ -226,6 +248,7 @@ export function MarkdownRenderer({
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          data-paragraph-index={nextIndex()}
           src={resolvedSrc}
           alt={alt || ""}
           className="my-4 max-w-full border border-border"
