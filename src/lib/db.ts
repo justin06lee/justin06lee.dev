@@ -89,6 +89,20 @@ export async function initDb() {
       data TEXT NOT NULL,
       fetched_at INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS annotations (
+      id TEXT PRIMARY KEY,
+      article_slug TEXT NOT NULL,
+      type TEXT NOT NULL,
+      paragraph_index INTEGER NOT NULL,
+      position TEXT,
+      start_offset INTEGER,
+      end_offset INTEGER,
+      highlight_color TEXT,
+      comment TEXT,
+      public INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_annotations_slug ON annotations(article_slug)`,
   ]);
 }
 
