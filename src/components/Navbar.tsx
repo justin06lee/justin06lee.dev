@@ -108,14 +108,8 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                     <Link href="/articles" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
                         articles
                     </Link>
-                    <Link href="/in-development" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
-                        in development
-                    </Link>
-                    <Link href="/hobbies" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
-                        hobbies
-                    </Link>
-                    <Link href="/projects" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
-                        projects
+                    <Link href="/gallery" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2 whitespace-nowrap">
+                        gallery
                     </Link>
                 </div>
 
@@ -175,14 +169,8 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                                 <Link href="/articles" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
                                     articles
                                 </Link>
-                                <Link href="/in-development" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
-                                    in development
-                                </Link>
-                                <Link href="/hobbies" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
-                                    hobbies
-                                </Link>
-                                <Link href="/projects" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
-                                    projects
+                                <Link href="/gallery" onClick={() => setOpen(false)} className="text-sm text-white underline-offset-4 hover:underline py-1">
+                                    gallery
                                 </Link>
                             </div>
                         </motion.div>
