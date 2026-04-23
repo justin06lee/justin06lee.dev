@@ -26,15 +26,8 @@ export function getClientIp(req: NextRequest): string {
 function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
-  // Pad to equal length to avoid leaking length via timing
-  const maxLen = Math.max(bufA.length, bufB.length);
-  const paddedA = Buffer.alloc(maxLen);
-  const paddedB = Buffer.alloc(maxLen);
-  bufA.copy(paddedA);
-  bufB.copy(paddedB);
-  // Compare padded buffers, but also check original lengths match
-  const equal = timingSafeEqual(paddedA, paddedB);
-  return equal && bufA.length === bufB.length;
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 /* ── Session store (DB-backed, survives cold starts / redeploys) ── */
@@ -83,16 +76,18 @@ export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 
 const RATE_WINDOW = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 10;
+const LOCKOUT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours once MAX_ATTEMPTS hit
 
 export async function checkRateLimit(ip: string): Promise<boolean> {
   await initDb();
   const now = Date.now();
   const windowStart = now - RATE_WINDOW;
+  const lockoutStart = now - LOCKOUT_WINDOW;
 
-  // Prune expired entries
+  // Prune entries older than the longest retention window
   await db.execute({
     sql: "DELETE FROM login_attempts WHERE first_attempt < ?",
-    args: [windowStart],
+    args: [lockoutStart],
   });
 
   const result = await db.execute({
@@ -101,6 +96,12 @@ export async function checkRateLimit(ip: string): Promise<boolean> {
   });
 
   const row = result.rows[0] as unknown as { count: number; first_attempt: number } | undefined;
+
+  // Lockout: once an IP exceeds MAX_ATTEMPTS, block for LOCKOUT_WINDOW regardless of rolling window
+  if (row && row.count > MAX_ATTEMPTS && row.first_attempt >= lockoutStart) {
+    return false;
+  }
+
   if (!row || row.first_attempt < windowStart) {
     await db.execute({
       sql: "INSERT OR REPLACE INTO login_attempts (ip, count, first_attempt) VALUES (?, 1, ?)",
@@ -119,9 +120,18 @@ export async function checkRateLimit(ip: string): Promise<boolean> {
 
 /* ── Admin verification ── */
 
+let warnedMissingAdminKey = false;
+
 export function verifyAdminKey(password: string): boolean {
   const adminKey = process.env.ADMIN_KEY;
-  if (!adminKey || typeof password !== "string") return false;
+  if (!adminKey) {
+    if (!warnedMissingAdminKey) {
+      warnedMissingAdminKey = true;
+      console.warn("[auth] ADMIN_KEY is not set; admin login is disabled.");
+    }
+    return false;
+  }
+  if (typeof password !== "string") return false;
   return safeCompare(password, adminKey);
 }
 
@@ -130,9 +140,6 @@ export async function isAdmin(req: NextRequest): Promise<boolean> {
   if (!sessionToken) return false;
   return validateSession(sessionToken);
 }
-
-/** Alias for isAdmin – matches naming convention used by annotation routes. */
-export const isAdminRequest = isAdmin;
 
 /**
  * Validate the session cookie. Returns null if valid, or a 401 response if invalid.

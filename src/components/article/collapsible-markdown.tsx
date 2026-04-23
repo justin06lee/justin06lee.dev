@@ -31,7 +31,6 @@ export function CollapsibleMarkdown({
         return (
           <details
             key={section.id}
-            open
             className="group py-1"
           >
             <summary className="flex cursor-pointer list-none items-start gap-3 py-2 [&::-webkit-details-marker]:hidden">

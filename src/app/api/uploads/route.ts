@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ id, url: `/api/uploads/${id}` });
 }
 
+const MAX_UPLOADS_PAGE = 100;
+const DEFAULT_UPLOADS_PAGE = 50;
+
 export async function GET(req: NextRequest) {
   const authError = await requireAdmin(req);
   if (authError) return authError;
@@ -74,16 +77,26 @@ export async function GET(req: NextRequest) {
   await initDb();
   const articleSlug = req.nextUrl.searchParams.get("article_slug");
 
+  const limitParam = Number(req.nextUrl.searchParams.get("limit"));
+  const limit = Number.isFinite(limitParam) && limitParam > 0
+    ? Math.min(Math.floor(limitParam), MAX_UPLOADS_PAGE)
+    : DEFAULT_UPLOADS_PAGE;
+  const offsetParam = Number(req.nextUrl.searchParams.get("offset"));
+  const offset = Number.isFinite(offsetParam) && offsetParam >= 0
+    ? Math.floor(offsetParam)
+    : 0;
+
   let result;
   if (articleSlug) {
     result = await db.execute({
-      sql: "SELECT id, filename, mime_type, created_at FROM uploads WHERE article_slug = ? ORDER BY created_at DESC",
-      args: [articleSlug],
+      sql: "SELECT id, filename, mime_type, created_at FROM uploads WHERE article_slug = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      args: [articleSlug, limit, offset],
     });
   } else {
-    result = await db.execute(
-      "SELECT id, filename, mime_type, created_at FROM uploads ORDER BY created_at DESC"
-    );
+    result = await db.execute({
+      sql: "SELECT id, filename, mime_type, created_at FROM uploads ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      args: [limit, offset],
+    });
   }
 
   return NextResponse.json(result.rows);

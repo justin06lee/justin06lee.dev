@@ -6,6 +6,9 @@ import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const authError = await requireAdmin(req);
+  if (authError) return authError;
+
   const from = req.nextUrl.searchParams.get("from");
   const to = req.nextUrl.searchParams.get("to");
   if (!from || !to || !isValidDateString(from) || !isValidDateString(to)) {

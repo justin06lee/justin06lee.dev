@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
+import { getClientIp } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,6 @@ const ALLOWED_ORIGINS = new Set([
   "https://www.justin06lee.dev",
   "http://localhost:3000",
 ]);
-
-const getIp = (req: NextRequest) => {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
-};
 
 // Reads the IP's bucket, computes allowed, and writes the new bucket state.
 // Allowed can briefly over-consume under concurrent requests from the same IP;
@@ -79,7 +74,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "delta must be a positive number" }, { status: 400 });
   }
   const capped = Math.min(Math.floor(delta), MAX_DELTA_PER_REQUEST);
-  const allowed = await consume(getIp(req), capped);
+  const allowed = await consume(getClientIp(req), capped);
 
   if (allowed <= 0) {
     const res = await db.execute("SELECT count FROM pat_counter WHERE id = 1");

@@ -311,6 +311,18 @@ html, body {
   outline: none;
 }
 
+/* Re-enable text selection inside article content.
+   globals.css disables selection at html-level; Tailwind's `select-text`
+   class alone doesn't override `-webkit-user-select`, so we re-enable all
+   vendor prefixes explicitly. */
+main.select-text,
+main.select-text * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
 /* Prevent browser autofill yellow background */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,

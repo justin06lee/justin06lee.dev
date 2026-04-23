@@ -130,14 +130,6 @@ export async function resolveArticleSegment(
   return match ? match.name : null;
 }
 
-export async function isArticlePath(
-  pathSegments: string[],
-  opts?: FetchOptions
-): Promise<boolean> {
-  const entries = await getDirectoryContents(pathSegments, opts);
-  return entries.some((entry) => entry.type === "file" && entry.name === "notes.md");
-}
-
 export async function getArticleByPath(
   pathSegments: string[],
   opts?: FetchOptions

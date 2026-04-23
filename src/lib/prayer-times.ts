@@ -73,7 +73,7 @@ export async function getPrayerTimesForDate(date: string): Promise<PrayerTimes |
   const [yStr, mStr, dStr] = date.split("-");
   const year = Number(yStr);
   const month = Number(mStr);
-  const day = dStr;
+  const day = dStr.padStart(2, "0");
   const config = await getSiteConfig();
   const loc = config.prayerLocation;
   const hasCoords = loc.latitude !== null && loc.longitude !== null;

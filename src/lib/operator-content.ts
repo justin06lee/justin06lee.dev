@@ -52,6 +52,11 @@ function requireWriteToken(): string {
   return token;
 }
 
+function reportGithubError(operation: string, status: number): never {
+  console.error(`[operator-content] GitHub ${operation} failed with status ${status}`);
+  throw new Error(`GitHub ${operation} failed. Check your token permissions.`);
+}
+
 async function pathExists(...segments: string[]) {
   const response = await fetch(contentsUrl(...segments), {
     headers: githubHeaders(),
@@ -63,7 +68,7 @@ async function pathExists(...segments: string[]) {
   }
 
   if (!response.ok) {
-    throw new Error(`GitHub request failed with status ${response.status}.`);
+    reportGithubError("request", response.status);
   }
 
   return true;
@@ -80,7 +85,7 @@ async function getFileContentEntry(...segments: string[]) {
   }
 
   if (!response.ok) {
-    throw new Error(`GitHub request failed with status ${response.status}.`);
+    reportGithubError("request", response.status);
   }
 
   const data = await response.json();
@@ -98,7 +103,7 @@ async function getDirectoryEntries(...segments: string[]) {
   }
 
   if (!response.ok) {
-    throw new Error(`GitHub request failed with status ${response.status}.`);
+    reportGithubError("request", response.status);
   }
 
   const data = await response.json();
@@ -130,9 +135,7 @@ async function putContent({
   });
 
   if (!response.ok) {
-    throw new Error(
-      `GitHub write failed (status ${response.status}). Check your token permissions.`
-    );
+    reportGithubError("write", response.status);
   }
 
   const data = await response.json();
@@ -169,9 +172,7 @@ async function deleteContent({
   }
 
   if (!response.ok) {
-    throw new Error(
-      `GitHub delete failed (status ${response.status}). Check your token permissions.`
-    );
+    reportGithubError("delete", response.status);
   }
 }
 
@@ -298,7 +299,7 @@ export async function createOperatorArticleByPath({
   return { slug: trimmedSlug };
 }
 
-const ALLOWED_UPLOAD_TYPES = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/;
+const ALLOWED_UPLOAD_TYPES = /^image\/(png|jpe?g|gif|webp)$/;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 function detectImageMime(buffer: Buffer): string | null {
@@ -335,10 +336,6 @@ function detectImageMime(buffer: Buffer): string | null {
     buffer[11] === 0x50
   ) {
     return "image/webp";
-  }
-  const head = buffer.slice(0, 512).toString("utf8").trimStart().toLowerCase();
-  if (head.startsWith("<?xml") || head.startsWith("<svg")) {
-    return "image/svg+xml";
   }
   return null;
 }

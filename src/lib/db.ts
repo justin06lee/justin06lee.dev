@@ -27,18 +27,6 @@ export async function initDb() {
       value TEXT NOT NULL,
       updated_at TEXT DEFAULT (datetime('now'))
     )`,
-    `CREATE TABLE IF NOT EXISTS articles (
-      slug TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      excerpt TEXT NOT NULL,
-      content TEXT NOT NULL,
-      banner_url TEXT,
-      tags TEXT NOT NULL DEFAULT '[]',
-      published INTEGER NOT NULL DEFAULT 0,
-      published_at TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    )`,
     `CREATE TABLE IF NOT EXISTS uploads (
       id TEXT PRIMARY KEY,
       filename TEXT NOT NULL,
@@ -89,35 +77,8 @@ export async function initDb() {
       data TEXT NOT NULL,
       fetched_at INTEGER NOT NULL
     )`,
-    `CREATE TABLE IF NOT EXISTS annotations (
-      id TEXT PRIMARY KEY,
-      article_slug TEXT NOT NULL,
-      type TEXT NOT NULL,
-      paragraph_index INTEGER NOT NULL,
-      position TEXT,
-      start_offset INTEGER,
-      end_offset INTEGER,
-      highlight_color TEXT,
-      comment TEXT,
-      public INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_annotations_slug ON annotations(article_slug)`,
   ]);
 }
-
-export type DbArticle = {
-  slug: string;
-  title: string;
-  excerpt: string;
-  content: string;
-  banner_url: string | null;
-  tags: string;
-  published: number;
-  published_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 export type DbItem = {
   id: string;

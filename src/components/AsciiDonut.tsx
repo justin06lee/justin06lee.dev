@@ -65,7 +65,7 @@ export default function AsciiSpinningDonut({
 
 		pre.removeChild(probe);
 		setYScale(charWidth / lineHeight);
-	}, [className, yScaleOverride]);
+	}, [yScaleOverride]);
 
 	useEffect(() => {
 		let rafId = 0;
