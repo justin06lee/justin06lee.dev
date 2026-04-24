@@ -13,7 +13,7 @@ const TABS: { key: GalleryTab; label: string }[] = [
 
 export function GalleryTabs({ active }: { active: GalleryTab }) {
     return (
-        <div className="flex gap-2 px-6 pt-4 sm:px-8">
+        <div className="max-w-6xl mx-auto px-4 pt-16 flex gap-2">
             {TABS.map(({ key, label }) => {
                 const isActive = key === active;
                 return (
