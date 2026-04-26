@@ -259,11 +259,8 @@ export default function HomePage({ config }: { config: SiteConfig }) {
 
                         <div className="flex justify-center scale-110">
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 2.8 }}>
-                                <Link href="/hobbies" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2">
-                                    hobbies
-                                </Link>
-                                <Link href="/projects" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2">
-                                    projects
+                                <Link href="/gallery" className="text-sm text-white underline-offset-4 hover:underline px-4 py-2">
+                                    gallery
                                 </Link>
                             </motion.div>
                             <div className="md:hidden block self-center mt-120 absolute text-sm text-white opacity-50">

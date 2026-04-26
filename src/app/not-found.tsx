@@ -57,11 +57,8 @@ export default function NotFound() {
                     <Link href="/" className="underline-offset-4 hover:underline px-4 py-2">
                         home
                     </Link>
-                    <Link href="/projects" className="underline-offset-4 hover:underline px-4 py-2">
-                        projects
-                    </Link>
-                    <Link href="/hobbies" className="underline-offset-4 hover:underline px-4 py-2">
-                        hobbies
+                    <Link href="/gallery" className="underline-offset-4 hover:underline px-4 py-2">
+                        gallery
                     </Link>
                 </motion.div>
             </main>
