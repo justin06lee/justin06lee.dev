@@ -396,3 +396,24 @@ export async function deleteActual(id: string): Promise<{ ok: boolean }> {
   });
   return { ok: (result.rowsAffected ?? 0) > 0 };
 }
+
+/** Returns { "YYYY-MM-DD": totalMinutes } for actuals anchored to that day in `year`. */
+export async function getActualsHeatmapForYear(year: number): Promise<Record<string, number>> {
+  await initDb();
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31`;
+  const result = await db.execute({
+    sql: `SELECT date, SUM(
+            CASE WHEN end_at IS NULL THEN 0 ELSE (end_at - start_at) / 60000 END
+          ) AS minutes
+          FROM calendar_actuals
+          WHERE date BETWEEN ? AND ?
+          GROUP BY date`,
+    args: [from, to],
+  });
+  const out: Record<string, number> = {};
+  for (const row of result.rows as unknown as { date: string; minutes: number }[]) {
+    out[row.date] = Number(row.minutes ?? 0);
+  }
+  return out;
+}
