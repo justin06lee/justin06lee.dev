@@ -95,3 +95,58 @@ export function hhmmToMinutes(hhmm: string | null): number | null {
   if (h < 0 || h > 23 || m < 0 || m > 59) return null;
   return h * 60 + m;
 }
+
+/** Returns YYYY-MM-DD for an epoch ms timestamp in the given timezone. */
+export function epochToDateInTz(ms: number, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ms));
+}
+
+/** Returns minutes since midnight (0..1440) for an epoch ms timestamp in the given timezone. */
+export function epochToMinutesOfDay(ms: number, timezone: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(ms));
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return h * 60 + m;
+}
+
+/**
+ * Returns the minutes-of-day window {startMin, endMin} for an actuals block on a given day,
+ * or null if the block doesn't intersect the day at all.
+ *
+ * - `endAt = null` means "currently running"; we use `nowMs` (default Date.now()) as the right edge.
+ * - Blocks that span across midnight are clamped to [0, 1440] for the visible day.
+ */
+export function clampActualToDay(
+  date: string,
+  startAtMs: number,
+  endAtMs: number | null,
+  timezone: string,
+  nowMs: number = Date.now(),
+): { startMin: number; endMin: number } | null {
+  const effectiveEnd = endAtMs ?? nowMs;
+  if (effectiveEnd <= startAtMs) return null;
+
+  const startDate = epochToDateInTz(startAtMs, timezone);
+  const endDate = epochToDateInTz(effectiveEnd, timezone);
+
+  const startsToday = startDate === date;
+  const startsAfter = startDate > date;
+  const endsBefore = endDate < date;
+  const endsToday = endDate === date;
+
+  if (startsAfter || endsBefore) return null;
+
+  const startMin = startsToday ? epochToMinutesOfDay(startAtMs, timezone) : 0;
+  const endMin = endsToday ? epochToMinutesOfDay(effectiveEnd, timezone) : 1440;
+  return { startMin, endMin };
+}
