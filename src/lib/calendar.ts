@@ -289,14 +289,16 @@ export async function startActual(input: StartActualInput): Promise<StartActualR
     });
   }
 
-  // 2) If planId given, hydrate missing fields from the plan.
-  let categoryId = input.categoryId ?? null;
-  let title = input.title ?? null;
+  // 2) If planId given, hydrate fields the caller didn't provide. We distinguish
+  //    "not provided" (undefined) from "explicit null" so callers can opt out
+  //    of plan inheritance per-field by sending null.
+  let categoryId: string | null = input.categoryId !== undefined ? input.categoryId : null;
+  let title: string | null = input.title !== undefined ? input.title : null;
   if (input.planId) {
     const plan = await getTaskById(input.planId);
     if (plan) {
-      if (categoryId === null) categoryId = plan.categoryId;
-      if (title === null) title = plan.title;
+      if (input.categoryId === undefined) categoryId = plan.categoryId;
+      if (input.title === undefined) title = plan.title;
     }
   }
 

@@ -96,7 +96,14 @@ export async function initDb() {
       FOREIGN KEY (category_id) REFERENCES calendar_categories(id) ON DELETE SET NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_calendar_actuals_date ON calendar_actuals(date)`,
-    `CREATE INDEX IF NOT EXISTS idx_calendar_actuals_running ON calendar_actuals(end_at) WHERE end_at IS NULL`,
+    // Drop the older non-unique form (if a previous init created it) so the
+    // unique-on-running rebuild below succeeds with the same name.
+    `DROP INDEX IF EXISTS idx_calendar_actuals_running`,
+    // Partial UNIQUE index enforces the single-active invariant at the DB
+    // level: at most one row may have end_at IS NULL at a time. App-level
+    // auto-stop in startActual still does the right thing on the happy path;
+    // this index ensures concurrent starts can't slip a duplicate through.
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_actuals_running ON calendar_actuals(end_at) WHERE end_at IS NULL`,
     `CREATE TABLE IF NOT EXISTS prayer_times_cache (
       cache_key TEXT PRIMARY KEY,
       year INTEGER NOT NULL,
