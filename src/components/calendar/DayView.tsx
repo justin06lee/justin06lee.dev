@@ -214,14 +214,24 @@ export default function DayView({
           className="hidden md:block"
         >
           {isAdmin ? (
-            <PlannedTodaySheet date={date} tasks={tasks} runningActual={runningActual} />
+            <PlannedTodaySheet
+              date={date}
+              tasks={tasks}
+              runningActual={runningActual}
+              onEditPlan={(t) => setEditing(t)}
+            />
           ) : null}
         </motion.aside>
       </div>
 
       {/* MOBILE STICKY BAR — admin only */}
       {isAdmin && (
-        <NowPlayingBar date={date} tasks={tasks} runningActual={runningActual} />
+        <NowPlayingBar
+          date={date}
+          tasks={tasks}
+          runningActual={runningActual}
+          onEditPlan={(t) => setEditing(t)}
+        />
       )}
 
       {/* Plan task editor modal (existing) */}

@@ -9,6 +9,7 @@ type Props = {
   date: string;
   tasks: CalendarTask[];
   runningActual: CalendarActual | null;
+  onEditPlan?: (task: CalendarTask) => void;
 };
 
 function formatElapsed(startAt: number, now: number): string {
@@ -21,7 +22,7 @@ function formatElapsed(startAt: number, now: number): string {
   return `${s}s`;
 }
 
-export default function NowPlayingBar({ date, tasks, runningActual }: Props) {
+export default function NowPlayingBar({ date, tasks, runningActual, onEditPlan }: Props) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
@@ -68,7 +69,15 @@ export default function NowPlayingBar({ date, tasks, runningActual }: Props) {
             className="absolute bottom-0 left-0 right-0 bg-black border-t border-white/20 p-4 max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <PlannedTodaySheet date={date} tasks={tasks} runningActual={runningActual} />
+            <PlannedTodaySheet
+              date={date}
+              tasks={tasks}
+              runningActual={runningActual}
+              onEditPlan={(t) => {
+                setExpanded(false);
+                onEditPlan?.(t);
+              }}
+            />
           </div>
         </div>
       )}

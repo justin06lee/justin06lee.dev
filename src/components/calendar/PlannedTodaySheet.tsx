@@ -9,9 +9,10 @@ type Props = {
   date: string;
   tasks: CalendarTask[];
   runningActual: CalendarActual | null;
+  onEditPlan?: (task: CalendarTask) => void;
 };
 
-export default function PlannedTodaySheet({ date, tasks, runningActual }: Props) {
+export default function PlannedTodaySheet({ date, tasks, runningActual, onEditPlan }: Props) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,6 +26,8 @@ export default function PlannedTodaySheet({ date, tasks, runningActual }: Props)
     seen.add(key);
     return true;
   });
+
+  const untimed = tasks.filter((t) => t.date === date && !t.startTime);
 
   async function startFromPlan(planId: string) {
     setBusy(true);
@@ -140,6 +143,36 @@ export default function PlannedTodaySheet({ date, tasks, runningActual }: Props)
           })}
         </div>
       </section>
+
+      {untimed.length > 0 && (
+        <section>
+          <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Untimed</div>
+          <div className="space-y-1">
+            {untimed.map((t) => (
+              <button
+                type="button"
+                key={t.id}
+                onClick={() => onEditPlan?.(t)}
+                disabled={!onEditPlan}
+                className="w-full flex items-center justify-between border border-white/15 hover:bg-white/5 px-3 py-2 text-left disabled:cursor-default"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  {t.category && (
+                    <span
+                      className="h-2 w-2 inline-block border border-white/30 shrink-0"
+                      style={{ backgroundColor: t.category.color }}
+                    />
+                  )}
+                  <span className={`truncate ${t.done ? "text-white/40 line-through" : ""}`}>
+                    {t.category ? `${t.category.name} — ${t.title}` : t.title}
+                  </span>
+                </span>
+                {onEditPlan && <span className="text-[10px] text-white/50 shrink-0">Edit</span>}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         {creating ? (
