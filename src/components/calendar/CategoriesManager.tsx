@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CalendarCategory } from "@/lib/calendar-categories";
 import { CATEGORY_PALETTE } from "@/lib/colors";
 import CategoryCreateInline from "./CategoryCreateInline";
+import { useDialog } from "@/components/Dialog";
 
 type Props = { initial: CalendarCategory[] };
 
@@ -11,6 +12,7 @@ export default function CategoriesManager({ initial }: Props) {
   const [categories, setCategories] = useState<CalendarCategory[]>(initial);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialog = useDialog();
 
   async function patch(id: string, body: Record<string, unknown>) {
     setError(null);
@@ -31,7 +33,13 @@ export default function CategoriesManager({ initial }: Props) {
 
   async function remove(c: CalendarCategory) {
     setError(null);
-    if (!confirm(`Delete "${c.name}"?`)) return;
+    const ok = await dialog.confirm({
+      title: `Delete "${c.name}"?`,
+      message: "If this category is in use, the deletion will be blocked.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     const r = await fetch(`/api/calendar/categories/${c.id}`, {
       method: "DELETE",
       credentials: "include",

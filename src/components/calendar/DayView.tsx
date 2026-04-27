@@ -131,12 +131,12 @@ export default function DayView({
             )}
             {nowMinutes != null && <NowLine nowMinutes={nowMinutes} />}
 
-            {/* Header / +add task */}
+            {/* Header / +add task — z-20 so it sits above the now-line (z-10) */}
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setEditing("new")}
-                className="absolute top-1 right-1 z-10 text-[10px] uppercase tracking-widest text-white/60 hover:text-white border border-white/20 px-2 py-0.5 hover:bg-white/5"
+                className="absolute top-1 right-1 z-20 bg-black text-[10px] uppercase tracking-widest text-white/60 hover:text-white border border-white/20 px-2 py-0.5 hover:bg-white/5"
               >
                 + task
               </button>

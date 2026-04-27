@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarTask } from "@/lib/calendar";
 import CategoryPicker from "./CategoryPicker";
+import { useDialog } from "@/components/Dialog";
 
 type Props = {
   date: string;
@@ -13,6 +14,7 @@ type Props = {
 
 export default function TaskEditor({ date, task, onClose }: Props) {
   const router = useRouter();
+  const dialog = useDialog();
   const [title, setTitle] = useState(task?.title ?? "");
   const [notes, setNotes] = useState(task?.notes ?? "");
   const [startTime, setStartTime] = useState(task?.startTime ?? "");
@@ -53,7 +55,13 @@ export default function TaskEditor({ date, task, onClose }: Props) {
 
   const remove = async () => {
     if (!task) return;
-    if (!confirm("Delete this task?")) return;
+    const ok = await dialog.confirm({
+      title: "Delete this task?",
+      message: "The plan and any actuals tied to it will lose this reference.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setSubmitting(true);
     await fetch(`/api/calendar/tasks/${task.id}`, { method: "DELETE" });
     setSubmitting(false);

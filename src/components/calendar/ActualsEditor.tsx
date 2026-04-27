@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarActual } from "@/lib/calendar";
 import CategoryPicker from "./CategoryPicker";
+import { useDialog } from "@/components/Dialog";
 
 type Props = {
   actual: CalendarActual;
@@ -23,6 +24,7 @@ function localInputToEpoch(s: string): number {
 
 export default function ActualsEditor({ actual, onClose }: Props) {
   const router = useRouter();
+  const dialog = useDialog();
   const [categoryId, setCategoryId] = useState<string | null>(actual.categoryId);
   const [title, setTitle] = useState<string>(actual.title ?? "");
   const [startInput, setStartInput] = useState<string>(epochToLocalInput(actual.startAt));
@@ -59,7 +61,13 @@ export default function ActualsEditor({ actual, onClose }: Props) {
   }
 
   async function remove() {
-    if (!confirm("Delete this actual?")) return;
+    const ok = await dialog.confirm({
+      title: "Delete this actual?",
+      message: "This block will be permanently removed.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setSubmitting(true);
     const r = await fetch(`/api/calendar/actuals/${actual.id}`, {
       method: "DELETE",

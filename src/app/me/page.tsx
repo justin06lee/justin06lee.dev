@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin } from "lucide-react";
+import { useDialog } from "@/components/Dialog";
 
 type Item = {
   id: string;
@@ -564,6 +565,7 @@ function CategoryPanel({ category }: { category: string }) {
   const [editing, setEditing] = useState<Item | null>(null);
   const [adding, setAdding] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const dialog = useDialog();
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -594,7 +596,7 @@ function CategoryPanel({ category }: { category: string }) {
       : await fetch(`/api/items/${encodeURIComponent(item.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      alert(`Save failed: ${body.error || res.statusText}`);
+      await dialog.alert({ title: "Save failed", message: body.error || res.statusText });
       return;
     }
     setEditing(null);
