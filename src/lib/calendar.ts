@@ -1,6 +1,8 @@
 import { db, initDb, type DbCalendarTask } from "./db";
 import { randomUUID } from "crypto";
 
+export type CategorySummary = { id: string; name: string; color: string };
+
 export type CalendarTask = {
   id: string;
   date: string;
@@ -10,6 +12,8 @@ export type CalendarTask = {
   endTime: string | null;
   done: boolean;
   position: number;
+  categoryId: string | null;
+  category: CategorySummary | null;
 };
 
 type NewCalendarTask = {
@@ -19,6 +23,7 @@ type NewCalendarTask = {
   startTime?: string | null;
   endTime?: string | null;
   position?: number;
+  categoryId?: string | null;
 };
 
 export type CalendarTaskPatch = Partial<{
@@ -29,9 +34,16 @@ export type CalendarTaskPatch = Partial<{
   done: boolean;
   position: number;
   date: string;
+  categoryId: string | null;
 }>;
 
-function rowToTask(row: DbCalendarTask): CalendarTask {
+type DbCalendarTaskJoined = DbCalendarTask & {
+  cat_id: string | null;
+  cat_name: string | null;
+  cat_color: string | null;
+};
+
+function rowToTask(row: DbCalendarTaskJoined): CalendarTask {
   return {
     id: row.id,
     date: row.date,
@@ -41,16 +53,25 @@ function rowToTask(row: DbCalendarTask): CalendarTask {
     endTime: row.end_time,
     done: row.done === 1,
     position: row.position,
+    categoryId: row.category_id,
+    category:
+      row.cat_id && row.cat_name && row.cat_color
+        ? { id: row.cat_id, name: row.cat_name, color: row.cat_color }
+        : null,
   };
 }
 
 export async function getTasksInRange(from: string, to: string): Promise<CalendarTask[]> {
   await initDb();
   const result = await db.execute({
-    sql: "SELECT * FROM calendar_tasks WHERE date BETWEEN ? AND ? ORDER BY date ASC, position ASC, created_at ASC",
+    sql: `SELECT t.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color
+          FROM calendar_tasks t
+          LEFT JOIN calendar_categories c ON c.id = t.category_id
+          WHERE t.date BETWEEN ? AND ?
+          ORDER BY t.date ASC, t.position ASC, t.created_at ASC`,
     args: [from, to],
   });
-  return (result.rows as unknown as DbCalendarTask[]).map(rowToTask);
+  return (result.rows as unknown as DbCalendarTaskJoined[]).map(rowToTask);
 }
 
 export async function getHeatmapForYear(year: number): Promise<Record<string, number>> {
@@ -73,8 +94,9 @@ export async function createTask(input: NewCalendarTask): Promise<CalendarTask> 
   const id = randomUUID();
   const now = Date.now();
   await db.execute({
-    sql: `INSERT INTO calendar_tasks (id, date, title, notes, start_time, end_time, done, position, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+    sql: `INSERT INTO calendar_tasks
+          (id, date, title, notes, start_time, end_time, done, position, category_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     args: [
       id,
       input.date,
@@ -83,6 +105,7 @@ export async function createTask(input: NewCalendarTask): Promise<CalendarTask> 
       input.startTime ?? null,
       input.endTime ?? null,
       input.position ?? 0,
+      input.categoryId ?? null,
       now,
       now,
     ],
@@ -95,10 +118,13 @@ export async function createTask(input: NewCalendarTask): Promise<CalendarTask> 
 async function getTaskById(id: string): Promise<CalendarTask | null> {
   await initDb();
   const result = await db.execute({
-    sql: "SELECT * FROM calendar_tasks WHERE id = ?",
+    sql: `SELECT t.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color
+          FROM calendar_tasks t
+          LEFT JOIN calendar_categories c ON c.id = t.category_id
+          WHERE t.id = ?`,
     args: [id],
   });
-  const row = result.rows[0] as unknown as DbCalendarTask | undefined;
+  const row = result.rows[0] as unknown as DbCalendarTaskJoined | undefined;
   return row ? rowToTask(row) : null;
 }
 
@@ -114,10 +140,11 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
     endTime: patch.endTime !== undefined ? patch.endTime : existing.endTime,
     done: patch.done !== undefined ? patch.done : existing.done,
     position: patch.position !== undefined ? patch.position : existing.position,
+    categoryId: patch.categoryId !== undefined ? patch.categoryId : existing.categoryId,
   };
   await db.execute({
     sql: `UPDATE calendar_tasks
-          SET date=?, title=?, notes=?, start_time=?, end_time=?, done=?, position=?, updated_at=?
+          SET date=?, title=?, notes=?, start_time=?, end_time=?, done=?, position=?, category_id=?, updated_at=?
           WHERE id=?`,
     args: [
       merged.date,
@@ -127,6 +154,7 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
       merged.endTime,
       merged.done ? 1 : 0,
       merged.position,
+      merged.categoryId,
       Date.now(),
       id,
     ],
