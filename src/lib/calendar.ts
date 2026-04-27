@@ -53,7 +53,7 @@ function rowToTask(row: DbCalendarTaskJoined): CalendarTask {
     endTime: row.end_time,
     done: row.done === 1,
     position: row.position,
-    categoryId: row.category_id,
+    categoryId: row.cat_id != null ? row.category_id : null,
     category:
       row.cat_id != null
         ? { id: row.cat_id, name: row.cat_name ?? "", color: row.cat_color ?? "" }
@@ -190,16 +190,20 @@ type DbCalendarActualJoined = DbCalendarActual & {
 };
 
 function rowToActual(row: DbCalendarActualJoined): CalendarActual {
+  // Null out *Id fields when their joined row is gone (orphan case after a
+  // hard delete) so the API surface stays self-consistent: no id without a
+  // matching summary.
+  const hasPlan = row.plan_id != null && row.plan_title != null;
+  const hasCategory = row.cat_id != null;
   return {
     id: row.id,
     date: row.date,
-    planId: row.plan_id,
-    plan: row.plan_id != null && row.plan_title != null ? { id: row.plan_id, title: row.plan_title } : null,
-    categoryId: row.category_id,
-    category:
-      row.cat_id != null
-        ? { id: row.cat_id, name: row.cat_name ?? "", color: row.cat_color ?? "" }
-        : null,
+    planId: hasPlan ? row.plan_id : null,
+    plan: hasPlan ? { id: row.plan_id!, title: row.plan_title! } : null,
+    categoryId: hasCategory ? row.category_id : null,
+    category: hasCategory
+      ? { id: row.cat_id!, name: row.cat_name ?? "", color: row.cat_color ?? "" }
+      : null,
     title: row.title,
     startAt: row.start_at,
     endAt: row.end_at,
@@ -214,14 +218,17 @@ export async function getActualsInRange(from: string, to: string): Promise<Calen
   // should query with `from = addDays(date, -1)` so yesterday's anchored rows
   // are included; the component layer (clampActualToDay) filters them to the visible day.
   const result = await db.execute({
+    // Include the running row only if it could plausibly intersect the range
+    // (its anchor date is on or before `to`). Without that bound, historical
+    // queries would always pick up "now" — surprising for callers.
     sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
           FROM calendar_actuals a
           LEFT JOIN calendar_categories c ON c.id = a.category_id
           LEFT JOIN calendar_tasks p ON p.id = a.plan_id
-          WHERE a.date BETWEEN ? AND ?
-             OR a.end_at IS NULL
+          WHERE (a.date BETWEEN ? AND ?)
+             OR (a.end_at IS NULL AND a.date <= ?)
           ORDER BY a.start_at ASC`,
-    args: [from, to],
+    args: [from, to, to],
   });
   return (result.rows as unknown as DbCalendarActualJoined[]).map(rowToActual);
 }
