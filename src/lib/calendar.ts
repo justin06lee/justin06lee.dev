@@ -1,5 +1,6 @@
 import { db, initDb, type DbCalendarTask, type DbCalendarActual } from "./db";
 import { randomUUID } from "crypto";
+import { epochToDateInTz } from "@/components/calendar/date-utils";
 
 export type CategorySummary = { id: string; name: string; color: string };
 
@@ -260,4 +261,72 @@ async function getActualById(id: string): Promise<CalendarActual | null> {
   });
   const row = result.rows[0] as unknown as DbCalendarActualJoined | undefined;
   return row ? rowToActual(row) : null;
+}
+
+export type StartActualInput = {
+  planId?: string | null;
+  categoryId?: string | null;
+  title?: string | null;
+  timezone: string; // for computing the actuals row's `date` field
+  nowMs?: number; // overrideable for tests; defaults to Date.now()
+};
+
+export type StartActualResult = {
+  started: CalendarActual;
+  autoStopped: CalendarActual | null;
+};
+
+export async function startActual(input: StartActualInput): Promise<StartActualResult> {
+  await initDb();
+  const now = input.nowMs ?? Date.now();
+
+  // 1) Auto-stop any running actual.
+  const running = await getRunningActual();
+  if (running) {
+    await db.execute({
+      sql: `UPDATE calendar_actuals SET end_at=?, updated_at=? WHERE id=? AND end_at IS NULL`,
+      args: [now, now, running.id],
+    });
+  }
+
+  // 2) If planId given, hydrate missing fields from the plan.
+  let categoryId = input.categoryId ?? null;
+  let title = input.title ?? null;
+  if (input.planId) {
+    const plan = await getTaskById(input.planId);
+    if (plan) {
+      if (categoryId === null) categoryId = plan.categoryId;
+      if (title === null) title = plan.title;
+    }
+  }
+
+  const id = randomUUID();
+  const date = epochToDateInTz(now, input.timezone);
+  await db.execute({
+    sql: `INSERT INTO calendar_actuals
+          (id, date, plan_id, category_id, title, start_at, end_at, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
+    args: [id, date, input.planId ?? null, categoryId, title, now, now, now],
+  });
+
+  const started = await getActualById(id);
+  if (!started) throw new Error("Failed to start actual");
+  const autoStopped = running ? await getActualById(running.id) : null;
+  return { started, autoStopped };
+}
+
+export type StopActualResult = {
+  stopped: CalendarActual | null; // null if nothing was running (idempotent)
+};
+
+export async function stopActual(nowMs: number = Date.now()): Promise<StopActualResult> {
+  await initDb();
+  const running = await getRunningActual();
+  if (!running) return { stopped: null };
+  await db.execute({
+    sql: `UPDATE calendar_actuals SET end_at=?, updated_at=? WHERE id=? AND end_at IS NULL`,
+    args: [nowMs, nowMs, running.id],
+  });
+  const stopped = await getActualById(running.id);
+  return { stopped };
 }
