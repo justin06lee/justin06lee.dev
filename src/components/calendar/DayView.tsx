@@ -1,62 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import * as motion from "motion/react-client";
-import type { CalendarTask } from "@/lib/calendar";
+import type { CalendarTask, CalendarActual } from "@/lib/calendar";
+import type { CalendarCategory } from "@/lib/calendar-categories";
 import type { PrayerTimes } from "@/lib/prayer-times";
-import { hhmmToMinutes } from "./date-utils";
+import { clampActualToDay } from "./date-utils";
 import PrayerTimeMarker from "./PrayerTimeMarker";
 import TaskEditor from "./TaskEditor";
+import PlanBlock from "./PlanBlock";
+import ActualBlock from "./ActualBlock";
+import ActualsEditor from "./ActualsEditor";
+import PlannedTodaySheet from "./PlannedTodaySheet";
+import NowPlayingBar from "./NowPlayingBar";
 
 type Props = {
   date: string;
   tasks: CalendarTask[];
+  actuals: CalendarActual[];
+  runningActual: CalendarActual | null;
+  categories: CalendarCategory[];
   prayers: PrayerTimes | null;
   isAdmin: boolean;
   today: string;
   timezone: string;
 };
-
-function TimedBlock({
-  task,
-  onClick,
-}: {
-  task: CalendarTask;
-  onClick: () => void;
-}) {
-  const start = hhmmToMinutes(task.startTime);
-  const end = hhmmToMinutes(task.endTime) ?? (start !== null ? start + 30 : null);
-  if (start == null || end == null) return null;
-  const duration = end - start;
-  const top = (start / 1440) * 100;
-  const height = Math.max(((end - start) / 1440) * 100, 0.8);
-  const collapsed = duration < 30;
-  const base = task.done
-    ? "bg-white/15 border-white/30 line-through text-white/60"
-    : "bg-white/5 border-white/30 hover:bg-white/10";
-  return (
-    <button
-      onClick={onClick}
-      className={`group absolute left-14 right-2 border text-left text-xs transition ${base} ${collapsed ? "flex items-center justify-center overflow-visible" : "px-2 py-1 overflow-hidden"}`}
-      style={{ top: `${top}%`, height: `${height}%` }}
-    >
-      {collapsed ? (
-        <>
-          <span className="text-white/40 tracking-widest">···</span>
-          <div className="absolute left-0 top-full mt-1 z-20 bg-black border border-white/20 px-3 py-2 text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">
-            <span className="font-mono text-white/60">{task.startTime}–{task.endTime ?? "?"}</span>{" "}
-            {task.title}
-          </div>
-        </>
-      ) : (
-        <>
-          <span className="font-mono">{task.startTime}–{task.endTime ?? "?"}</span> {task.title}
-        </>
-      )}
-    </button>
-  );
-}
 
 function useNowMinutes(enabled: boolean, timezone: string) {
   const [minutes, setMinutes] = useState<number | null>(null);
@@ -80,121 +48,183 @@ function useNowMinutes(enabled: boolean, timezone: string) {
   return minutes;
 }
 
-export default function DayView({ date, tasks, prayers, isAdmin, today, timezone }: Props) {
-  const router = useRouter();
+function HourGrid() {
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  return (
+    <>
+      {hours.map((h) => (
+        <div
+          key={h}
+          className="absolute left-0 right-0 border-t border-white/5 flex items-start pl-2"
+          style={{ top: `${(h / 24) * 100}%`, height: `${100 / 24}%` }}
+        >
+          <span className="font-mono text-[10px] text-white/40 mt-[-6px]">
+            {String(h).padStart(2, "0")}:00
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function NowLine({ nowMinutes }: { nowMinutes: number }) {
+  return (
+    <div
+      className="absolute left-0 right-0 z-10 pointer-events-none flex items-center"
+      style={{ top: `${(nowMinutes / 1440) * 100}%` }}
+    >
+      <div className="size-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+      <div className="h-px flex-1 bg-red-500" />
+    </div>
+  );
+}
+
+export default function DayView({
+  date,
+  tasks,
+  actuals,
+  runningActual,
+  prayers,
+  isAdmin,
+  today,
+  timezone,
+}: Props) {
   const [editing, setEditing] = useState<CalendarTask | "new" | null>(null);
+  const [editingActual, setEditingActual] = useState<CalendarActual | null>(null);
   const nowMinutes = useNowMinutes(date === today, timezone);
 
   const timed = tasks.filter((t) => t.startTime);
-  const sorted = [...tasks].sort((a, b) => {
-    const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
-    const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
-    return aMin - bMin;
-  });
-  const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  const toggleDone = async (task: CalendarTask) => {
-    await fetch(`/api/calendar/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: !task.done }),
-    });
-    router.refresh();
-  };
+  // Pre-compute renderable actuals (clamped to this day's [0,1440] window).
+  const renderActuals = actuals
+    .map((a) => {
+      const w = clampActualToDay(date, a.startAt, a.endAt, timezone);
+      return w ? { actual: a, ...w } : null;
+    })
+    .filter((x): x is { actual: CalendarActual; startMin: number; endMin: number } => x !== null);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="relative border border-white/10 bg-white/[0.02] min-h-[960px]"
-      >
-        <div className="absolute inset-0">
-          {hours.map((h) => (
-            <div
-              key={h}
-              className="absolute left-0 right-0 border-t border-white/5 flex items-start pl-2"
-              style={{ top: `${(h / 24) * 100}%`, height: `${100 / 24}%` }}
-            >
-              <span className="font-mono text-[10px] text-white/40 mt-[-6px]">
-                {String(h).padStart(2, "0")}:00
-              </span>
-            </div>
-          ))}
-
-          {prayers && (
-            <>
-              <PrayerTimeMarker name="Fajr" time={prayers.Fajr} />
-              <PrayerTimeMarker name="Dhuhr" time={prayers.Dhuhr} />
-              <PrayerTimeMarker name="Asr" time={prayers.Asr} />
-              <PrayerTimeMarker name="Maghrib" time={prayers.Maghrib} />
-              <PrayerTimeMarker name="Isha" time={prayers.Isha} />
-            </>
-          )}
-          {!prayers && (
-            <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-              prayer times unavailable
-            </div>
-          )}
-
-          {nowMinutes != null && (
-            <div
-              className="absolute left-0 right-0 z-10 pointer-events-none flex items-center"
-              style={{ top: `${(nowMinutes / 1440) * 100}%` }}
-            >
-              <div className="size-2 rounded-full bg-red-500 -ml-1 shrink-0" />
-              <div className="h-px flex-1 bg-red-500" />
-            </div>
-          )}
-
-          {timed.map((task) => (
-            <TimedBlock key={task.id} task={task} onClick={() => isAdmin && setEditing(task)} />
-          ))}
-        </div>
-      </motion.div>
-
-      <motion.aside
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className="flex flex-col gap-3"
-      >
-        <div className="flex items-center justify-between">
-          <span className="font-mono uppercase tracking-widest text-xs text-white/60">checklist</span>
-          {isAdmin && (
-            <button onClick={() => setEditing("new")} className="text-xs underline-offset-4 hover:underline text-white/80">+ add</button>
-          )}
-        </div>
-        {sorted.length === 0 && (
-          <div className="text-xs text-white/40">no tasks</div>
-        )}
-        {sorted.map((task) => (
-          <div key={task.id} className="flex items-start gap-2 border border-white/10 p-2">
-            <button
-              onClick={() => isAdmin && toggleDone(task)}
-              disabled={!isAdmin}
-              className={`size-4 border shrink-0 mt-0.5 ${task.done ? "bg-white border-white" : "border-white/40"} ${isAdmin ? "cursor-pointer" : "cursor-default"}`}
-              aria-label={task.done ? "mark not done" : "mark done"}
-            />
-            <div className="flex-1 min-w-0">
-              <div className={`text-sm ${task.done ? "line-through text-white/50" : "text-white"}`}>
-                {task.startTime && (
-                  <span className="font-mono text-white/40 text-xs mr-1.5">
-                    {task.startTime}{task.endTime ? `–${task.endTime}` : ""}
-                  </span>
-                )}
-                {task.title}
+    <>
+      <div className="grid gap-4 md:grid-cols-[1fr_1fr_280px] pb-20 md:pb-0">
+        {/* PLAN COLUMN — also hosts the mobile actuals overlay */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="relative border border-white/10 bg-white/[0.02] min-h-[960px]"
+        >
+          <div className="absolute inset-0">
+            <HourGrid />
+            {prayers && (
+              <>
+                <PrayerTimeMarker name="Fajr" time={prayers.Fajr} />
+                <PrayerTimeMarker name="Dhuhr" time={prayers.Dhuhr} />
+                <PrayerTimeMarker name="Asr" time={prayers.Asr} />
+                <PrayerTimeMarker name="Maghrib" time={prayers.Maghrib} />
+                <PrayerTimeMarker name="Isha" time={prayers.Isha} />
+              </>
+            )}
+            {!prayers && (
+              <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+                prayer times unavailable
               </div>
-              {task.notes && <div className="text-xs text-white/50 mt-1">{task.notes}</div>}
-            </div>
+            )}
+            {nowMinutes != null && <NowLine nowMinutes={nowMinutes} />}
+
+            {/* Header / +add task */}
             {isAdmin && (
-              <button onClick={() => setEditing(task)} className="text-xs text-white/50 hover:text-white">edit</button>
+              <button
+                type="button"
+                onClick={() => setEditing("new")}
+                className="absolute top-1 right-1 z-10 text-[10px] uppercase tracking-widest text-white/60 hover:text-white border border-white/20 px-2 py-0.5 hover:bg-white/5"
+              >
+                + task
+              </button>
+            )}
+
+            {/* On md+ desktops the plan column is its own column — full-width plan blocks. */}
+            <div className="hidden md:block absolute inset-0">
+              {timed.map((task) => (
+                <PlanBlock
+                  key={task.id}
+                  task={task}
+                  onClick={() => isAdmin && setEditing(task)}
+                />
+              ))}
+            </div>
+
+            {/* On mobile, plan blocks render half-width on the left, actuals overlay on the right. */}
+            <div className="md:hidden absolute inset-0">
+              {timed.map((task) => (
+                <PlanBlock
+                  key={task.id}
+                  task={task}
+                  halfLeft
+                  onClick={() => isAdmin && setEditing(task)}
+                />
+              ))}
+              {renderActuals.map(({ actual, startMin, endMin }) => (
+                <ActualBlock
+                  key={actual.id}
+                  actual={actual}
+                  startMin={startMin}
+                  endMin={endMin}
+                  isRunning={actual.endAt === null}
+                  halfRight
+                  onClick={() => isAdmin && setEditingActual(actual)}
+                />
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ACTUALS COLUMN — desktop only */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+          className="hidden md:block relative border border-white/10 bg-white/[0.02] min-h-[960px]"
+        >
+          <div className="absolute inset-0">
+            <HourGrid />
+            {nowMinutes != null && <NowLine nowMinutes={nowMinutes} />}
+            {renderActuals.map(({ actual, startMin, endMin }) => (
+              <ActualBlock
+                key={actual.id}
+                actual={actual}
+                startMin={startMin}
+                endMin={endMin}
+                isRunning={actual.endAt === null}
+                onClick={() => isAdmin && setEditingActual(actual)}
+              />
+            ))}
+            {renderActuals.length === 0 && (
+              <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+                no actuals yet
+              </div>
             )}
           </div>
-        ))}
-      </motion.aside>
+        </motion.div>
 
+        {/* SIDE PANEL — desktop only */}
+        <motion.aside
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="hidden md:block"
+        >
+          {isAdmin ? (
+            <PlannedTodaySheet date={date} tasks={tasks} runningActual={runningActual} />
+          ) : null}
+        </motion.aside>
+      </div>
+
+      {/* MOBILE STICKY BAR — admin only */}
+      {isAdmin && (
+        <NowPlayingBar date={date} tasks={tasks} runningActual={runningActual} />
+      )}
+
+      {/* Plan task editor modal (existing) */}
       {editing && (
         <TaskEditor
           key={editing === "new" ? "new" : editing.id}
@@ -203,6 +233,14 @@ export default function DayView({ date, tasks, prayers, isAdmin, today, timezone
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+
+      {/* Actuals editor modal (new) */}
+      {editingActual && (
+        <ActualsEditor
+          actual={editingActual}
+          onClose={() => setEditingActual(null)}
+        />
+      )}
+    </>
   );
 }
