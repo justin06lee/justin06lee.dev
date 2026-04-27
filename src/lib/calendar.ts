@@ -332,3 +332,67 @@ export async function stopActual(nowMs: number = Date.now()): Promise<StopActual
   const stopped = await getActualById(running.id);
   return { stopped };
 }
+
+export type ActualPatch = Partial<{
+  categoryId: string | null;
+  title: string | null;
+  startAt: number;
+  endAt: number | null;
+  notes: string | null;
+}>;
+
+export type UpdateActualResult =
+  | { ok: true; actual: CalendarActual }
+  | { ok: false; reason: "not-found" | "start-after-end" | "would-overlap-running" };
+
+export async function updateActual(id: string, patch: ActualPatch): Promise<UpdateActualResult> {
+  await initDb();
+  const existing = await getActualById(id);
+  if (!existing) return { ok: false, reason: "not-found" };
+
+  const merged = {
+    categoryId: patch.categoryId !== undefined ? patch.categoryId : existing.categoryId,
+    title: patch.title !== undefined ? patch.title : existing.title,
+    startAt: patch.startAt !== undefined ? patch.startAt : existing.startAt,
+    endAt: patch.endAt !== undefined ? patch.endAt : existing.endAt,
+    notes: patch.notes !== undefined ? patch.notes : existing.notes,
+  };
+
+  if (merged.endAt !== null && merged.startAt >= merged.endAt) {
+    return { ok: false, reason: "start-after-end" };
+  }
+
+  // Single-active invariant: if this row is becoming/staying running (endAt=null),
+  // there must be no OTHER running row.
+  if (merged.endAt === null) {
+    const running = await getRunningActual();
+    if (running && running.id !== id) {
+      return { ok: false, reason: "would-overlap-running" };
+    }
+  } else {
+    // If this row is now stopped, ensure it doesn't span the running row's start.
+    const running = await getRunningActual();
+    if (running && running.id !== id && merged.endAt > running.startAt) {
+      return { ok: false, reason: "would-overlap-running" };
+    }
+  }
+
+  await db.execute({
+    sql: `UPDATE calendar_actuals
+          SET category_id=?, title=?, start_at=?, end_at=?, notes=?, updated_at=?
+          WHERE id=?`,
+    args: [merged.categoryId, merged.title, merged.startAt, merged.endAt, merged.notes, Date.now(), id],
+  });
+  const updated = await getActualById(id);
+  if (!updated) throw new Error("Failed to load updated actual");
+  return { ok: true, actual: updated };
+}
+
+export async function deleteActual(id: string): Promise<{ ok: boolean }> {
+  await initDb();
+  const result = await db.execute({
+    sql: "DELETE FROM calendar_actuals WHERE id = ?",
+    args: [id],
+  });
+  return { ok: (result.rowsAffected ?? 0) > 0 };
+}
