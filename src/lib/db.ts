@@ -5,7 +5,17 @@ export const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN!,
 });
 
-export async function initDb() {
+// Memoize so initDb() costs ~0 after the first call in a worker process.
+// Without this, every lib function call (7+ per request) re-runs the full
+// schema batch — adding hundreds of ms to each page load.
+let initPromise: Promise<void> | null = null;
+
+export function initDb(): Promise<void> {
+  if (!initPromise) initPromise = doInit();
+  return initPromise;
+}
+
+async function doInit(): Promise<void> {
   await db.batch([
     `CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
