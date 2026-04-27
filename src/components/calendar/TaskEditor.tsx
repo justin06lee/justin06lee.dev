@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarTask } from "@/lib/calendar";
+import CategoryPicker from "./CategoryPicker";
 
 type Props = {
   date: string;
@@ -16,6 +17,7 @@ export default function TaskEditor({ date, task, onClose }: Props) {
   const [notes, setNotes] = useState(task?.notes ?? "");
   const [startTime, setStartTime] = useState(task?.startTime ?? "");
   const [endTime, setEndTime] = useState(task?.endTime ?? "");
+  const [categoryId, setCategoryId] = useState<string | null>(task?.categoryId ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,7 @@ export default function TaskEditor({ date, task, onClose }: Props) {
       notes: notes || null,
       startTime: startTime || null,
       endTime: endTime || null,
+      categoryId,
     };
     const url = task ? `/api/calendar/tasks/${task.id}` : "/api/calendar/tasks";
     const method = task ? "PATCH" : "POST";
@@ -71,6 +74,10 @@ export default function TaskEditor({ date, task, onClose }: Props) {
           </span>
           <button type="button" onClick={onClose} className="text-white/60 hover:text-white">×</button>
         </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-white/60 text-xs">category</span>
+          <CategoryPicker selectedId={categoryId} onChange={setCategoryId} />
+        </label>
         <label className="flex flex-col gap-1">
           <span className="text-white/60 text-xs">title</span>
           <input
