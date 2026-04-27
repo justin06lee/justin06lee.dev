@@ -65,6 +65,12 @@ export async function PATCH(
     }
     patch.date = body.date;
   }
+  if (body.categoryId !== undefined) {
+    if (body.categoryId !== null && typeof body.categoryId !== "string") {
+      return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
+    }
+    patch.categoryId = body.categoryId as string | null;
+  }
 
   const task = await updateTask(id, patch);
   if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });

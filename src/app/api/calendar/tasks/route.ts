@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, title, notes, startTime, endTime, position } = body;
+  const { date, title, notes, startTime, endTime, position, categoryId } = body;
   if (typeof date !== "string" || !isValidDateString(date)) {
     return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
   }
@@ -42,6 +42,9 @@ export async function POST(req: NextRequest) {
   if (endTime !== undefined && endTime !== null && (typeof endTime !== "string" || !isValidHhmm(endTime))) {
     return NextResponse.json({ error: "endTime must be HH:MM" }, { status: 400 });
   }
+  if (categoryId !== undefined && categoryId !== null && typeof categoryId !== "string") {
+    return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
+  }
 
   const task = await createTask({
     date,
@@ -50,6 +53,7 @@ export async function POST(req: NextRequest) {
     startTime: typeof startTime === "string" ? startTime : null,
     endTime: typeof endTime === "string" ? endTime : null,
     position: typeof position === "number" ? position : 0,
+    categoryId: typeof categoryId === "string" ? categoryId : null,
   });
   return NextResponse.json(task);
 }
