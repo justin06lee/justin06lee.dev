@@ -29,11 +29,10 @@ describe("pickNextUnusedColor", () => {
     const used = [CATEGORY_PALETTE[0].hex, CATEGORY_PALETTE[1].hex];
     expect(pickNextUnusedColor(used)).toBe(CATEGORY_PALETTE[2].hex);
   });
-  it("wraps to least-used when all are taken", () => {
+  it("wraps to least-used (earliest in palette wins ties) when all are taken", () => {
     const used = CATEGORY_PALETTE.map((c) => c.hex);
-    used.push(CATEGORY_PALETTE[3].hex); // index 3 used twice
-    const result = pickNextUnusedColor(used);
-    expect(result).not.toBe(CATEGORY_PALETTE[3].hex);
-    expect(CATEGORY_PALETTE.map((c) => c.hex)).toContain(result);
+    used.push(CATEGORY_PALETTE[3].hex); // index 3 used twice; all others once
+    // All non-3 entries tie at count 1; tie broken by earliest palette position → index 0.
+    expect(pickNextUnusedColor(used)).toBe(CATEGORY_PALETTE[0].hex);
   });
 });
