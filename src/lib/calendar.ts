@@ -1,7 +1,9 @@
 import { db, initDb, type DbCalendarTask, type DbCalendarActual, type DbCalendarCategory } from "./db";
-import { randomUUID } from "crypto";
 import { epochToDateInTz } from "@/components/calendar/date-utils";
 import { rowToCategory, type CalendarCategory } from "./calendar-categories";
+
+// Web Crypto global — works in Node 19+, Bun, and edge runtimes.
+const randomUUID = () => globalThis.crypto.randomUUID();
 
 export type CategorySummary = { id: string; name: string; color: string };
 

@@ -1,6 +1,8 @@
-import { randomUUID } from "crypto";
 import { db, initDb, type DbCalendarCategory } from "./db";
 import { isPaletteColor } from "./colors";
+
+// Web Crypto global — works in Node 19+, Bun, and edge runtimes.
+const randomUUID = () => globalThis.crypto.randomUUID();
 
 export type CalendarCategory = {
   id: string;

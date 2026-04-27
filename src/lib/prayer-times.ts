@@ -69,6 +69,11 @@ async function fetchAladhanMonth(
   return normalizeAladhanMonth(json.data);
 }
 
+// Per-process in-memory cache. Survives across requests served by the same
+// worker — avoids the DB read for repeat lookups within the same month/loc.
+// Keyed by `${year}-${month}-${loc-hash}`; values are the full month map.
+const memCache = new Map<string, Record<string, PrayerTimes>>();
+
 export async function getPrayerTimesForDate(date: string): Promise<PrayerTimes | null> {
   const [yStr, mStr, dStr] = date.split("-");
   const year = Number(yStr);
@@ -80,9 +85,14 @@ export async function getPrayerTimesForDate(date: string): Promise<PrayerTimes |
   const hasCity = Boolean(loc.city && loc.country);
   if (!hasCoords && !hasCity) return null;
 
-  await initDb();
   const key = cacheKey(year, month, loc);
 
+  // 1) Memory cache — instant.
+  const memHit = memCache.get(key);
+  if (memHit) return memHit[day] ?? null;
+
+  // 2) DB cache — one round trip.
+  await initDb();
   const cached = await db.execute({
     sql: "SELECT data FROM prayer_times_cache WHERE cache_key = ?",
     args: [key],
@@ -91,14 +101,17 @@ export async function getPrayerTimesForDate(date: string): Promise<PrayerTimes |
   if (cachedRow) {
     try {
       const parsed = JSON.parse(cachedRow.data) as Record<string, PrayerTimes>;
+      memCache.set(key, parsed);
       return parsed[day] ?? null;
     } catch {
       // fall through to refetch
     }
   }
 
+  // 3) Aladhan API — slow; populate both caches before returning.
   try {
     const monthMap = await fetchAladhanMonth(year, month, loc);
+    memCache.set(key, monthMap);
     await db.execute({
       sql: `INSERT OR REPLACE INTO prayer_times_cache
             (cache_key, year, month, city, country, method, data, fetched_at)

@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import * as motion from "motion/react-client";
 import type { CalendarTask, CalendarActual } from "@/lib/calendar";
 import type { CalendarCategory } from "@/lib/calendar-categories";
-import type { PrayerTimes } from "@/lib/prayer-times";
 import { clampActualToDay } from "./date-utils";
-import PrayerTimeMarker from "./PrayerTimeMarker";
 import TaskEditor from "./TaskEditor";
 import PlanBlock from "./PlanBlock";
 import ActualBlock from "./ActualBlock";
@@ -20,7 +18,8 @@ type Props = {
   actuals: CalendarActual[];
   runningActual: CalendarActual | null;
   categories: CalendarCategory[];
-  prayers: PrayerTimes | null;
+  /** Server-rendered prayer markers, suspended by the page route. */
+  prayersSlot: ReactNode;
   isAdmin: boolean;
   today: string;
   timezone: string;
@@ -84,7 +83,7 @@ export default function DayView({
   tasks,
   actuals,
   runningActual,
-  prayers,
+  prayersSlot,
   isAdmin,
   today,
   timezone,
@@ -115,20 +114,7 @@ export default function DayView({
         >
           <div className="absolute inset-0">
             <HourGrid />
-            {prayers && (
-              <>
-                <PrayerTimeMarker name="Fajr" time={prayers.Fajr} />
-                <PrayerTimeMarker name="Dhuhr" time={prayers.Dhuhr} />
-                <PrayerTimeMarker name="Asr" time={prayers.Asr} />
-                <PrayerTimeMarker name="Maghrib" time={prayers.Maghrib} />
-                <PrayerTimeMarker name="Isha" time={prayers.Isha} />
-              </>
-            )}
-            {!prayers && (
-              <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                prayer times unavailable
-              </div>
-            )}
+            {prayersSlot}
             {nowMinutes != null && <NowLine nowMinutes={nowMinutes} />}
 
             {/* Header / +add task — z-20 so it sits above the now-line (z-10) */}

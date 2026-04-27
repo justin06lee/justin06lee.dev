@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import DayView from "@/components/calendar/DayView";
+import PrayerMarkers from "@/components/calendar/PrayerMarkers";
 import { loadDayPageData } from "@/lib/calendar";
-import { getPrayerTimesForDate } from "@/lib/prayer-times";
 import { addDays, isValidDateString, todayInTz } from "@/components/calendar/date-utils";
 import { isAdminServer } from "@/lib/auth-server";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
@@ -14,9 +15,11 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   // Fetch yesterday's anchored actuals too so a block that started yesterday
   // and crosses midnight into `date` is included; clampActualToDay filters.
   const yesterday = addDays(date, -1);
-  const [day, prayers, admin, config] = await Promise.all([
+  // Prayer times intentionally excluded from this Promise.all — they stream
+  // in via the Suspense'd <PrayerMarkers /> below so a slow Aladhan fetch
+  // doesn't block the rest of the day view from rendering.
+  const [day, admin, config] = await Promise.all([
     loadDayPageData(date, yesterday),
-    getPrayerTimesForDate(date),
     isAdminServer(),
     getSiteConfig(),
   ]);
@@ -28,7 +31,11 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       actuals={day.actuals}
       runningActual={day.running}
       categories={day.categories}
-      prayers={prayers}
+      prayersSlot={
+        <Suspense fallback={null}>
+          <PrayerMarkers date={date} />
+        </Suspense>
+      }
       isAdmin={admin}
       today={todayInTz(tz)}
       timezone={tz}
