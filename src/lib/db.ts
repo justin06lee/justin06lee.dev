@@ -78,6 +78,9 @@ export async function initDb() {
       updated_at INTEGER NOT NULL
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_categories_name_lower ON calendar_categories(LOWER(name))`,
+    // FK clauses below are declarative; libsql does not enable
+    // PRAGMA foreign_keys per-connection, so SET NULL is enforced
+    // at the app level (see calendar-categories.ts deleteCategory).
     `CREATE TABLE IF NOT EXISTS calendar_actuals (
       id TEXT PRIMARY KEY,
       date TEXT NOT NULL,
@@ -118,7 +121,16 @@ export async function initDb() {
   });
 }
 
+// SQLite cannot parameterize identifiers, so caller-provided table/column/type
+// strings are interpolated directly. Allowlist them to prevent injection if
+// callers ever pass non-literal values.
+const SAFE_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SAFE_TYPE = /^[A-Za-z0-9_ ()]+$/;
+
 async function ensureColumn(table: string, column: string, type: string): Promise<void> {
+  if (!SAFE_IDENT.test(table) || !SAFE_IDENT.test(column) || !SAFE_TYPE.test(type)) {
+    throw new Error(`ensureColumn: unsafe identifier(s): ${table}.${column} ${type}`);
+  }
   const info = await db.execute({ sql: `PRAGMA table_info(${table})`, args: [] });
   const exists = (info.rows as unknown as { name: string }[]).some((r) => r.name === column);
   if (!exists) {
