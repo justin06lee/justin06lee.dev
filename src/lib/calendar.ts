@@ -1,4 +1,4 @@
-import { db, initDb, type DbCalendarTask } from "./db";
+import { db, initDb, type DbCalendarTask, type DbCalendarActual } from "./db";
 import { randomUUID } from "crypto";
 
 export type CategorySummary = { id: string; name: string; color: string };
@@ -165,4 +165,92 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
 export async function deleteTask(id: string): Promise<void> {
   await initDb();
   await db.execute({ sql: "DELETE FROM calendar_tasks WHERE id = ?", args: [id] });
+}
+
+export type PlanSummary = { id: string; title: string };
+
+export type CalendarActual = {
+  id: string;
+  date: string;
+  planId: string | null;
+  plan: PlanSummary | null;
+  categoryId: string | null;
+  category: CategorySummary | null;
+  title: string | null;
+  startAt: number;
+  endAt: number | null;
+  notes: string | null;
+};
+
+type DbCalendarActualJoined = DbCalendarActual & {
+  cat_id: string | null;
+  cat_name: string | null;
+  cat_color: string | null;
+  plan_title: string | null;
+};
+
+function rowToActual(row: DbCalendarActualJoined): CalendarActual {
+  return {
+    id: row.id,
+    date: row.date,
+    planId: row.plan_id,
+    plan: row.plan_id != null && row.plan_title != null ? { id: row.plan_id, title: row.plan_title } : null,
+    categoryId: row.category_id,
+    category:
+      row.cat_id != null
+        ? { id: row.cat_id, name: row.cat_name ?? "", color: row.cat_color ?? "" }
+        : null,
+    title: row.title,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    notes: row.notes,
+  };
+}
+
+export async function getActualsInRange(from: string, to: string): Promise<CalendarActual[]> {
+  await initDb();
+  // Returns rows anchored to [from, to] plus any currently-running row.
+  // Callers wanting to render cross-midnight blocks on the day AFTER they start
+  // should query with `from = addDays(date, -1)` so yesterday's anchored rows
+  // are included; the component layer (clampActualToDay) filters them to the visible day.
+  const result = await db.execute({
+    sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+          FROM calendar_actuals a
+          LEFT JOIN calendar_categories c ON c.id = a.category_id
+          LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+          WHERE a.date BETWEEN ? AND ?
+             OR a.end_at IS NULL
+          ORDER BY a.start_at ASC`,
+    args: [from, to],
+  });
+  return (result.rows as unknown as DbCalendarActualJoined[]).map(rowToActual);
+}
+
+export async function getRunningActual(): Promise<CalendarActual | null> {
+  await initDb();
+  const result = await db.execute({
+    sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+          FROM calendar_actuals a
+          LEFT JOIN calendar_categories c ON c.id = a.category_id
+          LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+          WHERE a.end_at IS NULL
+          LIMIT 1`,
+    args: [],
+  });
+  const row = result.rows[0] as unknown as DbCalendarActualJoined | undefined;
+  return row ? rowToActual(row) : null;
+}
+
+async function getActualById(id: string): Promise<CalendarActual | null> {
+  await initDb();
+  const result = await db.execute({
+    sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+          FROM calendar_actuals a
+          LEFT JOIN calendar_categories c ON c.id = a.category_id
+          LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+          WHERE a.id = ?`,
+    args: [id],
+  });
+  const row = result.rows[0] as unknown as DbCalendarActualJoined | undefined;
+  return row ? rowToActual(row) : null;
 }
