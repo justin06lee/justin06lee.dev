@@ -106,7 +106,7 @@ export function epochToDateInTz(ms: number, timezone: string): string {
   }).format(new Date(ms));
 }
 
-/** Returns minutes since midnight (0..1440) for an epoch ms timestamp in the given timezone. */
+/** Returns minutes since midnight (0..1439) for an epoch ms timestamp in the given timezone. */
 export function epochToMinutesOfDay(ms: number, timezone: string): number {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
