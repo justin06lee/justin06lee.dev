@@ -1,6 +1,7 @@
-import { db, initDb, type DbCalendarTask, type DbCalendarActual } from "./db";
+import { db, initDb, type DbCalendarTask, type DbCalendarActual, type DbCalendarCategory } from "./db";
 import { randomUUID } from "crypto";
 import { epochToDateInTz } from "@/components/calendar/date-utils";
+import { rowToCategory, type CalendarCategory } from "./calendar-categories";
 
 export type CategorySummary = { id: string; name: string; color: string };
 
@@ -395,6 +396,66 @@ export async function deleteActual(id: string): Promise<{ ok: boolean }> {
     args: [id],
   });
   return { ok: (result.rowsAffected ?? 0) > 0 };
+}
+
+/**
+ * Batched loader for the day-view page: tasks + actuals + running + categories
+ * in a single libsql round trip. Cuts ~4 round trips down to 1.
+ */
+export type DayPageData = {
+  tasks: CalendarTask[];
+  actuals: CalendarActual[];
+  running: CalendarActual | null;
+  categories: CalendarCategory[];
+};
+
+export async function loadDayPageData(date: string, yesterday: string): Promise<DayPageData> {
+  await initDb();
+  const [tasksRs, actualsRs, runningRs, categoriesRs] = await db.batch(
+    [
+      {
+        sql: `SELECT t.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color
+              FROM calendar_tasks t
+              LEFT JOIN calendar_categories c ON c.id = t.category_id
+              WHERE t.date BETWEEN ? AND ?
+              ORDER BY t.date ASC, t.position ASC, t.created_at ASC`,
+        args: [date, date],
+      },
+      {
+        sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+              FROM calendar_actuals a
+              LEFT JOIN calendar_categories c ON c.id = a.category_id
+              LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+              WHERE (a.date BETWEEN ? AND ?)
+                 OR (a.end_at IS NULL AND a.date <= ?)
+              ORDER BY a.start_at ASC`,
+        args: [yesterday, date, date],
+      },
+      {
+        sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+              FROM calendar_actuals a
+              LEFT JOIN calendar_categories c ON c.id = a.category_id
+              LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+              WHERE a.end_at IS NULL
+              LIMIT 1`,
+        args: [],
+      },
+      {
+        sql: `SELECT * FROM calendar_categories
+              ORDER BY archived ASC, is_system DESC, position ASC, LOWER(name) ASC`,
+        args: [],
+      },
+    ],
+    "read",
+  );
+
+  const tasks = (tasksRs.rows as unknown as DbCalendarTaskJoined[]).map(rowToTask);
+  const actuals = (actualsRs.rows as unknown as DbCalendarActualJoined[]).map(rowToActual);
+  const runningRow = runningRs.rows[0] as unknown as DbCalendarActualJoined | undefined;
+  const running = runningRow ? rowToActual(runningRow) : null;
+  const categories = (categoriesRs.rows as unknown as DbCalendarCategory[]).map(rowToCategory);
+
+  return { tasks, actuals, running, categories };
 }
 
 /** Returns { "YYYY-MM-DD": totalMinutes } for actuals anchored to that day in `year`. */

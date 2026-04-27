@@ -14,7 +14,7 @@ export type CalendarCategory = {
 export type NewCategory = { name: string; color: string };
 export type CategoryPatch = Partial<{ name: string; color: string; archived: boolean; position: number }>;
 
-function rowToCategory(row: DbCalendarCategory): CalendarCategory {
+export function rowToCategory(row: DbCalendarCategory): CalendarCategory {
   return {
     id: row.id,
     name: row.name,
