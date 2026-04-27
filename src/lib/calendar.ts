@@ -55,8 +55,8 @@ function rowToTask(row: DbCalendarTaskJoined): CalendarTask {
     position: row.position,
     categoryId: row.category_id,
     category:
-      row.cat_id && row.cat_name && row.cat_color
-        ? { id: row.cat_id, name: row.cat_name, color: row.cat_color }
+      row.cat_id != null
+        ? { id: row.cat_id, name: row.cat_name ?? "", color: row.cat_color ?? "" }
         : null,
   };
 }
