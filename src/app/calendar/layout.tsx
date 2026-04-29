@@ -2,6 +2,7 @@ import Navbar from "@/components/Navbar";
 import CalendarShell from "@/components/calendar/CalendarShell";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
 import { todayInTz } from "@/lib/calendar-dates";
+import { isAdminServer } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,11 @@ export default async function CalendarLayout({ children }: { children: React.Rea
   const config = await getSiteConfig();
   const today = todayInTz(resolveTimezone(config));
   const [y, m] = today.split("-");
+  const admin = await isAdminServer();
   return (
     <>
       <Navbar />
-      <CalendarShell today={today} todayMonth={`${y}-${m}`} todayYear={y}>
+      <CalendarShell today={today} todayMonth={`${y}-${m}`} todayYear={y} isAdmin={admin}>
         {children}
       </CalendarShell>
     </>

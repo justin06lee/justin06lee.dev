@@ -41,14 +41,17 @@ export default function CalendarShell({
   today,
   todayMonth,
   todayYear,
+  isAdmin = false,
   children,
 }: {
   today: string;
   todayMonth: string;
   todayYear: string;
+  isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const onCategories = pathname === "/calendar/categories";
   const { view, token } = parsePath(pathname);
 
   const dayHref = (t: string) => `/calendar/day/${t}`;
@@ -79,9 +82,17 @@ export default function CalendarShell({
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3 mb-6">
           <div className="flex items-center gap-4 text-sm">
-            <Link href={dayHref(today)} className={`underline-offset-4 hover:underline ${view === "day" ? "text-white" : "text-white/60"}`}>day</Link>
-            <Link href={monthHref(todayMonth)} className={`underline-offset-4 hover:underline ${view === "month" ? "text-white" : "text-white/60"}`}>month</Link>
-            <Link href={yearHref(todayYear)} className={`underline-offset-4 hover:underline ${view === "year" ? "text-white" : "text-white/60"}`}>year</Link>
+            <Link href={dayHref(today)} className={`underline-offset-4 hover:underline ${view === "day" && !onCategories ? "text-white" : "text-white/60"}`}>day</Link>
+            <Link href={monthHref(todayMonth)} className={`underline-offset-4 hover:underline ${view === "month" && !onCategories ? "text-white" : "text-white/60"}`}>month</Link>
+            <Link href={yearHref(todayYear)} className={`underline-offset-4 hover:underline ${view === "year" && !onCategories ? "text-white" : "text-white/60"}`}>year</Link>
+            {isAdmin && (
+              <Link
+                href="/calendar/categories"
+                className={`underline-offset-4 hover:underline ml-2 pl-4 border-l border-white/10 ${onCategories ? "text-white" : "text-white/60"}`}
+              >
+                categories
+              </Link>
+            )}
           </div>
           <div className="flex items-center gap-3 text-sm">
             <Link href={prevHref} aria-label="Previous" className="text-white/60 hover:text-white">‹</Link>
