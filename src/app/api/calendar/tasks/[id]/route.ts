@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWithMutationRate } from "@/lib/auth";
 import { deleteTask, updateTask, type CalendarTaskPatch } from "@/lib/calendar";
-import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils";
+import { isValidDateString, isValidHhmm } from "@/lib/calendar-dates";
+import {
+  MAX_NOTES_LEN,
+  MAX_TITLE_LEN,
+  isFiniteInt32,
+  isStringWithin,
+} from "@/lib/calendar-validate";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +15,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   const { id } = await params;
@@ -24,14 +30,14 @@ export async function PATCH(
   const patch: CalendarTaskPatch = {};
 
   if (body.title !== undefined) {
-    if (typeof body.title !== "string" || body.title.trim().length === 0) {
-      return NextResponse.json({ error: "title must be non-empty string" }, { status: 400 });
+    if (!isStringWithin(body.title, MAX_TITLE_LEN) || body.title.trim().length === 0) {
+      return NextResponse.json({ error: `title must be non-empty (<= ${MAX_TITLE_LEN} chars)` }, { status: 400 });
     }
     patch.title = body.title.trim();
   }
   if (body.notes !== undefined) {
-    if (body.notes !== null && typeof body.notes !== "string") {
-      return NextResponse.json({ error: "notes must be string or null" }, { status: 400 });
+    if (body.notes !== null && !isStringWithin(body.notes, MAX_NOTES_LEN)) {
+      return NextResponse.json({ error: `notes must be string (<= ${MAX_NOTES_LEN}) or null` }, { status: 400 });
     }
     patch.notes = typeof body.notes === "string" ? body.notes : null;
   }
@@ -54,8 +60,8 @@ export async function PATCH(
     patch.done = body.done;
   }
   if (body.position !== undefined) {
-    if (typeof body.position !== "number") {
-      return NextResponse.json({ error: "position must be number" }, { status: 400 });
+    if (!isFiniteInt32(body.position)) {
+      return NextResponse.json({ error: "position must be a finite integer" }, { status: 400 });
     }
     patch.position = body.position;
   }
@@ -65,19 +71,29 @@ export async function PATCH(
     }
     patch.date = body.date;
   }
+  if (body.categoryId !== undefined) {
+    if (body.categoryId !== null && !isStringWithin(body.categoryId, MAX_TITLE_LEN)) {
+      return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
+    }
+    patch.categoryId = body.categoryId as string | null;
+  }
 
-  const task = await updateTask(id, patch);
-  if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
-  return NextResponse.json(task);
+  const result = await updateTask(id, patch);
+  if (!result.ok) {
+    if (result.reason === "not-found") return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    return NextResponse.json({ error: result.reason }, { status: 400 });
+  }
+  return NextResponse.json(result.task);
 }
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
   const { id } = await params;
-  await deleteTask(id);
+  const result = await deleteTask(id);
+  if (!result.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

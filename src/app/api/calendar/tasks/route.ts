@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminWithMutationRate } from "@/lib/auth";
 import { createTask, getTasksInRange } from "@/lib/calendar";
-import { isValidDateString, isValidHhmm } from "@/components/calendar/date-utils";
+import { isValidDateString, isValidHhmm } from "@/lib/calendar-dates";
+import {
+  MAX_NOTES_LEN,
+  MAX_TITLE_LEN,
+  checkDateRangeSpan,
+  isFiniteInt32,
+  isStringWithin,
+} from "@/lib/calendar-validate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +21,14 @@ export async function GET(req: NextRequest) {
   if (!from || !to || !isValidDateString(from) || !isValidDateString(to)) {
     return NextResponse.json({ error: "from and to must be YYYY-MM-DD" }, { status: 400 });
   }
+  const spanError = checkDateRangeSpan(from, to);
+  if (spanError) return NextResponse.json({ error: spanError }, { status: 400 });
   const tasks = await getTasksInRange(from, to);
   return NextResponse.json(tasks);
 }
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   let body: Record<string, unknown>;
@@ -29,12 +38,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, title, notes, startTime, endTime, position } = body;
+  const { date, title, notes, startTime, endTime, position, categoryId } = body;
   if (typeof date !== "string" || !isValidDateString(date)) {
     return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
   }
-  if (typeof title !== "string" || title.trim().length === 0) {
-    return NextResponse.json({ error: "title is required" }, { status: 400 });
+  if (!isStringWithin(title, MAX_TITLE_LEN) || title.trim().length === 0) {
+    return NextResponse.json({ error: `title is required (<= ${MAX_TITLE_LEN} chars)` }, { status: 400 });
+  }
+  if (notes !== undefined && notes !== null && !isStringWithin(notes, MAX_NOTES_LEN)) {
+    return NextResponse.json({ error: `notes must be <= ${MAX_NOTES_LEN} chars` }, { status: 400 });
   }
   if (startTime !== undefined && startTime !== null && (typeof startTime !== "string" || !isValidHhmm(startTime))) {
     return NextResponse.json({ error: "startTime must be HH:MM" }, { status: 400 });
@@ -42,14 +54,24 @@ export async function POST(req: NextRequest) {
   if (endTime !== undefined && endTime !== null && (typeof endTime !== "string" || !isValidHhmm(endTime))) {
     return NextResponse.json({ error: "endTime must be HH:MM" }, { status: 400 });
   }
+  if (position !== undefined && !isFiniteInt32(position)) {
+    return NextResponse.json({ error: "position must be a finite integer" }, { status: 400 });
+  }
+  if (categoryId !== undefined && categoryId !== null && !isStringWithin(categoryId, MAX_TITLE_LEN)) {
+    return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
+  }
 
-  const task = await createTask({
+  const result = await createTask({
     date,
     title: title.trim(),
     notes: typeof notes === "string" ? notes : null,
     startTime: typeof startTime === "string" ? startTime : null,
     endTime: typeof endTime === "string" ? endTime : null,
     position: typeof position === "number" ? position : 0,
+    categoryId: typeof categoryId === "string" ? categoryId : null,
   });
-  return NextResponse.json(task);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.reason }, { status: 400 });
+  }
+  return NextResponse.json(result.task);
 }

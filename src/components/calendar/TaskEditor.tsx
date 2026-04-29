@@ -1,21 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarTask } from "@/lib/calendar";
+import type { CalendarCategory } from "@/lib/calendar-categories";
+import CategoryPicker from "./CategoryPicker";
+import { useDialog } from "@/components/Dialog";
 
 type Props = {
   date: string;
   task?: CalendarTask;
+  categories?: CalendarCategory[];
   onClose: () => void;
 };
 
-export default function TaskEditor({ date, task, onClose }: Props) {
+export default function TaskEditor({ date, task, categories, onClose }: Props) {
   const router = useRouter();
+  const dialog = useDialog();
+  const dialogRef = useRef<HTMLFormElement>(null);
   const [title, setTitle] = useState(task?.title ?? "");
   const [notes, setNotes] = useState(task?.notes ?? "");
   const [startTime, setStartTime] = useState(task?.startTime ?? "");
   const [endTime, setEndTime] = useState(task?.endTime ?? "");
+  const [categoryId, setCategoryId] = useState<string | null>(task?.categoryId ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +36,7 @@ export default function TaskEditor({ date, task, onClose }: Props) {
       notes: notes || null,
       startTime: startTime || null,
       endTime: endTime || null,
+      categoryId,
     };
     const url = task ? `/api/calendar/tasks/${task.id}` : "/api/calendar/tasks";
     const method = task ? "PATCH" : "POST";
@@ -50,17 +58,48 @@ export default function TaskEditor({ date, task, onClose }: Props) {
 
   const remove = async () => {
     if (!task) return;
-    if (!confirm("Delete this task?")) return;
+    const ok = await dialog.confirm({
+      title: "Delete this task?",
+      message: "The plan and any actuals tied to it will lose this reference.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setSubmitting(true);
-    await fetch(`/api/calendar/tasks/${task.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/calendar/tasks/${task.id}`, { method: "DELETE" });
     setSubmitting(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? `HTTP ${res.status}`);
+      return;
+    }
     onClose();
     router.refresh();
   };
 
+  // Esc-to-close + return-focus on unmount.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={task ? "Edit task" : "New task"}
+    >
       <form
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
         className="w-full max-w-md bg-black border border-white/20 p-5 flex flex-col gap-3 text-sm"
@@ -69,8 +108,12 @@ export default function TaskEditor({ date, task, onClose }: Props) {
           <span className="font-mono uppercase tracking-widest text-white/70 text-xs">
             {task ? "Edit task" : "New task"} · {date}
           </span>
-          <button type="button" onClick={onClose} className="text-white/60 hover:text-white">×</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-white/60 hover:text-white">×</button>
         </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-white/60 text-xs">category</span>
+          <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />
+        </label>
         <label className="flex flex-col gap-1">
           <span className="text-white/60 text-xs">title</span>
           <input
@@ -91,22 +134,20 @@ export default function TaskEditor({ date, task, onClose }: Props) {
         </label>
         <div className="flex gap-3">
           <label className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className="text-white/60 text-xs">start (HH:MM)</span>
+            <span className="text-white/60 text-xs">start</span>
             <input
+              type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              placeholder="09:00"
-              pattern="\d{2}:\d{2}"
               className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
             />
           </label>
           <label className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className="text-white/60 text-xs">end (HH:MM)</span>
+            <span className="text-white/60 text-xs">end</span>
             <input
+              type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              placeholder="10:00"
-              pattern="\d{2}:\d{2}"
               className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
             />
           </label>

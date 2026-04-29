@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import YearView from "@/components/calendar/YearView";
-import { getHeatmapForYear } from "@/lib/calendar";
-import { isValidYearString, todayInTz } from "@/components/calendar/date-utils";
+import { getOverlapHeatmapForRange } from "@/lib/calendar";
+import { isValidYearString, todayInTz } from "@/lib/calendar-dates";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,8 @@ export default async function YearPage({ params }: { params: Promise<{ yyyy: str
   const { yyyy } = await params;
   if (!isValidYearString(yyyy)) notFound();
   const year = Number(yyyy);
-  const [heatmap, config] = await Promise.all([getHeatmapForYear(year), getSiteConfig()]);
-  return <YearView year={year} heatmap={heatmap} today={todayInTz(resolveTimezone(config))} />;
+  const config = await getSiteConfig();
+  const tz = resolveTimezone(config);
+  const heatmap = await getOverlapHeatmapForRange(`${year}-01-01`, `${year}-12-31`, tz);
+  return <YearView year={year} heatmap={heatmap} today={todayInTz(tz)} />;
 }

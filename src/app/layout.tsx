@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { DialogProvider } from "@/components/Dialog";
 import { Analytics } from "@vercel/analytics/next";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://justin06lee.dev";
@@ -79,8 +80,10 @@ export default function RootLayout({
 		<html lang="en" suppressHydrationWarning className="bg-black">
 			<body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}>
 				<ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-					{children}
-					<Analytics />
+					<DialogProvider>
+						{children}
+						<Analytics />
+					</DialogProvider>
 				</ThemeProvider>
 			</body>
 		</html>

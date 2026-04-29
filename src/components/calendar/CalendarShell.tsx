@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { addDays } from "./date-utils";
+import { addDays } from "@/lib/calendar-dates";
 
 type View = "day" | "month" | "year";
 
 function parsePath(pathname: string): { view: View; token: string | null } {
+  // The CalendarShell layout only mounts under `/calendar/*`, so `parts[0]`
+  // is always "calendar" — no defensive branch needed.
   const parts = pathname.split("/").filter(Boolean);
-  if (parts[0] !== "calendar") return { view: "day", token: null };
   const view = (parts[1] as View) ?? "day";
   const token = parts[2] ?? null;
   return { view, token };
@@ -83,9 +84,9 @@ export default function CalendarShell({
             <Link href={yearHref(todayYear)} className={`underline-offset-4 hover:underline ${view === "year" ? "text-white" : "text-white/60"}`}>year</Link>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <Link href={prevHref} className="text-white/60 hover:text-white">‹</Link>
+            <Link href={prevHref} aria-label="Previous" className="text-white/60 hover:text-white">‹</Link>
             <Link href={todayHref} title={isOnCurrent ? currentLabel : `jump to ${currentLabel}`} className="text-white/60 hover:text-white underline-offset-4 hover:underline font-mono tabular-nums">{middleLabel}</Link>
-            <Link href={nextHref} className="text-white/60 hover:text-white">›</Link>
+            <Link href={nextHref} aria-label="Next" className="text-white/60 hover:text-white">›</Link>
           </div>
         </div>
         {children}

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin } from "lucide-react";
+import { useDialog } from "@/components/Dialog";
+import Navbar from "@/components/Navbar";
 
 type Item = {
   id: string;
@@ -150,12 +152,15 @@ export default function AdminPage() {
     setPasswordInput("");
   };
 
+  let body: React.ReactNode;
   if (!authChecked) {
-    return <div className="min-h-screen bg-black text-white flex items-center justify-center"><p className="text-white/60">Loading...</p></div>;
-  }
-
-  if (!authed) {
-    return (
+    body = (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="text-white/60">Loading...</p>
+      </div>
+    );
+  } else if (!authed) {
+    body = (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="w-full max-w-sm flex flex-col gap-4 px-4">
           <h1 className="text-xl font-semibold text-center">Admin</h1>
@@ -175,11 +180,10 @@ export default function AdminPage() {
         </div>
       </div>
     );
-  }
-
-  return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+  } else {
+    body = (
+      <div className="min-h-screen bg-black text-white">
+        <div className="max-w-7xl mx-auto px-4 pt-16 pb-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold">Content Manager</h1>
           <button onClick={handleLogout} className="inline-flex items-center gap-2 text-sm hover:bg-white/10 px-3 py-1.5 transition-colors">
@@ -201,12 +205,20 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {activeTab === "site-config" && <SiteConfigPanel />}
-        {activeTab !== "site-config" && (
-          <CategoryPanel category={activeTab} />
-        )}
+          {activeTab === "site-config" && <SiteConfigPanel />}
+          {activeTab !== "site-config" && (
+            <CategoryPanel category={activeTab} />
+          )}
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      {body}
+    </>
   );
 }
 
@@ -564,6 +576,7 @@ function CategoryPanel({ category }: { category: string }) {
   const [editing, setEditing] = useState<Item | null>(null);
   const [adding, setAdding] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const dialog = useDialog();
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -594,7 +607,7 @@ function CategoryPanel({ category }: { category: string }) {
       : await fetch(`/api/items/${encodeURIComponent(item.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      alert(`Save failed: ${body.error || res.statusText}`);
+      await dialog.alert({ title: "Save failed", message: body.error || res.statusText });
       return;
     }
     setEditing(null);

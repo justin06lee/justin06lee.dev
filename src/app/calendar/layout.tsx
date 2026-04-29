@@ -1,7 +1,7 @@
 import Navbar from "@/components/Navbar";
 import CalendarShell from "@/components/calendar/CalendarShell";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
-import { todayInTz } from "@/components/calendar/date-utils";
+import { todayInTz } from "@/lib/calendar-dates";
 
 export const dynamic = "force-dynamic";
 
