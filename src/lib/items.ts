@@ -4,7 +4,7 @@ import type { GalleryItem } from "@/components/ItemGallery";
 export async function getItemsByCategory(category: string): Promise<GalleryItem[]> {
   await initDb();
   const result = await db.execute({
-    sql: "SELECT * FROM items WHERE category = ? ORDER BY sort_order ASC, year DESC",
+    sql: "SELECT * FROM items WHERE category = ? ORDER BY pinned DESC, sort_order ASC, year DESC",
     args: [category],
   });
 
@@ -18,5 +18,6 @@ export async function getItemsByCategory(category: string): Promise<GalleryItem[
     repo: row.repo ?? undefined,
     live: row.live ?? undefined,
     notes: row.notes ?? undefined,
+    pinned: !!row.pinned,
   }));
 }

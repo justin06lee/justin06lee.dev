@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin } from "lucide-react";
+import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin, FolderInput, Pin, PinOff } from "lucide-react";
 import { useDialog } from "@/components/Dialog";
 import Navbar from "@/components/Navbar";
 
 type Item = {
   id: string;
-  category: string;
+  category: ItemCategory;
   title: string;
   description: string;
   year: number;
@@ -17,9 +17,10 @@ type Item = {
   live?: string;
   notes?: string;
   sort_order: number;
+  pinned: boolean;
 };
 
-type RawItem = Omit<Item, "tech"> & { tech: string };
+type RawItem = Omit<Item, "tech" | "pinned"> & { tech: string; pinned: number };
 
 type Pfp = {
   url: string;
@@ -53,11 +54,19 @@ const TABS = [
   { key: "in-development", label: "In Development" },
   { key: "site-config", label: "Site Config" },
 ] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+const ITEM_CATEGORIES = [
+  { key: "projects", label: "Projects" },
+  { key: "hobbies", label: "Hobbies" },
+  { key: "in-development", label: "In Development" },
+] as const;
+type ItemCategory = (typeof ITEM_CATEGORIES)[number]["key"];
 
 function parseItem(raw: RawItem): Item {
   let tech: string[] = [];
   try { tech = JSON.parse(raw.tech); } catch { /* malformed */ }
-  return { ...raw, tech };
+  return { ...raw, tech, pinned: !!raw.pinned };
 }
 
 function slugify(str: string): string {
@@ -103,6 +112,70 @@ function ConfirmModal({
   );
 }
 
+/* ───────── Move Menu ───────── */
+
+function MoveMenu({
+  current,
+  onMove,
+  disabled,
+}: {
+  current: ItemCategory;
+  onMove: (target: ItemCategory) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (disabled && open) setOpen(false);
+  }, [disabled, open]);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const targets = ITEM_CATEGORIES.filter((c) => c.key !== current);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        title={disabled ? "Moving..." : "Move to..."}
+        aria-label="Move to another category"
+        className="inline-flex items-center justify-center size-9 hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <FolderInput className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 z-20 mt-1 border border-white/20 bg-black min-w-[180px]">
+          <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-white/40 border-b border-white/10">
+            Move to
+          </div>
+          {targets.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => {
+                onMove(t.key);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ───────── Split text into lines by word count ───────── */
 
 function splitIntoLines(text: string, wordsPerLine = 10): string[] {
@@ -122,7 +195,7 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
-  const [activeTab, setActiveTab] = useState("projects");
+  const [activeTab, setActiveTab] = useState<TabKey>("projects");
 
   useEffect(() => {
     fetch("/api/auth")
@@ -569,13 +642,14 @@ function SiteConfigPanel() {
 
 /* ───────── Category Items Panel ───────── */
 
-function CategoryPanel({ category }: { category: string }) {
+function CategoryPanel({ category }: { category: ItemCategory }) {
   const [items, setItems] = useState<Item[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Item | null>(null);
   const [adding, setAdding] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
   const dialog = useDialog();
 
   const fetchItems = useCallback(async () => {
@@ -615,6 +689,41 @@ function CategoryPanel({ category }: { category: string }) {
     fetchItems();
   };
 
+  const handleTogglePin = async (item: Item) => {
+    const next = { ...item, pinned: !item.pinned };
+    const res = await fetch(`/api/items/${encodeURIComponent(item.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      await dialog.alert({ title: "Pin failed", message: body.error || res.statusText });
+      return;
+    }
+    fetchItems();
+  };
+
+  const handleMove = async (item: Item, target: ItemCategory) => {
+    if (movingId) return;
+    setMovingId(item.id);
+    try {
+      const res = await fetch(`/api/items/${encodeURIComponent(item.id)}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        await dialog.alert({ title: "Move failed", message: body.error || res.statusText });
+        return;
+      }
+      await fetchItems();
+    } finally {
+      setMovingId(null);
+    }
+  };
+
   if (loading) return <p className="text-white/60">Loading...</p>;
 
   return (
@@ -633,7 +742,10 @@ function CategoryPanel({ category }: { category: string }) {
           {items.map((item) => (
             <div key={item.id} className="border border-white/10 p-4 flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold">{item.title}</h3>
+                <h3 className="font-semibold flex items-center gap-1.5">
+                  {item.pinned && <Pin className="h-3.5 w-3.5 fill-white text-white -rotate-45" aria-label="Pinned" />}
+                  <span>{item.title}</span>
+                </h3>
                 <p className="text-sm text-white/70 mt-1">{item.description}</p>
                 <div className="flex flex-wrap gap-1 mt-2">
                   {item.tech.map((t) => (<span key={t} className="px-2 py-0.5 text-xs border border-white/15 text-white/80">{t}</span>))}
@@ -641,6 +753,19 @@ function CategoryPanel({ category }: { category: string }) {
                 {item.notes && <p className="text-xs text-white/50 mt-2 italic">{item.notes}</p>}
               </div>
               <div className="flex gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleTogglePin(item)}
+                  title={item.pinned ? "Unpin" : "Pin to top"}
+                  aria-label={item.pinned ? "Unpin" : "Pin to top"}
+                  aria-pressed={item.pinned}
+                  className="inline-flex items-center justify-center size-9 hover:bg-white/10 transition-colors"
+                >
+                  {item.pinned
+                    ? <PinOff className="h-4 w-4" />
+                    : <Pin className="h-4 w-4 -rotate-45" />}
+                </button>
+                <MoveMenu current={item.category} onMove={(target) => handleMove(item, target)} disabled={movingId !== null} />
                 <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 transition-colors" onClick={() => setEditing(item)}><Pencil className="h-4 w-4" /></button>
                 <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 transition-colors" onClick={() => setDeleteTarget(item.id)}><Trash2 className="h-4 w-4" /></button>
               </div>
@@ -657,9 +782,10 @@ function CategoryPanel({ category }: { category: string }) {
 function ItemForm({
   item, category, existingTags, itemCount, onSave, onCancel,
 }: {
-  item?: Item; category: string; existingTags: string[]; itemCount: number; onSave: (item: Item) => void; onCancel: () => void;
+  item?: Item; category: ItemCategory; existingTags: string[]; itemCount: number; onSave: (item: Item) => void; onCancel: () => void;
 }) {
   const [title, setTitle] = useState(item?.title ?? "");
+  const [itemCategory, setItemCategory] = useState<ItemCategory>(item?.category ?? category);
   const [description, setDescription] = useState(item?.description ?? "");
   const [year, setYear] = useState(item?.year ?? new Date().getFullYear());
   const [techStr, setTechStr] = useState(item?.tech.join(", ") ?? "");
@@ -683,10 +809,11 @@ function ItemForm({
     e.preventDefault();
     onSave({
       id: isNew ? slugify(title) : item.id,
-      category, title, description, year,
+      category: itemCategory, title, description, year,
       tech: currentTechList,
       link: link || undefined, repo: repo || undefined, live: live || undefined, notes: notes || undefined,
       sort_order: isNew ? itemCount : item.sort_order,
+      pinned: isNew ? false : item.pinned,
     });
   };
 
@@ -697,6 +824,20 @@ function ItemForm({
         <label className="text-xs text-white/60 mb-1 block">Title</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} required />
         {isNew && title && <p className="text-xs text-white/40 mt-1">ID: {slugify(title)}</p>}
+      </div>
+      <div>
+        <label className="text-xs text-white/60 mb-1 block">Category</label>
+        <select
+          value={itemCategory}
+          onChange={(e) => setItemCategory(e.target.value as ItemCategory)}
+          className={inputClass}
+        >
+          {ITEM_CATEGORIES.map((c) => (
+            <option key={c.key} value={c.key} className="bg-black">
+              {c.label}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="text-xs text-white/60 mb-1 block">Description</label>

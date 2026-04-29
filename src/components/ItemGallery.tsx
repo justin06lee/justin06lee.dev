@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import * as motion from "motion/react-client";
-import { ListFilter } from "lucide-react";
+import { ListFilter, Pin } from "lucide-react";
 
 export type GalleryItem = {
 	id: string;
@@ -14,6 +14,7 @@ export type GalleryItem = {
 	repo?: string;
 	live?: string;
 	notes?: string;
+	pinned?: boolean;
 };
 
 type SortKey = "newest" | "oldest" | "az" | "za";
@@ -81,6 +82,8 @@ export function ItemGallery({
 		});
 
 		res.sort((a, b) => {
+			const pinDiff = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+			if (pinDiff !== 0) return pinDiff;
 			switch (sort) {
 				case "newest": return b.year - a.year || a.title.localeCompare(b.title);
 				case "oldest": return a.year - b.year || a.title.localeCompare(b.title);
@@ -228,9 +231,17 @@ function ProjectCard({ p, i, k, shouldAnimate }: { p: GalleryItem; i: number; k:
 			className="border border-white/10 bg-transparent p-5 flex flex-col gap-3"
 		>
 			<div className="flex items-start justify-between gap-3">
-				{p.link && <a href={p.link} target="_blank" rel="noreferrer noopener"><h3 className="text-lg font-semibold leading-tight hover:underline underline-offset-5">{p.title}</h3></a>}
-				{!p.link && <h3 className="text-lg font-semibold leading-tight">{p.title}</h3>}
-				<span className="text-xs text-white/60 select-none">{p.year}</span>
+				<div className="flex items-start gap-1.5 min-w-0">
+					{p.pinned && (
+						<Pin
+							className="h-3.5 w-3.5 mt-1 shrink-0 fill-white text-white -rotate-45"
+							aria-label="Pinned"
+						/>
+					)}
+					{p.link && <a href={p.link} target="_blank" rel="noreferrer noopener"><h3 className="text-lg font-semibold leading-tight hover:underline underline-offset-5">{p.title}</h3></a>}
+					{!p.link && <h3 className="text-lg font-semibold leading-tight">{p.title}</h3>}
+				</div>
+				<span className="text-xs text-white/60 select-none shrink-0">{p.year}</span>
 			</div>
 
 			<p className="text-sm text-white/80">{p.description}</p>

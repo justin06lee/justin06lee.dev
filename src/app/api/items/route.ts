@@ -20,13 +20,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
     const result = await db.execute({
-      sql: "SELECT * FROM items WHERE category = ? ORDER BY sort_order ASC, year DESC",
+      sql: "SELECT * FROM items WHERE category = ? ORDER BY pinned DESC, sort_order ASC, year DESC",
       args: [category],
     });
     return NextResponse.json(result.rows);
   }
 
-  const result = await db.execute("SELECT * FROM items ORDER BY category, sort_order ASC, year DESC");
+  const result = await db.execute("SELECT * FROM items ORDER BY category, pinned DESC, sort_order ASC, year DESC");
   return NextResponse.json(result.rows);
 }
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { id, category, title, description, year, tech, link, repo, live, notes, sort_order } = body;
+  const { id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned } = body;
 
   if (
     typeof id !== "string" ||
@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
   }
 
   await db.execute({
-    sql: `INSERT INTO items (id, category, title, description, year, tech, link, repo, live, notes, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO items (id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       category,
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
       typeof live === "string" ? live : null,
       typeof notes === "string" ? notes : null,
       typeof sort_order === "number" ? sort_order : 0,
+      pinned === true ? 1 : 0,
     ],
   });
 

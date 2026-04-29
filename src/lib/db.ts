@@ -32,6 +32,7 @@ async function doInit(): Promise<void> {
       live TEXT,
       notes TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      pinned INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )`,
@@ -136,6 +137,7 @@ async function doInit(): Promise<void> {
   // CREATE TABLE above already includes the column for fresh schemas; this
   // adds it to older deployments without dropping data.
   await ensureColumn("calendar_tasks", "category_id", "TEXT");
+  await ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
 
   // Seed the built-in Sleep category if not present.
   await db.execute({
@@ -175,6 +177,7 @@ export type DbItem = {
   live: string | null;
   notes: string | null;
   sort_order: number;
+  pinned: number;
 };
 
 export type DbCalendarTask = {
