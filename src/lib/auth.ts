@@ -118,6 +118,50 @@ export async function checkRateLimit(ip: string): Promise<boolean> {
   return nextCount <= MAX_ATTEMPTS;
 }
 
+/* ── API mutation rate limiter (per-IP, sliding 1-minute window) ── */
+
+const MUTATION_WINDOW_MS = 60 * 1000;
+const MUTATION_MAX_PER_WINDOW = 200;
+
+/**
+ * Per-IP rate limit for state-changing API calls. Generous threshold —
+ * intended to stop runaway scripts and accidental loops, never to inconvenience
+ * the human admin (~3/sec sustained still passes). DB-backed so the limit
+ * survives serverless cold starts.
+ */
+export async function checkApiMutationRate(ip: string): Promise<boolean> {
+  await initDb();
+  const now = Date.now();
+  const windowStart = now - MUTATION_WINDOW_MS;
+
+  // Prune stale rows so the table doesn't grow indefinitely.
+  await db.execute({
+    sql: "DELETE FROM api_mutation_rate WHERE first_attempt < ?",
+    args: [windowStart],
+  });
+
+  const result = await db.execute({
+    sql: "SELECT count, first_attempt FROM api_mutation_rate WHERE ip = ?",
+    args: [ip],
+  });
+  const row = result.rows[0] as unknown as { count: number; first_attempt: number } | undefined;
+
+  if (!row || row.first_attempt < windowStart) {
+    await db.execute({
+      sql: "INSERT OR REPLACE INTO api_mutation_rate (ip, count, first_attempt) VALUES (?, 1, ?)",
+      args: [ip, now],
+    });
+    return true;
+  }
+
+  const next = row.count + 1;
+  await db.execute({
+    sql: "UPDATE api_mutation_rate SET count = ? WHERE ip = ?",
+    args: [next, ip],
+  });
+  return next <= MUTATION_MAX_PER_WINDOW;
+}
+
 /* ── Admin verification ── */
 
 let warnedMissingAdminKey = false;
@@ -147,4 +191,19 @@ export async function isAdmin(req: NextRequest): Promise<boolean> {
 export async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
   if (await isAdmin(req)) return null;
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+/**
+ * Like `requireAdmin`, but also enforces the per-IP mutation rate limit.
+ * Use on POST/PATCH/DELETE handlers (read-only GETs should stay on
+ * `requireAdmin` so they're not throttled alongside writes).
+ */
+export async function requireAdminWithMutationRate(req: NextRequest): Promise<NextResponse | null> {
+  const auth = await requireAdmin(req);
+  if (auth) return auth;
+  const ip = getClientIp(req);
+  if (!(await checkApiMutationRate(ip))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+  return null;
 }

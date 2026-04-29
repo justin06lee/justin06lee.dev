@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import DayView from "@/components/calendar/DayView";
 import PrayerMarkers from "@/components/calendar/PrayerMarkers";
 import { loadDayPageData } from "@/lib/calendar";
-import { addDays, isValidDateString, todayInTz } from "@/components/calendar/date-utils";
+import { addDays, isValidDateString, todayInTz } from "@/lib/calendar-dates";
 import { isAdminServer } from "@/lib/auth-server";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
 
@@ -29,7 +29,6 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       date={date}
       tasks={day.tasks}
       actuals={day.actuals}
-      runningActual={day.running}
       categories={day.categories}
       prayersSlot={
         <Suspense fallback={null}>

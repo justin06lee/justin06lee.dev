@@ -1,4 +1,4 @@
-import { hhmmToMinutes } from "./date-utils";
+import { hhmmToMinutes } from "@/lib/calendar-dates";
 
 export default function PrayerTimeMarker({
   name,

@@ -1,4 +1,7 @@
 import { createClient } from "@libsql/client";
+import { SLEEP_CATEGORY_ID } from "./calendar-constants";
+
+export { SLEEP_CATEGORY_ID };
 
 export const db = createClient({
   url: process.env.TURSO_DATABASE_URL!,
@@ -54,6 +57,11 @@ async function doInit(): Promise<void> {
       count INTEGER NOT NULL,
       first_attempt INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS api_mutation_rate (
+      ip TEXT PRIMARY KEY,
+      count INTEGER NOT NULL,
+      first_attempt INTEGER NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS pat_counter (
       id INTEGER PRIMARY KEY,
       count INTEGER NOT NULL DEFAULT 0
@@ -73,6 +81,7 @@ async function doInit(): Promise<void> {
       end_time TEXT,
       done INTEGER NOT NULL DEFAULT 0,
       position INTEGER NOT NULL DEFAULT 0,
+      category_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
@@ -106,9 +115,6 @@ async function doInit(): Promise<void> {
       FOREIGN KEY (category_id) REFERENCES calendar_categories(id) ON DELETE SET NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_calendar_actuals_date ON calendar_actuals(date)`,
-    // Drop the older non-unique form (if a previous init created it) so the
-    // unique-on-running rebuild below succeeds with the same name.
-    `DROP INDEX IF EXISTS idx_calendar_actuals_running`,
     // Partial UNIQUE index enforces the single-active invariant at the DB
     // level: at most one row may have end_at IS NULL at a time. App-level
     // auto-stop in startActual still does the right thing on the happy path;
@@ -126,15 +132,17 @@ async function doInit(): Promise<void> {
     )`,
   ]);
 
-  // Additive ALTER for existing rows (no-op if column exists)
+  // Idempotent migration for installations that predate `category_id`. The
+  // CREATE TABLE above already includes the column for fresh schemas; this
+  // adds it to older deployments without dropping data.
   await ensureColumn("calendar_tasks", "category_id", "TEXT");
 
-  // Seed the built-in Sleep category if not present
+  // Seed the built-in Sleep category if not present.
   await db.execute({
     sql: `INSERT INTO calendar_categories (id, name, color, is_system, archived, position, created_at, updated_at)
           SELECT ?, 'Sleep', ?, 1, 0, 0, ?, ?
           WHERE NOT EXISTS (SELECT 1 FROM calendar_categories WHERE LOWER(name) = 'sleep')`,
-    args: ["sleep-system", "#5b5b8a", Date.now(), Date.now()],
+    args: [SLEEP_CATEGORY_ID, "#5b5b8a", Date.now(), Date.now()],
   });
 }
 

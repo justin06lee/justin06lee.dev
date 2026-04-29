@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWithMutationRate } from "@/lib/auth";
 import { updateCategory, deleteCategory } from "@/lib/calendar-categories";
+import { MAX_NAME_LEN, isFiniteInt32, isStringWithin } from "@/lib/calendar-validate";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
   const { id } = await params;
 
@@ -21,8 +22,8 @@ export async function PATCH(
 
   const patch: { name?: string; color?: string; archived?: boolean; position?: number } = {};
   if (body.name !== undefined) {
-    if (typeof body.name !== "string" || body.name.trim().length === 0) {
-      return NextResponse.json({ error: "name must be non-empty" }, { status: 400 });
+    if (!isStringWithin(body.name, MAX_NAME_LEN) || body.name.trim().length === 0) {
+      return NextResponse.json({ error: `name must be non-empty (<= ${MAX_NAME_LEN} chars)` }, { status: 400 });
     }
     patch.name = body.name;
   }
@@ -39,8 +40,8 @@ export async function PATCH(
     patch.archived = body.archived;
   }
   if (body.position !== undefined) {
-    if (typeof body.position !== "number") {
-      return NextResponse.json({ error: "position must be number" }, { status: 400 });
+    if (!isFiniteInt32(body.position)) {
+      return NextResponse.json({ error: "position must be a finite integer" }, { status: 400 });
     }
     patch.position = body.position;
   }
@@ -49,6 +50,7 @@ export async function PATCH(
   if (!result.ok) {
     if (result.reason === "not-found") return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (result.reason === "duplicate") return NextResponse.json({ error: "Duplicate name" }, { status: 409 });
+    if (result.reason === "empty-name") return NextResponse.json({ error: "name must be non-empty" }, { status: 400 });
     if (result.reason === "invalid-color") return NextResponse.json({ error: "Invalid color" }, { status: 400 });
     if (result.reason === "system-name-locked") {
       return NextResponse.json({ error: "Cannot rename a system category" }, { status: 400 });
@@ -62,7 +64,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
   const { id } = await params;
   const result = await deleteCategory(id);

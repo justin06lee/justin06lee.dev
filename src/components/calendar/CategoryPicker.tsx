@@ -7,20 +7,33 @@ import CategoryCreateInline from "./CategoryCreateInline";
 type Props = {
   selectedId: string | null;
   onChange: (id: string | null) => void;
+  /** Server-loaded categories, threaded through to avoid one fetch per picker
+   *  mount. If omitted, falls back to fetching `/api/calendar/categories`. */
+  categories?: CalendarCategory[];
 };
 
-export default function CategoryPicker({ selectedId, onChange }: Props) {
+export default function CategoryPicker({ selectedId, onChange, categories: initialCategories }: Props) {
   const [open, setOpen] = useState(false);
-  const [categories, setCategories] = useState<CalendarCategory[]>([]);
+  const [categories, setCategories] = useState<CalendarCategory[]>(initialCategories ?? []);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  // If a server-provided list is present we never need to fetch.
+  const [loaded, setLoaded] = useState(initialCategories !== undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!loaded) {
-      void refresh();
-    }
+    if (loaded) return;
+    let cancelled = false;
+    (async () => {
+      const r = await fetch("/api/calendar/categories", { credentials: "include" });
+      if (cancelled || !r.ok) return;
+      const list = (await r.json()) as CalendarCategory[];
+      setCategories(list);
+      setLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [loaded]);
 
   useEffect(() => {
@@ -33,15 +46,6 @@ export default function CategoryPicker({ selectedId, onChange }: Props) {
     if (open) document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
-
-  async function refresh() {
-    const r = await fetch("/api/calendar/categories", { credentials: "include" });
-    if (r.ok) {
-      const list = (await r.json()) as CalendarCategory[];
-      setCategories(list);
-      setLoaded(true);
-    }
-  }
 
   const selected = categories.find((c) => c.id === selectedId) ?? null;
 

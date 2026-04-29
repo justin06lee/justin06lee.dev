@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWithMutationRate } from "@/lib/auth";
 import { startActual } from "@/lib/calendar";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
+import { MAX_TITLE_LEN, isStringWithin } from "@/lib/calendar-validate";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   let body: Record<string, unknown> = {};
@@ -16,14 +17,21 @@ export async function POST(req: NextRequest) {
     // Allow empty body (e.g., quick "start sleep" with no fields).
   }
 
-  const planId = typeof body.planId === "string" ? body.planId : undefined;
+  const planId = isStringWithin(body.planId, MAX_TITLE_LEN) ? body.planId : undefined;
   const categoryId =
-    body.categoryId === null ? null : typeof body.categoryId === "string" ? body.categoryId : undefined;
+    body.categoryId === null ? null : isStringWithin(body.categoryId, MAX_TITLE_LEN) ? body.categoryId : undefined;
   const title =
-    body.title === null ? null : typeof body.title === "string" ? body.title : undefined;
+    body.title === null ? null : isStringWithin(body.title, MAX_TITLE_LEN) ? body.title : undefined;
 
   const config = await getSiteConfig();
   const tz = resolveTimezone(config);
   const result = await startActual({ planId, categoryId, title, timezone: tz });
+  if (!result.ok) {
+    if (result.reason === "concurrent-start") {
+      return NextResponse.json({ error: result.reason }, { status: 409 });
+    }
+    // invalid-category / invalid-plan are 400.
+    return NextResponse.json({ error: result.reason }, { status: 400 });
+  }
   return NextResponse.json(result);
 }

@@ -1,34 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarActual } from "@/lib/calendar";
+import type { CalendarCategory } from "@/lib/calendar-categories";
 import CategoryPicker from "./CategoryPicker";
 import { useDialog } from "@/components/Dialog";
+import { epochToLocalInput, localInputToEpoch } from "@/lib/calendar-dates";
 
 type Props = {
   actual: CalendarActual;
+  categories?: CalendarCategory[];
+  timezone: string;
   onClose: () => void;
 };
 
-function epochToLocalInput(ms: number): string {
-  // YYYY-MM-DDTHH:MM in local tz, suitable for <input type="datetime-local">
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function localInputToEpoch(s: string): number {
-  return new Date(s).getTime();
-}
-
-export default function ActualsEditor({ actual, onClose }: Props) {
+export default function ActualsEditor({ actual, categories, timezone, onClose }: Props) {
   const router = useRouter();
   const dialog = useDialog();
   const [categoryId, setCategoryId] = useState<string | null>(actual.categoryId);
   const [title, setTitle] = useState<string>(actual.title ?? "");
-  const [startInput, setStartInput] = useState<string>(epochToLocalInput(actual.startAt));
-  const [endInput, setEndInput] = useState<string>(actual.endAt ? epochToLocalInput(actual.endAt) : "");
+  const [startInput, setStartInput] = useState<string>(epochToLocalInput(actual.startAt, timezone));
+  const [endInput, setEndInput] = useState<string>(actual.endAt ? epochToLocalInput(actual.endAt, timezone) : "");
   const [stillRunning, setStillRunning] = useState<boolean>(actual.endAt === null);
   const [notes, setNotes] = useState<string>(actual.notes ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +33,8 @@ export default function ActualsEditor({ actual, onClose }: Props) {
     const body: Record<string, unknown> = {
       categoryId,
       title: title.trim() || null,
-      startAt: localInputToEpoch(startInput),
-      endAt: stillRunning ? null : localInputToEpoch(endInput),
+      startAt: localInputToEpoch(startInput, timezone),
+      endAt: stillRunning ? null : localInputToEpoch(endInput, timezone),
       notes: notes.trim() || null,
     };
     const r = await fetch(`/api/calendar/actuals/${actual.id}`, {
@@ -62,7 +55,7 @@ export default function ActualsEditor({ actual, onClose }: Props) {
 
   async function remove() {
     const ok = await dialog.confirm({
-      title: "Delete this actual?",
+      title: "Delete this activity?",
       message: "This block will be permanently removed.",
       confirmText: "Delete",
       danger: true,
@@ -82,19 +75,35 @@ export default function ActualsEditor({ actual, onClose }: Props) {
     router.refresh();
   }
 
+  // Esc-to-close + return-focus on unmount.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-30 flex items-center justify-center bg-black/70"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit activity"
     >
       <div
         className="w-full max-w-md border border-white/20 bg-black p-4 space-y-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm uppercase tracking-wider text-white/70">Edit actual</h3>
+        <h3 className="text-sm uppercase tracking-wider text-white/70">Edit activity</h3>
         <div className="space-y-1">
           <label className="text-xs text-white/60">Category</label>
-          <CategoryPicker selectedId={categoryId} onChange={setCategoryId} />
+          <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />
         </div>
         <div className="space-y-1">
           <label className="text-xs text-white/60">Title</label>

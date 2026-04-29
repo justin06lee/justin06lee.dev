@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminWithMutationRate } from "@/lib/auth";
 import { listCategories, createCategory } from "@/lib/calendar-categories";
+import { MAX_NAME_LEN, isStringWithin } from "@/lib/calendar-validate";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   let body: Record<string, unknown>;
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest) {
   }
 
   const { name, color } = body;
-  if (typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (!isStringWithin(name, MAX_NAME_LEN) || name.trim().length === 0) {
+    return NextResponse.json({ error: `name is required (<= ${MAX_NAME_LEN} chars)` }, { status: 400 });
   }
   if (typeof color !== "string") {
     return NextResponse.json({ error: "color is required" }, { status: 400 });
@@ -34,6 +35,9 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     if (result.reason === "duplicate") {
       return NextResponse.json({ error: "A category with that name already exists" }, { status: 409 });
+    }
+    if (result.reason === "empty-name") {
+      return NextResponse.json({ error: "name must be non-empty" }, { status: 400 });
     }
     if (result.reason === "invalid-color") {
       return NextResponse.json({ error: "color must be from the muted palette" }, { status: 400 });

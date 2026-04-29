@@ -3,22 +3,22 @@
 import Link from "next/link";
 import * as motion from "motion/react-client";
 import type { CalendarTask } from "@/lib/calendar";
-import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT, hhmmToMinutes } from "./date-utils";
+import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT, hhmmToMinutes, overlapIntensityClass } from "@/lib/calendar-dates";
+
+const fadeIn = {
+  initial: { opacity: 0, y: -10 },
+  animate: { opacity: 1, y: 0 },
+};
 
 type Props = {
   yyyymm: string;
   tasks: CalendarTask[];
+  /** Plan/actual overlap minutes per day — drives cell intensity. */
+  heatmap?: Record<string, number>;
   today: string;
 };
 
-function intensityClass(count: number): string {
-  if (count <= 0) return "";
-  if (count <= 2) return "bg-white/[0.06]";
-  if (count <= 4) return "bg-white/[0.10]";
-  return "bg-white/[0.14]";
-}
-
-export default function MonthView({ yyyymm, tasks, today }: Props) {
+export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
   const cells = buildMonthGrid(yyyymm);
   const [y, m] = yyyymm.split("-").map(Number);
   const byDate = new Map<string, CalendarTask[]>();
@@ -31,16 +31,14 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <motion.h2
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...fadeIn}
         transition={{ duration: 0.4 }}
         className="font-mono text-sm uppercase tracking-widest text-white/70"
       >
         {MONTH_NAMES_SHORT[m - 1]} {y}
       </motion.h2>
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...fadeIn}
         transition={{ duration: 0.4, delay: 0.05 }}
         className="grid grid-cols-7 gap-[3px] text-[10px] font-mono uppercase tracking-widest text-white/40"
       >
@@ -49,17 +47,23 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
         ))}
       </motion.div>
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...fadeIn}
         transition={{ duration: 0.4, delay: 0.1 }}
         className="grid grid-cols-7 gap-[3px]"
       >
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="min-h-28" />;
+          // Two heatmap signals coexist intentionally: cell background uses
+          // overlapMinutes (how well plan/actuals lined up for the day), and
+          // the corner ratio shows done/total tasks. Different axes, both
+          // useful at a glance.
           const dayTasks = (byDate.get(date) ?? []).sort((a, b) => {
             const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
             const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
-            return aMin - bMin;
+            if (aMin !== bMin) return aMin - bMin;
+            // Tie-break for untimed (or same-time) tasks: position, then id.
+            if (a.position !== b.position) return a.position - b.position;
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
           });
           const done = dayTasks.filter((t) => t.done).length;
           const total = dayTasks.length;
@@ -67,11 +71,12 @@ export default function MonthView({ yyyymm, tasks, today }: Props) {
           const isToday = date === today;
           const visible = dayTasks.slice(0, 3);
           const extra = total - visible.length;
+          const overlapMinutes = heatmap?.[date] ?? 0;
           return (
             <Link
               key={date}
               href={`/calendar/day/${date}`}
-              className={`min-h-28 p-2 flex flex-col gap-1 transition hover:ring-1 hover:ring-white/30 ${intensityClass(done)} ${isToday ? "ring-1 ring-inset ring-white/80" : ""}`}
+              className={`min-h-28 p-2 flex flex-col gap-1 transition hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapMinutes, "month")} ${isToday ? "ring-1 ring-inset ring-white/80" : ""}`}
             >
               <div className="flex items-baseline justify-between">
                 <span className={`font-mono text-sm tabular-nums ${isToday ? "text-white font-semibold" : "text-white/80"}`}>

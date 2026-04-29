@@ -4,7 +4,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import * as motion from "motion/react-client";
 import type { CalendarTask, CalendarActual } from "@/lib/calendar";
 import type { CalendarCategory } from "@/lib/calendar-categories";
-import { clampActualToDay } from "./date-utils";
+import { clampActualToDay, epochToMinutesOfDay } from "@/lib/calendar-dates";
 import TaskEditor from "./TaskEditor";
 import PlanBlock from "./PlanBlock";
 import ActualBlock from "./ActualBlock";
@@ -16,7 +16,6 @@ type Props = {
   date: string;
   tasks: CalendarTask[];
   actuals: CalendarActual[];
-  runningActual: CalendarActual | null;
   categories: CalendarCategory[];
   /** Server-rendered prayer markers, suspended by the page route. */
   prayersSlot: ReactNode;
@@ -29,17 +28,7 @@ function useNowMinutes(enabled: boolean, timezone: string) {
   const [minutes, setMinutes] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) return;
-    const tick = () => {
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        hour: "numeric",
-        minute: "numeric",
-        hour12: false,
-      }).formatToParts(new Date());
-      const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
-      const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
-      setMinutes(h * 60 + m);
-    };
+    const tick = () => setMinutes(epochToMinutesOfDay(Date.now(), timezone));
     tick();
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
@@ -82,7 +71,7 @@ export default function DayView({
   date,
   tasks,
   actuals,
-  runningActual,
+  categories,
   prayersSlot,
   isAdmin,
   today,
@@ -104,7 +93,11 @@ export default function DayView({
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_280px] pb-20 md:pb-0">
+      <div
+        className={`grid gap-4 pb-20 md:pb-0 ${
+          isAdmin ? "md:grid-cols-[1fr_1fr_280px]" : "md:grid-cols-2"
+        }`}
+      >
         {/* PLAN COLUMN — also hosts the mobile actuals overlay */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -134,7 +127,7 @@ export default function DayView({
                 <PlanBlock
                   key={task.id}
                   task={task}
-                  onClick={() => isAdmin && setEditing(task)}
+                  onClick={isAdmin ? () => setEditing(task) : undefined}
                 />
               ))}
             </div>
@@ -146,7 +139,7 @@ export default function DayView({
                   key={task.id}
                   task={task}
                   halfLeft
-                  onClick={() => isAdmin && setEditing(task)}
+                  onClick={isAdmin ? () => setEditing(task) : undefined}
                 />
               ))}
               {renderActuals.map(({ actual, startMin, endMin }) => (
@@ -157,7 +150,6 @@ export default function DayView({
                   endMin={endMin}
                   isRunning={actual.endAt === null}
                   halfRight
-                  onClick={() => isAdmin && setEditingActual(actual)}
                 />
               ))}
             </div>
@@ -181,7 +173,6 @@ export default function DayView({
                 startMin={startMin}
                 endMin={endMin}
                 isRunning={actual.endAt === null}
-                onClick={() => isAdmin && setEditingActual(actual)}
               />
             ))}
             {renderActuals.length === 0 && (
@@ -192,22 +183,25 @@ export default function DayView({
           </div>
         </motion.div>
 
-        {/* SIDE PANEL — desktop only */}
-        <motion.aside
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="hidden md:block"
-        >
-          {isAdmin ? (
+        {/* SIDE PANEL — desktop, admin only */}
+        {isAdmin && (
+          <motion.aside
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="hidden md:block"
+          >
             <PlannedTodaySheet
               date={date}
               tasks={tasks}
-              runningActual={runningActual}
+              actuals={actuals}
+              categories={categories}
+              timezone={timezone}
               onEditPlan={(t) => setEditing(t)}
+              onEditActual={(a) => setEditingActual(a)}
             />
-          ) : null}
-        </motion.aside>
+          </motion.aside>
+        )}
       </div>
 
       {/* MOBILE STICKY BAR — admin only */}
@@ -215,25 +209,31 @@ export default function DayView({
         <NowPlayingBar
           date={date}
           tasks={tasks}
-          runningActual={runningActual}
+          actuals={actuals}
+          categories={categories}
+          timezone={timezone}
           onEditPlan={(t) => setEditing(t)}
+          onEditActual={(a) => setEditingActual(a)}
         />
       )}
 
-      {/* Plan task editor modal (existing) */}
+      {/* Plan task editor modal */}
       {editing && (
         <TaskEditor
           key={editing === "new" ? "new" : editing.id}
           date={date}
           task={editing === "new" ? undefined : editing}
+          categories={categories}
           onClose={() => setEditing(null)}
         />
       )}
 
-      {/* Actuals editor modal (new) */}
+      {/* Actuals editor — opened from the sidebar/log, not from clicking blocks */}
       {editingActual && (
         <ActualsEditor
           actual={editingActual}
+          categories={categories}
+          timezone={timezone}
           onClose={() => setEditingActual(null)}
         />
       )}

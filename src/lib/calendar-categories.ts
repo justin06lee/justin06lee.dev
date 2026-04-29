@@ -57,11 +57,11 @@ export async function findCategoryByNameCI(name: string): Promise<CalendarCatego
   return row ? rowToCategory(row) : null;
 }
 
-export async function createCategory(input: NewCategory): Promise<{ ok: true; category: CalendarCategory } | { ok: false; reason: "duplicate" | "invalid-color" }> {
+export async function createCategory(input: NewCategory): Promise<{ ok: true; category: CalendarCategory } | { ok: false; reason: "duplicate" | "invalid-color" | "empty-name" }> {
   await initDb();
   if (!isPaletteColor(input.color)) return { ok: false, reason: "invalid-color" };
   const trimmed = input.name.trim();
-  if (trimmed.length === 0) return { ok: false, reason: "duplicate" }; // empty name is treated as invalid
+  if (trimmed.length === 0) return { ok: false, reason: "empty-name" };
   const dup = await findCategoryByNameCI(trimmed);
   if (dup) return { ok: false, reason: "duplicate" };
   const id = randomUUID();
@@ -79,7 +79,7 @@ export async function createCategory(input: NewCategory): Promise<{ ok: true; ca
 export async function updateCategory(
   id: string,
   patch: CategoryPatch,
-): Promise<{ ok: true; category: CalendarCategory } | { ok: false; reason: "not-found" | "duplicate" | "invalid-color" | "system-name-locked" }> {
+): Promise<{ ok: true; category: CalendarCategory } | { ok: false; reason: "not-found" | "duplicate" | "invalid-color" | "system-name-locked" | "empty-name" }> {
   await initDb();
   const existing = await getCategoryById(id);
   if (!existing) return { ok: false, reason: "not-found" };
@@ -87,7 +87,7 @@ export async function updateCategory(
   if (patch.name !== undefined) {
     if (existing.isSystem) return { ok: false, reason: "system-name-locked" };
     const trimmed = patch.name.trim();
-    if (trimmed.length === 0) return { ok: false, reason: "duplicate" };
+    if (trimmed.length === 0) return { ok: false, reason: "empty-name" };
     const dup = await findCategoryByNameCI(trimmed);
     if (dup && dup.id !== id) return { ok: false, reason: "duplicate" };
   }

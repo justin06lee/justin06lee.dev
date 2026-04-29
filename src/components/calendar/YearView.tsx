@@ -2,7 +2,18 @@
 
 import Link from "next/link";
 import * as motion from "motion/react-client";
-import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT } from "./date-utils";
+import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT, overlapIntensityClass, OVERLAP_INTENSITY_CLASSES } from "@/lib/calendar-dates";
+
+const monthFadeIn = {
+  initial: { opacity: 0, y: -10 },
+  animate: { opacity: 1, y: 0 },
+};
+
+const legendFadeIn = {
+  initial: { opacity: 0, y: -10 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.4, delay: 0.4 },
+};
 
 type Props = {
   year: number;
@@ -10,12 +21,13 @@ type Props = {
   today: string;
 };
 
-function intensityClass(count: number): string {
-  if (count <= 0) return "bg-white/[0.04]";
-  if (count <= 2) return "bg-white/15";
-  if (count <= 4) return "bg-white/30";
-  if (count <= 6) return "bg-white/55";
-  return "bg-white/85";
+function fmtMinutes(n: number): string {
+  if (n <= 0) return "0m";
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function MonthGrid({ year, month, heatmap, today }: { year: number; month: number; heatmap: Record<string, number>; today: string }) {
@@ -38,14 +50,14 @@ function MonthGrid({ year, month, heatmap, today }: { year: number; month: numbe
       <div className="grid grid-cols-7 gap-[3px]">
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="aspect-square" />;
-          const count = heatmap[date] ?? 0;
+          const minutes = heatmap[date] ?? 0;
           const isToday = date === today;
           return (
             <Link
               key={i}
               href={`/calendar/day/${date}`}
-              title={`${date} — ${count} task${count === 1 ? "" : "s"} done${isToday ? " (today)" : ""}`}
-              className={`aspect-square ${intensityClass(count)} ${isToday ? "ring-1 ring-white" : "hover:ring-1 hover:ring-white/60"} transition`}
+              title={`${date} — ${fmtMinutes(minutes)} on plan${isToday ? " (today)" : ""}`}
+              className={`aspect-square ${overlapIntensityClass(minutes, "year")} ${isToday ? "ring-1 ring-white" : "hover:ring-1 hover:ring-white/60"} transition`}
             />
           );
         })}
@@ -61,8 +73,7 @@ export default function YearView({ year, heatmap, today }: Props) {
         {MONTH_NAMES_SHORT.map((_, idx) => (
           <motion.div
             key={idx}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            {...monthFadeIn}
             transition={{ duration: 0.4, delay: idx * 0.03 }}
           >
             <MonthGrid year={year} month={idx + 1} heatmap={heatmap} today={today} />
@@ -70,17 +81,13 @@ export default function YearView({ year, heatmap, today }: Props) {
         ))}
       </div>
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.4 }}
+        {...legendFadeIn}
         className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-white/40"
       >
         <span>less</span>
-        <span className="w-3 h-3 bg-white/[0.04]" />
-        <span className="w-3 h-3 bg-white/15" />
-        <span className="w-3 h-3 bg-white/30" />
-        <span className="w-3 h-3 bg-white/55" />
-        <span className="w-3 h-3 bg-white/85" />
+        {OVERLAP_INTENSITY_CLASSES.year.map((cls, i) => (
+          <span key={i} className={`w-3 h-3 ${cls}`} />
+        ))}
         <span>more</span>
       </motion.div>
     </div>
