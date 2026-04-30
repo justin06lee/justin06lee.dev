@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin, FolderInput, Pin, PinOff } from "lucide-react";
 import { useDialog } from "@/components/Dialog";
 import Navbar from "@/components/Navbar";
+import Select from "@/components/Select";
 
 type Item = {
   id: string;
@@ -538,17 +539,15 @@ function PrayerLocationPicker({
       {saved && <p className="text-sm text-green-400">Location saved.</p>}
       <div>
         <label className="text-xs text-white/60 mb-1 block">Calculation Method</label>
-        <select
+        <Select<number>
+          ariaLabel="Calculation method"
           value={value.method}
-          onChange={(e) => onChange({ ...value, method: Number(e.target.value) })}
-          className={inputClass}
-        >
-          {ALADHAN_METHODS.map((m) => (
-            <option key={m.id} value={m.id} className="bg-black">
-              {m.id} — {m.label}
-            </option>
-          ))}
-        </select>
+          onChange={(method) => onChange({ ...value, method })}
+          options={ALADHAN_METHODS.map((m) => ({
+            value: m.id,
+            label: `${m.id} — ${m.label}`,
+          }))}
+        />
       </div>
     </div>
   );
@@ -827,17 +826,12 @@ function ItemForm({
       </div>
       <div>
         <label className="text-xs text-white/60 mb-1 block">Category</label>
-        <select
+        <Select<ItemCategory>
+          ariaLabel="Item category"
           value={itemCategory}
-          onChange={(e) => setItemCategory(e.target.value as ItemCategory)}
-          className={inputClass}
-        >
-          {ITEM_CATEGORIES.map((c) => (
-            <option key={c.key} value={c.key} className="bg-black">
-              {c.label}
-            </option>
-          ))}
-        </select>
+          onChange={setItemCategory}
+          options={ITEM_CATEGORIES.map((c) => ({ value: c.key, label: c.label }))}
+        />
       </div>
       <div>
         <label className="text-xs text-white/60 mb-1 block">Description</label>

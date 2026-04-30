@@ -17,6 +17,7 @@ function useTheme() {
   return { theme };
 }
 import { saveDrawingAction } from "./content-actions";
+import Select from "@/components/Select";
 
 const HISTORY_LIMIT = 24;
 const MIN_ZOOM = 0.5;
@@ -1108,23 +1109,19 @@ export function OperatorDrawingWindow({
               <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted">
                 Canvas Size
               </label>
-              <select
+              <Select<CanvasPresetKey>
+                ariaLabel="Canvas size"
                 value={canvasPreset}
-                onChange={(event) =>
-                  {
-                    setCanvasPreset(event.target.value as CanvasPresetKey);
-                    setZoom(1);
-                    setViewOffset({ x: 0, y: 0 });
-                  }
-                }
-                className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground"
-              >
-                {CANVAS_PRESETS.map((preset) => (
-                  <option key={preset.key} value={preset.key}>
-                    {preset.label} ({preset.width} x {preset.height})
-                  </option>
-                ))}
-              </select>
+                onChange={(key) => {
+                  setCanvasPreset(key);
+                  setZoom(1);
+                  setViewOffset({ x: 0, y: 0 });
+                }}
+                options={CANVAS_PRESETS.map((preset) => ({
+                  value: preset.key,
+                  label: `${preset.label} (${preset.width} x ${preset.height})`,
+                }))}
+              />
             </div>
 
             <div>

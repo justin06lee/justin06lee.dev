@@ -8,7 +8,9 @@ import {
   checkDateRangeSpan,
   isFiniteInt32,
   isStringWithin,
+  parseFallbacksInput,
 } from "@/lib/calendar-validate";
+import type { PlanFallback } from "@/lib/calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, title, notes, startTime, endTime, position, categoryId } = body;
+  const { date, title, notes, startTime, endTime, position, categoryId, isUncertain, fallbacks } = body;
   if (typeof date !== "string" || !isValidDateString(date)) {
     return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
   }
@@ -60,6 +62,17 @@ export async function POST(req: NextRequest) {
   if (categoryId !== undefined && categoryId !== null && !isStringWithin(categoryId, MAX_TITLE_LEN)) {
     return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
   }
+  if (isUncertain !== undefined && typeof isUncertain !== "boolean") {
+    return NextResponse.json({ error: "isUncertain must be boolean" }, { status: 400 });
+  }
+  let parsedFallbacks: PlanFallback[] | undefined;
+  if (fallbacks !== undefined && fallbacks !== null) {
+    const parsed = parseFallbacksInput(fallbacks);
+    if (typeof parsed === "string") {
+      return NextResponse.json({ error: parsed }, { status: 400 });
+    }
+    parsedFallbacks = parsed;
+  }
 
   const result = await createTask({
     date,
@@ -69,6 +82,8 @@ export async function POST(req: NextRequest) {
     endTime: typeof endTime === "string" ? endTime : null,
     position: typeof position === "number" ? position : 0,
     categoryId: typeof categoryId === "string" ? categoryId : null,
+    isUncertain: typeof isUncertain === "boolean" ? isUncertain : false,
+    fallbacks: parsedFallbacks,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.reason }, { status: 400 });

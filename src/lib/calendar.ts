@@ -13,6 +13,18 @@ const randomUUID = () => globalThis.crypto.randomUUID();
 
 export type CategorySummary = { id: string; name: string; color: string };
 
+/**
+ * A fallback alternative for an "uncertain" plan. Doing an actual that matches
+ * any of the plan's fallbacks (in addition to the plan's own category) counts
+ * the same as fulfilling the plan itself in the heatmap scoring.
+ *
+ *  - "category": match by FK; case-irrelevant since IDs are exact.
+ *  - "title":    match the actual's `title` field, case-insensitive, trimmed.
+ */
+export type PlanFallback =
+  | { type: "category"; categoryId: string }
+  | { type: "title"; title: string };
+
 export type CalendarTask = {
   id: string;
   date: string;
@@ -24,6 +36,8 @@ export type CalendarTask = {
   position: number;
   categoryId: string | null;
   category: CategorySummary | null;
+  isUncertain: boolean;
+  fallbacks: PlanFallback[];
 };
 
 type NewCalendarTask = {
@@ -34,6 +48,8 @@ type NewCalendarTask = {
   endTime?: string | null;
   position?: number;
   categoryId?: string | null;
+  isUncertain?: boolean;
+  fallbacks?: PlanFallback[];
 };
 
 export type CalendarTaskPatch = Partial<{
@@ -45,7 +61,45 @@ export type CalendarTaskPatch = Partial<{
   position: number;
   date: string;
   categoryId: string | null;
+  isUncertain: boolean;
+  fallbacks: PlanFallback[];
 }>;
+
+/** Parses the JSON-encoded `fallbacks` column. Always returns a valid array;
+ *  malformed rows degrade silently to []. We don't surface a parse error
+ *  because (a) writes go through the API which validates and (b) a failed
+ *  fallback list shouldn't break the rest of the task data. */
+function parseFallbacks(raw: string | null): PlanFallback[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidFallback);
+  } catch {
+    return [];
+  }
+}
+
+function isValidFallback(v: unknown): v is PlanFallback {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  if (o.type === "category") return typeof o.categoryId === "string" && o.categoryId.length > 0;
+  if (o.type === "title") return typeof o.title === "string" && o.title.trim().length > 0;
+  return false;
+}
+
+function serializeFallbacks(fbs: PlanFallback[] | undefined | null): string | null {
+  if (!fbs || fbs.length === 0) return null;
+  // Normalize titles (trim, lowercase) on write so heatmap matches don't have
+  // to reapply normalization per-row at read time.
+  const normalized = fbs
+    .filter(isValidFallback)
+    .map((f) =>
+      f.type === "title" ? { type: "title" as const, title: f.title.trim() } : f,
+    );
+  if (normalized.length === 0) return null;
+  return JSON.stringify(normalized);
+}
 
 /** Returns true iff the given non-null id matches a row. We use this from
  *  write paths so callers see a clear "invalid-category"/"invalid-plan"
@@ -91,6 +145,8 @@ function rowToTask(row: DbCalendarTaskJoined): CalendarTask {
       row.cat_id != null
         ? { id: row.cat_id, name: row.cat_name ?? "", color: row.cat_color ?? "" }
         : null,
+    isUncertain: row.is_uncertain === 1,
+    fallbacks: parseFallbacks(row.fallbacks),
   };
 }
 
@@ -118,10 +174,14 @@ export async function createTask(input: NewCalendarTask): Promise<CreateTaskResu
   }
   const id = randomUUID();
   const now = Date.now();
+  const isUncertain = input.isUncertain ? 1 : 0;
+  // Drop fallbacks entirely when not uncertain — keeps the column clean and
+  // makes the "off" state unambiguous on read.
+  const fallbacksJson = isUncertain ? serializeFallbacks(input.fallbacks) : null;
   await db.execute({
     sql: `INSERT INTO calendar_tasks
-          (id, date, title, notes, start_time, end_time, done, position, category_id, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+          (id, date, title, notes, start_time, end_time, done, position, category_id, is_uncertain, fallbacks, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.date,
@@ -131,6 +191,8 @@ export async function createTask(input: NewCalendarTask): Promise<CreateTaskResu
       input.endTime ?? null,
       input.position ?? 0,
       input.categoryId ?? null,
+      isUncertain,
+      fallbacksJson,
       now,
       now,
     ],
@@ -173,10 +235,15 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
     done: patch.done !== undefined ? patch.done : existing.done,
     position: patch.position !== undefined ? patch.position : existing.position,
     categoryId: patch.categoryId !== undefined ? patch.categoryId : existing.categoryId,
+    isUncertain: patch.isUncertain !== undefined ? patch.isUncertain : existing.isUncertain,
+    fallbacks: patch.fallbacks !== undefined ? patch.fallbacks : existing.fallbacks,
   };
+  // Same invariant as createTask: when not uncertain, fallbacks are erased so
+  // the off state is unambiguous and toggling back on doesn't surface stale data.
+  const fallbacksJson = merged.isUncertain ? serializeFallbacks(merged.fallbacks) : null;
   await db.execute({
     sql: `UPDATE calendar_tasks
-          SET date=?, title=?, notes=?, start_time=?, end_time=?, done=?, position=?, category_id=?, updated_at=?
+          SET date=?, title=?, notes=?, start_time=?, end_time=?, done=?, position=?, category_id=?, is_uncertain=?, fallbacks=?, updated_at=?
           WHERE id=?`,
     args: [
       merged.date,
@@ -187,6 +254,8 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
       merged.done ? 1 : 0,
       merged.position,
       merged.categoryId,
+      merged.isUncertain ? 1 : 0,
+      fallbacksJson,
       Date.now(),
       id,
     ],
@@ -593,8 +662,16 @@ export async function loadDayPageData(date: string, yesterday: string): Promise<
 /**
  * Returns { "YYYY-MM-DD": overlapMinutes } across the given inclusive date range.
  *
- * Overlap = total minutes-of-day where a planned task interval and a logged actual
- * interval coincide AND share the same `category_id` (NULL counts as its own bucket).
+ * Strict (non-uncertain) plans contribute the minutes during which a logged
+ * actual with the same `category_id` overlaps the planned interval.
+ *
+ * Uncertain plans accept a wider eligible-actual set: the plan's own category
+ * PLUS any of its `fallbacks` (category-id matches and title matches, the
+ * latter case-insensitive on the trimmed actual.title). Multiple fallbacks
+ * never multiply the score — the eligible actuals are unioned before
+ * intersecting with the plan interval, so N fallbacks cap at the same minutes
+ * a single matching one would.
+ *
  * Cross-midnight actuals are clamped to each day they touch. Running actuals
  * (`end_at IS NULL`) clamp to "now".
  */
@@ -609,13 +686,14 @@ export async function getOverlapHeatmapForRange(
   const [tasksRs, actualsRs] = await db.batch(
     [
       {
-        sql: `SELECT date, start_time, end_time, category_id FROM calendar_tasks
+        sql: `SELECT date, start_time, end_time, category_id, is_uncertain, fallbacks
+              FROM calendar_tasks
               WHERE date BETWEEN ? AND ?
                 AND start_time IS NOT NULL AND end_time IS NOT NULL`,
         args: [from, to],
       },
       {
-        sql: `SELECT date, start_at, end_at, category_id FROM calendar_actuals
+        sql: `SELECT date, start_at, end_at, category_id, title FROM calendar_actuals
               WHERE date BETWEEN ? AND ?`,
         args: [dayBefore, to],
       },
@@ -623,58 +701,99 @@ export async function getOverlapHeatmapForRange(
     "read",
   );
 
-  type Bucket = Map<string, [number, number][]>;
-  const plansByDate = new Map<string, Bucket>();
+  type PlanRow = {
+    interval: readonly [number, number];
+    categoryId: string | null;
+    isUncertain: boolean;
+    fallbacks: PlanFallback[];
+  };
+  type ActualSlice = {
+    interval: readonly [number, number];
+    categoryId: string | null;
+    /** Pre-lowercased + trimmed at filter-time for case-insensitive title match. */
+    titleLower: string | null;
+  };
+
+  const plansByDate = new Map<string, PlanRow[]>();
   for (const row of tasksRs.rows as unknown as {
     date: string;
     start_time: string;
     end_time: string;
     category_id: string | null;
+    is_uncertain: number;
+    fallbacks: string | null;
   }[]) {
     const start = hhmmToMinutes(row.start_time);
     const end = hhmmToMinutes(row.end_time);
     if (start === null || end === null || end <= start) continue;
-    const key = row.category_id ?? "";
-    let bucket = plansByDate.get(row.date);
-    if (!bucket) { bucket = new Map(); plansByDate.set(row.date, bucket); }
-    const arr = bucket.get(key) ?? [];
-    arr.push([start, end]);
-    bucket.set(key, arr);
+    const isUncertain = row.is_uncertain === 1;
+    const plan: PlanRow = {
+      interval: [start, end],
+      categoryId: row.category_id,
+      isUncertain,
+      // Strict plans don't need fallbacks at scoring time — skip the parse.
+      fallbacks: isUncertain ? parseFallbacks(row.fallbacks) : [],
+    };
+    const arr = plansByDate.get(row.date) ?? [];
+    arr.push(plan);
+    plansByDate.set(row.date, arr);
   }
 
   const now = Date.now();
-  const actualsByDate = new Map<string, Bucket>();
+  const actualsByDate = new Map<string, ActualSlice[]>();
   for (const row of actualsRs.rows as unknown as {
     date: string;
     start_at: number;
     end_at: number | null;
     category_id: string | null;
+    title: string | null;
   }[]) {
     const startsOn = row.date;
     const endsOn = epochToDateInTz(row.end_at ?? now, timezone);
     const datesToCheck = startsOn === endsOn ? [startsOn] : [startsOn, endsOn];
-    const key = row.category_id ?? "";
+    const titleLower = row.title ? row.title.trim().toLowerCase() : null;
     for (const d of datesToCheck) {
       if (d < from || d > to) continue;
       const w = clampActualToDay(d, row.start_at, row.end_at, timezone, now);
       if (!w) continue;
-      let bucket = actualsByDate.get(d);
-      if (!bucket) { bucket = new Map(); actualsByDate.set(d, bucket); }
-      const arr = bucket.get(key) ?? [];
-      arr.push([w.startMin, w.endMin]);
-      bucket.set(key, arr);
+      const arr = actualsByDate.get(d) ?? [];
+      arr.push({
+        interval: [w.startMin, w.endMin],
+        categoryId: row.category_id,
+        titleLower,
+      });
+      actualsByDate.set(d, arr);
     }
   }
 
   const out: Record<string, number> = {};
-  for (const [date, plansByCat] of plansByDate) {
-    const actualsByCat = actualsByDate.get(date);
-    if (!actualsByCat) continue;
+  for (const [date, plans] of plansByDate) {
+    const dayActuals = actualsByDate.get(date);
+    if (!dayActuals || dayActuals.length === 0) continue;
     let total = 0;
-    for (const [cat, plans] of plansByCat) {
-      const actuals = actualsByCat.get(cat);
-      if (!actuals) continue;
-      total += intervalIntersectionMinutes(plans, actuals);
+    for (const plan of plans) {
+      // Build eligible set: own category always counts; fallbacks add when
+      // uncertain. NULL plan.categoryId is a real value (matches actuals with
+      // null category_id), preserving the prior "NULL is its own bucket" rule
+      // for strict plans.
+      const eligibleCategoryIds = new Set<string | null>([plan.categoryId]);
+      const eligibleTitlesLower = new Set<string>();
+      if (plan.isUncertain) {
+        for (const fb of plan.fallbacks) {
+          if (fb.type === "category") eligibleCategoryIds.add(fb.categoryId);
+          else eligibleTitlesLower.add(fb.title.trim().toLowerCase());
+        }
+      }
+      const eligibleIntervals: [number, number][] = [];
+      for (const a of dayActuals) {
+        const catMatch = eligibleCategoryIds.has(a.categoryId);
+        const titleMatch = a.titleLower !== null && eligibleTitlesLower.has(a.titleLower);
+        if (catMatch || titleMatch) {
+          eligibleIntervals.push([a.interval[0], a.interval[1]]);
+        }
+      }
+      if (eligibleIntervals.length === 0) continue;
+      total += intervalIntersectionMinutes([plan.interval], eligibleIntervals);
     }
     if (total > 0) out[date] = total;
   }

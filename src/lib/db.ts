@@ -83,6 +83,8 @@ async function doInit(): Promise<void> {
       done INTEGER NOT NULL DEFAULT 0,
       position INTEGER NOT NULL DEFAULT 0,
       category_id TEXT,
+      is_uncertain INTEGER NOT NULL DEFAULT 0,
+      fallbacks TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
@@ -137,6 +139,8 @@ async function doInit(): Promise<void> {
   // CREATE TABLE above already includes the column for fresh schemas; this
   // adds it to older deployments without dropping data.
   await ensureColumn("calendar_tasks", "category_id", "TEXT");
+  await ensureColumn("calendar_tasks", "is_uncertain", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn("calendar_tasks", "fallbacks", "TEXT");
   await ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
 
   // Seed the built-in Sleep category if not present.
@@ -190,6 +194,9 @@ export type DbCalendarTask = {
   done: number;
   position: number;
   category_id: string | null;
+  is_uncertain: number;
+  /** JSON-encoded PlanFallback[]; null when not uncertain or empty. */
+  fallbacks: string | null;
   created_at: number;
   updated_at: number;
 };

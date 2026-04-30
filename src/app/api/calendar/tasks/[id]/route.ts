@@ -7,6 +7,7 @@ import {
   MAX_TITLE_LEN,
   isFiniteInt32,
   isStringWithin,
+  parseFallbacksInput,
 } from "@/lib/calendar-validate";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,23 @@ export async function PATCH(
       return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
     }
     patch.categoryId = body.categoryId as string | null;
+  }
+  if (body.isUncertain !== undefined) {
+    if (typeof body.isUncertain !== "boolean") {
+      return NextResponse.json({ error: "isUncertain must be boolean" }, { status: 400 });
+    }
+    patch.isUncertain = body.isUncertain;
+  }
+  if (body.fallbacks !== undefined) {
+    if (body.fallbacks === null) {
+      patch.fallbacks = [];
+    } else {
+      const parsed = parseFallbacksInput(body.fallbacks);
+      if (typeof parsed === "string") {
+        return NextResponse.json({ error: parsed }, { status: 400 });
+      }
+      patch.fallbacks = parsed;
+    }
   }
 
   const result = await updateTask(id, patch);

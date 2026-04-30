@@ -5,6 +5,7 @@ import type { CalendarCategory } from "@/lib/calendar-categories";
 import { CATEGORY_PALETTE } from "@/lib/colors";
 import CategoryCreateInline from "./CategoryCreateInline";
 import { useDialog } from "@/components/Dialog";
+import Select from "@/components/Select";
 
 type Props = { initial: CalendarCategory[] };
 
@@ -176,19 +177,23 @@ export default function CategoriesManager({ initial }: Props) {
                   )}
                 </td>
                 <td className="py-2">
-                  <select
-                    aria-label={`Color for ${c.name}`}
+                  <Select
+                    size="compact"
+                    ariaLabel={`Color for ${c.name}`}
                     value={c.color}
                     disabled={pending}
-                    onChange={(e) => void patch(c.id, { color: e.target.value })}
-                    className="bg-transparent border border-white/20 px-1 py-0.5 text-xs disabled:opacity-50"
-                  >
-                    {CATEGORY_PALETTE.map((p) => (
-                      <option key={p.hex} value={p.hex} style={{ backgroundColor: p.hex }}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(hex) => void patch(c.id, { color: hex })}
+                    options={CATEGORY_PALETTE.map((p) => ({
+                      value: p.hex,
+                      label: p.name,
+                      prefix: (
+                        <span
+                          className="h-3 w-3 inline-block border border-white/30"
+                          style={{ backgroundColor: p.hex }}
+                        />
+                      ),
+                    }))}
+                  />
                 </td>
                 <td className="py-2 text-right">
                   <button

@@ -29,7 +29,12 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
     ? `${task.category.name} — ${task.title}`
     : task.title;
   const timeText = `${task.startTime}–${task.endTime ?? "?"}`;
-  const fullText = `${timeText} ${titleText}`;
+  // `~` is the marker for an uncertain plan: approximate match, fallbacks
+  // accepted. Reads cleanly inline without needing a separate badge slot.
+  const uncertainMarker = task.isUncertain ? "~ " : "";
+  const fullText = `${uncertainMarker}${timeText} ${titleText}${
+    task.isUncertain && task.fallbacks.length > 0 ? ` (+${task.fallbacks.length} alt)` : ""
+  }`;
 
   const handleClick = () => {
     if (onClick) onClick();
@@ -45,6 +50,15 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
       style={{ top: `${top}%`, height: `${height}%`, ...tint, ...borderStyle }}
     >
       <div className="absolute inset-0 overflow-hidden px-1 py-0.5 flex items-center gap-1 min-w-0">
+        {task.isUncertain && (
+          <span
+            aria-hidden="true"
+            title="uncertain — fallbacks accepted"
+            className="font-mono text-[10px] opacity-70 shrink-0"
+          >
+            ~
+          </span>
+        )}
         <span className="font-mono text-[10px] opacity-70 shrink-0">{timeText}</span>
         <span className="truncate">{titleText}</span>
       </div>

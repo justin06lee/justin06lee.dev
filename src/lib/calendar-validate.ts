@@ -6,6 +6,7 @@
  */
 
 import { addDays } from "@/lib/calendar-dates";
+import type { PlanFallback } from "./calendar";
 
 export const MAX_TITLE_LEN = 200;
 export const MAX_NOTES_LEN = 10_000;
@@ -35,4 +36,33 @@ export function checkDateRangeSpan(from: string, to: string): string | null {
 
 export function isStringWithin(v: unknown, max: number): v is string {
   return typeof v === "string" && v.length <= max;
+}
+
+/** Per-plan max — generous enough for "I planned X but might do any of {a,b,c,d,…}",
+ *  tight enough that a runaway client can't blow up the JSON column. */
+export const MAX_FALLBACKS = 16;
+
+/** Returns the parsed list if `v` is a valid PlanFallback[], else a reason string. */
+export function parseFallbacksInput(v: unknown): PlanFallback[] | string {
+  if (!Array.isArray(v)) return "fallbacks must be an array";
+  if (v.length > MAX_FALLBACKS) return `fallbacks must be <= ${MAX_FALLBACKS} entries`;
+  const out: PlanFallback[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") return "each fallback must be an object";
+    const o = raw as Record<string, unknown>;
+    if (o.type === "category") {
+      if (!isStringWithin(o.categoryId, MAX_TITLE_LEN) || o.categoryId.length === 0) {
+        return "fallback.categoryId must be a non-empty string";
+      }
+      out.push({ type: "category", categoryId: o.categoryId });
+    } else if (o.type === "title") {
+      if (!isStringWithin(o.title, MAX_TITLE_LEN) || o.title.trim().length === 0) {
+        return `fallback.title must be a non-empty string (<= ${MAX_TITLE_LEN} chars)`;
+      }
+      out.push({ type: "title", title: o.title.trim() });
+    } else {
+      return 'fallback.type must be "category" or "title"';
+    }
+  }
+  return out;
 }
