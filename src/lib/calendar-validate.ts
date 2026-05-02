@@ -5,7 +5,7 @@
  * against the user.
  */
 
-import { addDays } from "@/lib/calendar-dates";
+import { addDays, isValidHhmm } from "@/lib/calendar-dates";
 import type { PlanFallback } from "./calendar";
 
 export const MAX_TITLE_LEN = 200;
@@ -50,19 +50,27 @@ export function parseFallbacksInput(v: unknown): PlanFallback[] | string {
   for (const raw of v) {
     if (!raw || typeof raw !== "object") return "each fallback must be an object";
     const o = raw as Record<string, unknown>;
-    if (o.type === "category") {
-      if (!isStringWithin(o.categoryId, MAX_TITLE_LEN) || o.categoryId.length === 0) {
-        return "fallback.categoryId must be a non-empty string";
-      }
-      out.push({ type: "category", categoryId: o.categoryId });
-    } else if (o.type === "title") {
-      if (!isStringWithin(o.title, MAX_TITLE_LEN) || o.title.trim().length === 0) {
-        return `fallback.title must be a non-empty string (<= ${MAX_TITLE_LEN} chars)`;
-      }
-      out.push({ type: "title", title: o.title.trim() });
-    } else {
-      return 'fallback.type must be "category" or "title"';
+    if (!isStringWithin(o.categoryId, MAX_TITLE_LEN) || o.categoryId.length === 0) {
+      return "fallback.categoryId must be a non-empty string";
     }
+    if (!isStringWithin(o.title, MAX_TITLE_LEN) || o.title.trim().length === 0) {
+      return `fallback.title must be a non-empty string (<= ${MAX_TITLE_LEN} chars)`;
+    }
+    if (typeof o.startTime !== "string" || !isValidHhmm(o.startTime)) {
+      return "fallback.startTime must be HH:MM";
+    }
+    if (typeof o.endTime !== "string" || !isValidHhmm(o.endTime)) {
+      return "fallback.endTime must be HH:MM";
+    }
+    if (o.startTime >= o.endTime) {
+      return "fallback.endTime must be after fallback.startTime";
+    }
+    out.push({
+      categoryId: o.categoryId,
+      title: o.title.trim(),
+      startTime: o.startTime,
+      endTime: o.endTime,
+    });
   }
   return out;
 }

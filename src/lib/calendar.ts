@@ -14,16 +14,26 @@ const randomUUID = () => globalThis.crypto.randomUUID();
 export type CategorySummary = { id: string; name: string; color: string };
 
 /**
- * A fallback alternative for an "uncertain" plan. Doing an actual that matches
- * any of the plan's fallbacks (in addition to the plan's own category) counts
- * the same as fulfilling the plan itself in the heatmap scoring.
+ * An alternative concrete task that can also fulfill an "uncertain" plan's
+ * slot. Each alternative is a full mini-task (category + title + interval).
  *
- *  - "category": match by FK; case-irrelevant since IDs are exact.
- *  - "title":    match the actual's `title` field, case-insensitive, trimmed.
+ * Match rule for heatmap scoring: an actual fulfills an alternative when its
+ * `category_id` equals the alternative's `categoryId` AND its `title`
+ * (trimmed, lowercased) equals the alternative's `title` (same normalization).
+ * Both fields must match — alternatives are deliberately specific.
+ *
+ * The plan's own (parent) category still scores by category-only, as before.
+ * That asymmetry is intentional: parent says "anything in this category," each
+ * alternative says "this exact other thing."
  */
-export type PlanFallback =
-  | { type: "category"; categoryId: string }
-  | { type: "title"; title: string };
+export type PlanFallback = {
+  categoryId: string;
+  title: string;
+  /** HH:MM — must be present; alternatives without a time slot can't be scored. */
+  startTime: string;
+  /** HH:MM — must be > startTime. */
+  endTime: string;
+};
 
 export type CalendarTask = {
   id: string;
@@ -83,20 +93,27 @@ function parseFallbacks(raw: string | null): PlanFallback[] {
 function isValidFallback(v: unknown): v is PlanFallback {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
-  if (o.type === "category") return typeof o.categoryId === "string" && o.categoryId.length > 0;
-  if (o.type === "title") return typeof o.title === "string" && o.title.trim().length > 0;
-  return false;
+  return (
+    typeof o.categoryId === "string" && o.categoryId.length > 0 &&
+    typeof o.title === "string" && o.title.trim().length > 0 &&
+    typeof o.startTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(o.startTime) &&
+    typeof o.endTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(o.endTime) &&
+    o.startTime < o.endTime
+  );
 }
 
 function serializeFallbacks(fbs: PlanFallback[] | undefined | null): string | null {
   if (!fbs || fbs.length === 0) return null;
-  // Normalize titles (trim, lowercase) on write so heatmap matches don't have
-  // to reapply normalization per-row at read time.
+  // Trim titles on write so the heatmap doesn't have to per-row at read time.
+  // Lowercasing happens at scoring time (display still shows the original case).
   const normalized = fbs
     .filter(isValidFallback)
-    .map((f) =>
-      f.type === "title" ? { type: "title" as const, title: f.title.trim() } : f,
-    );
+    .map((f) => ({
+      categoryId: f.categoryId,
+      title: f.title.trim(),
+      startTime: f.startTime,
+      endTime: f.endTime,
+    }));
   if (normalized.length === 0) return null;
   return JSON.stringify(normalized);
 }
@@ -662,15 +679,19 @@ export async function loadDayPageData(date: string, yesterday: string): Promise<
 /**
  * Returns { "YYYY-MM-DD": overlapMinutes } across the given inclusive date range.
  *
- * Strict (non-uncertain) plans contribute the minutes during which a logged
- * actual with the same `category_id` overlaps the planned interval.
+ * Each plan has one "parent" candidate (its own interval + category) and, if
+ * it's uncertain, one extra candidate per alternative (alt's interval +
+ * (categoryId, title)). Per-candidate match rules:
  *
- * Uncertain plans accept a wider eligible-actual set: the plan's own category
- * PLUS any of its `fallbacks` (category-id matches and title matches, the
- * latter case-insensitive on the trimmed actual.title). Multiple fallbacks
- * never multiply the score — the eligible actuals are unioned before
- * intersecting with the plan interval, so N fallbacks cap at the same minutes
- * a single matching one would.
+ *   - parent:      actual.category_id === plan.category_id (title irrelevant)
+ *   - alternative: actual.category_id === alt.categoryId AND
+ *                  trim/lower(actual.title) === trim/lower(alt.title)
+ *
+ * For each candidate we collect the sub-intervals where matching actuals
+ * overlap the candidate's own time slot. The plan's score is the union length
+ * of those sub-intervals across parent + all alternatives — overlapping
+ * candidates fulfilled by the same actual minute count once, not multiple
+ * times. Per-day total is the sum across plans on that day.
  *
  * Cross-midnight actuals are clamped to each day they touch. Running actuals
  * (`end_at IS NULL`) clamp to "now".
@@ -766,34 +787,48 @@ export async function getOverlapHeatmapForRange(
     }
   }
 
+  const FULL_DAY: [number, number][] = [[0, 1440]];
   const out: Record<string, number> = {};
   for (const [date, plans] of plansByDate) {
     const dayActuals = actualsByDate.get(date);
     if (!dayActuals || dayActuals.length === 0) continue;
     let total = 0;
     for (const plan of plans) {
-      // Build eligible set: own category always counts; fallbacks add when
-      // uncertain. NULL plan.categoryId is a real value (matches actuals with
-      // null category_id), preserving the prior "NULL is its own bucket" rule
-      // for strict plans.
-      const eligibleCategoryIds = new Set<string | null>([plan.categoryId]);
-      const eligibleTitlesLower = new Set<string>();
-      if (plan.isUncertain) {
-        for (const fb of plan.fallbacks) {
-          if (fb.type === "category") eligibleCategoryIds.add(fb.categoryId);
-          else eligibleTitlesLower.add(fb.title.trim().toLowerCase());
-        }
-      }
-      const eligibleIntervals: [number, number][] = [];
+      // Collect fulfilled sub-intervals across the parent + alternatives. Each
+      // matching actual gets clipped to its candidate's interval before being
+      // unioned, so a candidate at 18:00–19:00 fulfilled by an actual that
+      // ran 17:30–18:30 contributes only [18:00, 18:30].
+      const fulfilled: [number, number][] = [];
+
+      // Parent candidate: category-only match.
       for (const a of dayActuals) {
-        const catMatch = eligibleCategoryIds.has(a.categoryId);
-        const titleMatch = a.titleLower !== null && eligibleTitlesLower.has(a.titleLower);
-        if (catMatch || titleMatch) {
-          eligibleIntervals.push([a.interval[0], a.interval[1]]);
+        if (a.categoryId !== plan.categoryId) continue;
+        const lo = Math.max(a.interval[0], plan.interval[0]);
+        const hi = Math.min(a.interval[1], plan.interval[1]);
+        if (hi > lo) fulfilled.push([lo, hi]);
+      }
+
+      // Alternative candidates: category AND title both must match.
+      if (plan.isUncertain) {
+        for (const alt of plan.fallbacks) {
+          const altStart = hhmmToMinutes(alt.startTime);
+          const altEnd = hhmmToMinutes(alt.endTime);
+          if (altStart === null || altEnd === null || altEnd <= altStart) continue;
+          const altTitleLower = alt.title.trim().toLowerCase();
+          for (const a of dayActuals) {
+            if (a.categoryId !== alt.categoryId) continue;
+            if (a.titleLower !== altTitleLower) continue;
+            const lo = Math.max(a.interval[0], altStart);
+            const hi = Math.min(a.interval[1], altEnd);
+            if (hi > lo) fulfilled.push([lo, hi]);
+          }
         }
       }
-      if (eligibleIntervals.length === 0) continue;
-      total += intervalIntersectionMinutes([plan.interval], eligibleIntervals);
+
+      if (fulfilled.length === 0) continue;
+      // Intersecting with the full day is a no-op after the helper's internal
+      // normalize step — saves us exporting normalizeIntervals just for this.
+      total += intervalIntersectionMinutes(fulfilled, FULL_DAY);
     }
     if (total > 0) out[date] = total;
   }

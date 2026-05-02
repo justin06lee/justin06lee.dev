@@ -143,6 +143,16 @@ async function doInit(): Promise<void> {
   await ensureColumn("calendar_tasks", "fallbacks", "TEXT");
   await ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
 
+  // One-time cleanup of pre-2026-05 fallback rows. The old shape was
+  // `[{"type":"category"|"title", ...}]`; the new shape has no `"type"` key.
+  // The runtime parser already discards old rows silently, but clearing the
+  // column here means re-edits don't show ghost-uncertain tasks with no alts.
+  // Idempotent: subsequent runs find no `"type":` substrings and no-op.
+  await db.execute({
+    sql: `UPDATE calendar_tasks SET fallbacks = NULL WHERE fallbacks LIKE '%"type":%'`,
+    args: [],
+  });
+
   // Seed the built-in Sleep category if not present.
   await db.execute({
     sql: `INSERT INTO calendar_categories (id, name, color, is_system, archived, position, created_at, updated_at)

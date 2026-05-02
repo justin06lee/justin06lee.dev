@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarTask, PlanFallback } from "@/lib/calendar";
 import type { CalendarCategory } from "@/lib/calendar-categories";
+import { isValidHhmm } from "@/lib/calendar-dates";
 import CategoryPicker from "./CategoryPicker";
 import { useDialog } from "@/components/Dialog";
 
@@ -13,6 +14,23 @@ type Props = {
   categories?: CalendarCategory[];
   onClose: () => void;
 };
+
+/** Local draft type — alternatives are partial while being edited. The submit
+ *  step validates and only sends complete rows; incomplete rows raise an error. */
+type AlternativeDraft = {
+  categoryId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+};
+
+function emptyAlternative(): AlternativeDraft {
+  return { categoryId: "", title: "", startTime: "", endTime: "" };
+}
+
+function fallbackToDraft(f: PlanFallback): AlternativeDraft {
+  return { categoryId: f.categoryId, title: f.title, startTime: f.startTime, endTime: f.endTime };
+}
 
 export default function TaskEditor({ date, task, categories, onClose }: Props) {
   const router = useRouter();
@@ -24,7 +42,9 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
   const [endTime, setEndTime] = useState(task?.endTime ?? "");
   const [categoryId, setCategoryId] = useState<string | null>(task?.categoryId ?? null);
   const [isUncertain, setIsUncertain] = useState<boolean>(task?.isUncertain ?? false);
-  const [fallbacks, setFallbacks] = useState<PlanFallback[]>(task?.fallbacks ?? []);
+  const [alternatives, setAlternatives] = useState<AlternativeDraft[]>(
+    () => task?.fallbacks.map(fallbackToDraft) ?? [],
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +52,43 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    // Drop blank title-fallbacks before submit so accidentally-empty rows don't
-    // 400 the request. Server still validates as a defense against hand-crafted
-    // payloads.
-    const cleanFallbacks = fallbacks.filter((f) =>
-      f.type === "category" ? f.categoryId.length > 0 : f.title.trim().length > 0,
-    );
+
+    let cleanFallbacks: PlanFallback[] = [];
+    if (isUncertain && alternatives.length > 0) {
+      for (let i = 0; i < alternatives.length; i++) {
+        const a = alternatives[i];
+        const num = i + 1;
+        if (!a.categoryId) {
+          setError(`alternative ${num}: pick a category`);
+          setSubmitting(false);
+          return;
+        }
+        if (!a.title.trim()) {
+          setError(`alternative ${num}: title is required`);
+          setSubmitting(false);
+          return;
+        }
+        if (!isValidHhmm(a.startTime) || !isValidHhmm(a.endTime)) {
+          setError(`alternative ${num}: start and end must be HH:MM`);
+          setSubmitting(false);
+          return;
+        }
+        if (a.startTime >= a.endTime) {
+          setError(`alternative ${num}: end must be after start`);
+          setSubmitting(false);
+          return;
+        }
+        cleanFallbacks.push({
+          categoryId: a.categoryId,
+          title: a.title.trim(),
+          startTime: a.startTime,
+          endTime: a.endTime,
+        });
+      }
+    } else {
+      cleanFallbacks = [];
+    }
+
     const payload = {
       date,
       title,
@@ -46,7 +97,7 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
       endTime: endTime || null,
       categoryId,
       isUncertain,
-      fallbacks: isUncertain ? cleanFallbacks : [],
+      fallbacks: cleanFallbacks,
     };
     const url = task ? `/api/calendar/tasks/${task.id}` : "/api/calendar/tasks";
     const method = task ? "PATCH" : "POST";
@@ -112,7 +163,7 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
-        className="w-full max-w-md bg-black border border-white/20 p-5 flex flex-col gap-3 text-sm"
+        className="w-full max-w-md bg-black border border-white/20 p-5 flex flex-col gap-3 text-sm max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between">
           <span className="font-mono uppercase tracking-widest text-white/70 text-xs">
@@ -124,28 +175,12 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
           <span className="text-white/60 text-xs">category</span>
           <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />
         </label>
-        <FallbackSection
-          isUncertain={isUncertain}
-          onUncertainChange={setIsUncertain}
-          fallbacks={fallbacks}
-          onFallbacksChange={setFallbacks}
-          categories={categories}
-        />
         <label className="flex flex-col gap-1">
           <span className="text-white/60 text-xs">title</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-white/60 text-xs">notes</span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
             className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
           />
         </label>
@@ -169,6 +204,22 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
             />
           </label>
         </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-white/60 text-xs">notes</span>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
+          />
+        </label>
+        <AlternativesSection
+          isUncertain={isUncertain}
+          onUncertainChange={setIsUncertain}
+          alternatives={alternatives}
+          onAlternativesChange={setAlternatives}
+          categories={categories}
+        />
         {error && <div className="text-red-400 text-xs">{error}</div>}
         <div className="flex items-center justify-between pt-2">
           {task ? (
@@ -186,37 +237,34 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
 }
 
 /**
- * "Uncertain" toggle + per-row fallback editor. A fallback is either a
- * category match or a free-text actual-title match (case-insensitive). The
- * scoring engine treats the eligible-set as a union, so adding more fallbacks
- * can only widen what counts — never multiply it.
+ * "Uncertain" toggle + per-row alternative-task editor. Each alternative is a
+ * full mini-task (category + title + start + end). Heatmap scoring credits the
+ * plan for time spent on EITHER the parent's category OR any alternative's
+ * exact (category, title) pairing within that alternative's time slot.
  */
-function FallbackSection({
+function AlternativesSection({
   isUncertain,
   onUncertainChange,
-  fallbacks,
-  onFallbacksChange,
+  alternatives,
+  onAlternativesChange,
   categories,
 }: {
   isUncertain: boolean;
   onUncertainChange: (v: boolean) => void;
-  fallbacks: PlanFallback[];
-  onFallbacksChange: (v: PlanFallback[]) => void;
+  alternatives: AlternativeDraft[];
+  onAlternativesChange: (v: AlternativeDraft[]) => void;
   categories?: CalendarCategory[];
 }) {
-  function update(idx: number, patch: PlanFallback) {
-    const next = fallbacks.slice();
-    next[idx] = patch;
-    onFallbacksChange(next);
+  function update(idx: number, patch: Partial<AlternativeDraft>) {
+    const next = alternatives.slice();
+    next[idx] = { ...next[idx], ...patch };
+    onAlternativesChange(next);
   }
   function remove(idx: number) {
-    onFallbacksChange(fallbacks.filter((_, i) => i !== idx));
+    onAlternativesChange(alternatives.filter((_, i) => i !== idx));
   }
-  function addCategory() {
-    onFallbacksChange([...fallbacks, { type: "category", categoryId: "" }]);
-  }
-  function addTitle() {
-    onFallbacksChange([...fallbacks, { type: "title", title: "" }]);
+  function addAlternative() {
+    onAlternativesChange([...alternatives, emptyAlternative()]);
   }
 
   return (
@@ -231,60 +279,74 @@ function FallbackSection({
         <span className="flex flex-col gap-0.5">
           <span className="text-white/80 text-xs">uncertain</span>
           <span className="text-white/40 text-[10px] leading-snug">
-            doing the plan&rsquo;s category — or any fallback below — counts toward this slot
+            doing the plan above — or any alternative below — counts toward this slot
           </span>
         </span>
       </label>
       {isUncertain && (
-        <div className="flex flex-col gap-2 pl-6">
-          {fallbacks.length === 0 && (
-            <div className="text-white/40 text-[11px]">no fallbacks yet — add at least one below</div>
+        <div className="flex flex-col gap-3 pl-6">
+          {alternatives.length === 0 && (
+            <div className="text-white/40 text-[11px]">no alternatives yet — add one below if you want</div>
           )}
-          {fallbacks.map((fb, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-white/40 text-[10px] uppercase tracking-wider w-12">
-                {fb.type === "category" ? "cat" : "title"}
-              </span>
-              <div className="flex-1 min-w-0">
-                {fb.type === "category" ? (
-                  <CategoryPicker
-                    selectedId={fb.categoryId || null}
-                    onChange={(id) => update(i, { type: "category", categoryId: id ?? "" })}
-                    categories={categories}
-                  />
-                ) : (
-                  <input
-                    value={fb.title}
-                    onChange={(e) => update(i, { type: "title", title: e.target.value })}
-                    placeholder="actual title to accept"
-                    className="w-full bg-transparent border border-white/20 px-2 py-1 text-white text-sm outline-none focus:border-white/60"
-                  />
-                )}
+          {alternatives.map((alt, i) => (
+            <div key={i} className="flex flex-col gap-1.5 border border-white/10 px-2 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-white/40 text-[10px] uppercase tracking-wider">alt {i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  aria-label={`Remove alternative ${i + 1}`}
+                  className="text-white/40 hover:text-white text-xs px-1"
+                >
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                aria-label="Remove fallback"
-                className="text-white/40 hover:text-white text-xs px-1"
-              >
-                ×
-              </button>
+              <label className="flex flex-col gap-1">
+                <span className="text-white/60 text-[10px]">category</span>
+                <CategoryPicker
+                  selectedId={alt.categoryId || null}
+                  onChange={(id) => update(i, { categoryId: id ?? "" })}
+                  categories={categories}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-white/60 text-[10px]">title</span>
+                <input
+                  value={alt.title}
+                  onChange={(e) => update(i, { title: e.target.value })}
+                  placeholder="what you'd do instead"
+                  className="w-full bg-transparent border border-white/20 px-2 py-1 text-white text-xs outline-none focus:border-white/60"
+                />
+              </label>
+              <div className="flex gap-2">
+                <label className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-white/60 text-[10px]">start</span>
+                  <input
+                    type="time"
+                    value={alt.startTime}
+                    onChange={(e) => update(i, { startTime: e.target.value })}
+                    className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white text-xs outline-none focus:border-white/60"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-white/60 text-[10px]">end</span>
+                  <input
+                    type="time"
+                    value={alt.endTime}
+                    onChange={(e) => update(i, { endTime: e.target.value })}
+                    className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white text-xs outline-none focus:border-white/60"
+                  />
+                </label>
+              </div>
             </div>
           ))}
-          <div className="flex gap-2">
+          <div>
             <button
               type="button"
-              onClick={addCategory}
+              onClick={addAlternative}
               className="text-[11px] text-white/60 hover:text-white border border-white/20 hover:border-white/40 px-2 py-0.5"
             >
-              + category
-            </button>
-            <button
-              type="button"
-              onClick={addTitle}
-              className="text-[11px] text-white/60 hover:text-white border border-white/20 hover:border-white/40 px-2 py-0.5"
-            >
-              + title
+              + alternative
             </button>
           </div>
         </div>
