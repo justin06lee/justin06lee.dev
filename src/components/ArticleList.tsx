@@ -26,7 +26,9 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
   const [stillSrc, setStillSrc] = useState<string | null>(null);
   const [gifSrc, setGifSrc] = useState<string | null>(null);
 
-  // Fetch image as blob, extract first frame as a static PNG data URL
+  // Fetch the cover, freeze the first frame as a still PNG, swap to the
+  // animated original on hover. Lets GIF/animated WebP banners stay calm
+  // until the user shows interest.
   useEffect(() => {
     if (!article.banner_url) return;
     let cancelled = false;
@@ -52,7 +54,6 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
     };
   }, [article.banner_url]);
 
-  // Cleanup gif object URL on unmount
   useEffect(() => {
     return () => {
       if (gifUrlRef.current) URL.revokeObjectURL(gifUrlRef.current);
@@ -65,7 +66,6 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
       if (gifUrlRef.current) URL.revokeObjectURL(gifUrlRef.current);
       const url = URL.createObjectURL(blobRef.current);
       gifUrlRef.current = url;
-      // Preload so the swap is instant
       const img = new Image();
       img.onload = () => {
         if (wantsHover.current) setGifSrc(url);
@@ -83,18 +83,17 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
     setGifSrc(null);
   }, []);
 
-  // Single src — animated when hovering, frozen still frame otherwise
   const displaySrc = gifSrc ?? stillSrc;
 
   return (
     <Link
       href={`/articles/${article.slug}`}
-      className="group block border border-white/10 overflow-hidden transition-all duration-300"
+      className="group block border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/20 transition-colors"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       {article.banner_url && (
-        <div className="overflow-hidden h-48 relative bg-black">
+        <div className="overflow-hidden h-44 relative bg-black border-b border-white/10">
           {displaySrc && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -107,26 +106,28 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
           )}
         </div>
       )}
-      <div className="p-4 transition-colors duration-300">
+      <div className="p-4">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-base font-semibold leading-snug group-hover:underline underline-offset-4 transition-colors duration-300 text-white/60 group-hover:text-white">
+          <h2 className="text-base font-semibold leading-snug text-white/80 group-hover:text-white transition-colors">
             {article.title}
           </h2>
           {article.published_at && (
-            <span className="text-xs text-white/30 group-hover:text-white/50 shrink-0 mt-0.5 transition-colors duration-300">
+            <span className="text-xs text-white/40 shrink-0 mt-0.5 font-mono tabular-nums">
               {formatDate(article.published_at)}
             </span>
           )}
         </div>
-        <p className="text-sm mt-1.5 line-clamp-2 transition-colors duration-300 text-white/30 group-hover:text-white/60">
-          {article.excerpt}
-        </p>
+        {article.excerpt && (
+          <p className="text-sm mt-1.5 line-clamp-2 text-white/50 group-hover:text-white/70 transition-colors">
+            {article.excerpt}
+          </p>
+        )}
         {article.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {article.tags.map((t) => (
               <span
                 key={t}
-                className="px-2 py-0.5 text-xs border transition-colors duration-300 border-white/10 text-white/30 group-hover:border-white/15 group-hover:text-white/50"
+                className="px-2 py-0.5 text-xs border border-white/10 text-white/40 group-hover:border-white/20 group-hover:text-white/60 transition-colors"
               >
                 {t}
               </span>
@@ -159,21 +160,23 @@ export default function ArticleList({ articles }: { articles: ArticlePreview[] }
   }, [articles, query, selectedTag]);
 
   return (
-    <main className="max-w-6xl mx-auto px-4 pt-16 pb-24">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 pb-24">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.1 }}
+        transition={{ duration: 0.6, delay: 0.1 }}
       >
-        <h1 className="text-3xl font-semibold tracking-tight">Articles</h1>
-        <p className="text-white/70 mt-1 text-sm">Thoughts, guides, and things I find interesting.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">articles</h1>
+        <p className="text-white/50 mt-1 text-sm">
+          thoughts, guides, and stuff i find interesting.
+        </p>
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.2 }}
-        className="mt-6 mb-4"
+        transition={{ duration: 0.6, delay: 0.2 }}
+        className="mt-8 mb-4"
       >
         <input
           type="text"
@@ -188,44 +191,45 @@ export default function ArticleList({ articles }: { articles: ArticlePreview[] }
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
-          className="flex flex-wrap gap-2 mb-8"
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="flex flex-wrap items-center gap-2 mb-8"
         >
           {allTags.map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => setSelectedTag(selectedTag === t ? null : t)}
-              className={[
-                "px-3 py-1 text-sm transition",
+              className={
                 selectedTag === t
-                  ? "bg-white text-black"
-                  : "text-white/60 hover:text-white hover:bg-white/10",
-              ].join(" ")}
+                  ? "px-3 py-1 text-xs bg-white text-black"
+                  : "px-3 py-1 text-xs border border-white/15 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              }
             >
               {t}
             </button>
           ))}
           {selectedTag && (
             <button
+              type="button"
               onClick={() => setSelectedTag(null)}
-              className="text-sm text-white underline-offset-4 hover:underline px-2"
+              className="text-xs text-white/60 hover:text-white underline-offset-4 hover:underline px-2 transition-colors"
             >
-              Clear
+              clear
             </button>
           )}
         </motion.div>
       )}
 
       {filtered.length === 0 ? (
-        <div className="text-center text-white/60 py-24">No articles found.</div>
+        <div className="text-center text-white/40 py-24 text-sm">no articles found.</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((article, i) => (
             <motion.div
               key={article.slug}
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 + i * 0.08 }}
+              transition={{ duration: 0.6, delay: 0.4 + i * 0.06 }}
             >
               <ArticleCard article={article} />
             </motion.div>

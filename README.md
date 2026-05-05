@@ -24,10 +24,10 @@ bun run lint
 bun run test     # vitest
 ```
 
-needs `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in `.env`. `ADMIN_KEY` for the cms. `GITHUB_TOKEN` if you want to write articles back via /author.
+needs `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in `.env`. `ADMIN_KEY` for the cms. `GITHUB_TOKEN` if you want to write articles back via /desk.
 
 ## notes
 
 - the calendar bit is the most involved piece — single-running-actual is enforced via a partial unique index, dst-correct datetime-local round-trips, prayer times via aladhan w/ a 3-tier cache. see CLAUDE.md if you actually want to touch it
-- /me is the item/config cms. /author is the article cms (writes to a separate github repo via the contents api)
+- /me is the item/config cms. /desk is the article cms (writes to a separate github repo via the contents api)
 - yes i used claude code hella. CLAUDE.md is now actually up to date

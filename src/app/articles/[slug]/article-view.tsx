@@ -29,18 +29,18 @@ function formatDate(iso: string | null): string {
 
 export default function ArticleView({ article }: { article: ArticleViewData }) {
   return (
-    <main className="max-w-5xl mx-auto px-4 pt-16 pb-24 select-text">
+    <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-20 pb-24 select-text">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.1 }}
+        transition={{ duration: 0.6, delay: 0.1 }}
       >
         <Link
           href="/articles"
-          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors mb-8"
+          className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white underline-offset-4 hover:underline transition-colors mb-10"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to articles
+          back to articles
         </Link>
       </motion.div>
 
@@ -48,8 +48,8 @@ export default function ArticleView({ article }: { article: ArticleViewData }) {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.15 }}
-          className="mb-8 overflow-hidden border border-border"
+          transition={{ duration: 0.6, delay: 0.15 }}
+          className="mb-10 overflow-hidden border border-white/10"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -63,41 +63,43 @@ export default function ArticleView({ article }: { article: ArticleViewData }) {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.2 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
       >
-        <h1 className="text-3xl font-semibold tracking-tight leading-tight">
+        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
           {article.title}
         </h1>
 
-        <div className="flex items-center gap-3 mt-3 text-sm text-muted">
-          {article.published_at && (
-            <time>{formatDate(article.published_at)}</time>
-          )}
-          {article.tags.length > 0 && (
-            <>
-              {article.published_at && (
-                <span className="text-border">|</span>
-              )}
-              <div className="flex gap-1.5">
+        {(article.published_at || article.tags.length > 0) && (
+          <div className="flex flex-wrap items-center gap-3 mt-4 text-sm">
+            {article.published_at && (
+              <time className="font-mono tabular-nums text-white/50">
+                {formatDate(article.published_at)}
+              </time>
+            )}
+            {article.published_at && article.tags.length > 0 && (
+              <span className="text-white/20">·</span>
+            )}
+            {article.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
                 {article.tags.map((t) => (
                   <span
                     key={t}
-                    className="px-2 py-0.5 text-xs border border-border text-muted"
+                    className="px-2 py-0.5 text-xs border border-white/15 text-white/60"
                   >
                     {t}
                   </span>
                 ))}
               </div>
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 0.4 }}
-        className="mt-10"
+        transition={{ duration: 0.6, delay: 0.35 }}
+        className="mt-12"
       >
         <CollapsibleMarkdown
           content={article.content}

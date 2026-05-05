@@ -80,7 +80,7 @@ export function OperatorFileGrid({
 
   return (
     <>
-      <div className="flex flex-wrap gap-8 p-8">
+      <div className="flex flex-wrap gap-8">
         {items.map((item) => (
           <div
             key={item.name}
@@ -128,9 +128,9 @@ export function OperatorFileGrid({
           className={`pointer-events-auto flex h-16 w-16 items-center justify-center border transition-all ${
             draggingItem
               ? dropActive
-                ? "scale-110 border-red-500 bg-red-500 text-white shadow-[0_18px_40px_rgba(239,68,68,0.32)]"
-                : "border-border bg-surface text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.18)]"
-              : "border-border bg-surface text-muted shadow-[0_12px_28px_rgba(0,0,0,0.14)]"
+                ? "scale-110 border-red-500 bg-red-500/90 text-white"
+                : "border-white/30 bg-black text-white"
+              : "border-white/15 bg-black text-white/50"
           }`}
         >
           <TrashIcon />
@@ -138,38 +138,27 @@ export function OperatorFileGrid({
       </div>
 
       {pendingDelete ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/25 px-4">
-          <div className="w-full max-w-md border border-border bg-surface p-6 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Delete article
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-black border border-white/20 p-6 max-w-sm w-full flex flex-col gap-4">
+            <p className="text-sm text-white">
+              Delete <span className="font-medium">{pendingDelete.name}</span>? This permanently removes the article. Type the exact name to confirm.
             </p>
-            <h2 className="mt-2 text-2xl tracking-tight text-foreground">
-              {pendingDelete.name}
-            </h2>
-            <p className="mt-4 text-sm leading-6 text-muted">
-              This action permanently removes this article. Type the exact name
-              below to confirm deletion.
-            </p>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wider text-muted">
-              Type {pendingDelete.name}
-            </label>
             <input
               type="text"
               value={confirmValue}
               onChange={(event) => setConfirmValue(event.target.value)}
-              className="mt-2 w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
+              placeholder={pendingDelete.name}
+              className="w-full bg-black border border-white/20 px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-white/40"
               autoFocus
             />
             {deleteError ? (
-              <p className="mt-4 text-sm leading-6 text-red-600 dark:text-red-400">
-                {deleteError}
-              </p>
+              <p className="text-sm text-red-400">{deleteError}</p>
             ) : null}
-            <div className="mt-6 flex gap-3">
+            <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={resetDeleteState}
-                className="border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-alt"
+                className="text-sm hover:bg-white/10 px-4 py-1.5 transition-colors"
               >
                 Cancel
               </button>
@@ -177,7 +166,7 @@ export function OperatorFileGrid({
                 type="button"
                 disabled={!canDelete || deletingName === pendingDelete.name}
                 onClick={confirmDelete}
-                className="border border-foreground bg-foreground px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-red-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
               >
                 {deletingName === pendingDelete.name ? "Deleting..." : "Delete"}
               </button>

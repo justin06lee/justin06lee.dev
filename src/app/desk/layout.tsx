@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { isAdminServer } from "@/lib/auth-server";
+import Navbar from "@/components/Navbar";
 import { OperatorHeader } from "./OperatorHeader";
 import { OperatorLoginForm } from "./OperatorLoginForm";
 
@@ -8,10 +9,10 @@ export const metadata: Metadata = {
     follow: false,
     index: false,
   },
-  title: "Author | justin06lee.dev",
+  title: "desk | justin06lee.dev",
 };
 
-export default async function AuthorLayout({
+export default async function DeskLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -19,15 +20,12 @@ export default async function AuthorLayout({
   const authenticated = await isAdminServer();
 
   if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-background">
-        <OperatorLoginForm />
-      </div>
-    );
+    return <OperatorLoginForm />;
   }
 
   return (
-    <div className="operator-shell min-h-screen bg-background">
+    <div className="min-h-screen bg-black text-white">
+      <Navbar />
       <OperatorHeader />
       {children}
     </div>

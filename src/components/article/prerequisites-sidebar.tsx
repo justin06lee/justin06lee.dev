@@ -38,8 +38,8 @@ export async function PrerequisitesSidebar({
         top: "var(--sticky-header-offset)",
       }}
     >
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
-        Prerequisites
+      <p className="mb-3 text-xs text-white/40 font-mono uppercase tracking-widest">
+        prerequisites
       </p>
       <ul className="space-y-2">
         {resolved.map((prereq) => (
@@ -48,7 +48,7 @@ export async function PrerequisitesSidebar({
               href={prereq.route}
               target="_blank"
               rel="noopener noreferrer"
-              className="block border border-border bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-alt"
+              className="block border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80 hover:text-white hover:bg-white/[0.04] hover:border-white/20 transition-colors"
             >
               {prereq.title}
             </Link>

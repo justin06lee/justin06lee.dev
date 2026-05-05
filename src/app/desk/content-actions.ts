@@ -33,10 +33,10 @@ function parsePathField(value: string): string[] {
 
 function operatorRouteForPath(pathSegments: string[]) {
   if (pathSegments.length === 0) {
-    return "/author";
+    return "/desk";
   }
 
-  return `/author/${pathSegments.map(pathSegmentSlug).join("/")}`;
+  return `/desk/${pathSegments.map(pathSegmentSlug).join("/")}`;
 }
 
 export async function createArticleAction(

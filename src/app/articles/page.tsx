@@ -6,7 +6,7 @@ export default async function ArticlesPage() {
   const articles = await listArticleSummaries();
 
   return (
-    <>
+    <div className="min-h-screen bg-black text-white">
       <Navbar />
       <ArticleList
         articles={articles.map((a) => ({
@@ -18,6 +18,6 @@ export default async function ArticlesPage() {
           published_at: null,
         }))}
       />
-    </>
+    </div>
   );
 }

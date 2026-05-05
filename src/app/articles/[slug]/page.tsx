@@ -16,7 +16,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     : null;
 
   return (
-    <>
+    <div className="min-h-screen bg-black text-white">
       <Navbar />
       <ArticleView
         article={{
@@ -30,6 +30,6 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
           imageBaseUrl: article.rawPath,
         }}
       />
-    </>
+    </div>
   );
 }

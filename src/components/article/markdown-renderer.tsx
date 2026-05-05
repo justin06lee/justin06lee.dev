@@ -10,7 +10,6 @@ import rehypeSlug from "rehype-slug";
 import type { Components } from "react-markdown";
 import { useTheme } from "next-themes";
 import { getThemeImageVariant, isThemeManagedImage } from "@/lib/theme-images";
-import { cn } from "@/lib/utils";
 import { CopyCodeButton } from "./copy-code-button";
 import "katex/dist/katex.min.css";
 
@@ -34,17 +33,13 @@ function isResolvedImageSrc(src: string): boolean {
 
 function PreBlock({
   children,
-  className,
   ...props
 }: React.ComponentPropsWithoutRef<"pre">) {
   const preRef = useRef<HTMLPreElement>(null);
   return (
     <pre
       ref={preRef}
-      className={cn(
-        "group relative mb-4 overflow-x-auto border border-border bg-surface-alt p-0",
-        className,
-      )}
+      className="group relative my-5 overflow-x-auto border border-white/10 bg-white/[0.03] p-4 font-mono text-[13px] leading-6"
       {...props}
     >
       {children}
@@ -52,6 +47,8 @@ function PreBlock({
     </pre>
   );
 }
+
+const HEADING_SCROLL = { scrollMarginTop: "var(--sticky-header-offset)" };
 
 export function MarkdownRenderer({
   content,
@@ -63,8 +60,8 @@ export function MarkdownRenderer({
   const components: Components = {
     h1: ({ children, ...props }) => (
       <h1
-        className="mb-6 mt-10 text-4xl font-normal leading-tight tracking-tight text-foreground first:mt-0"
-        style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
+        className="mb-4 mt-10 text-3xl font-semibold tracking-tight text-white first:mt-0"
+        style={HEADING_SCROLL}
         {...props}
       >
         {children}
@@ -72,8 +69,8 @@ export function MarkdownRenderer({
     ),
     h2: ({ children, ...props }) => (
       <h2
-        className="mb-4 mt-8 text-3xl font-normal leading-snug text-foreground"
-        style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
+        className="mb-3 mt-10 text-2xl font-semibold tracking-tight text-white"
+        style={HEADING_SCROLL}
         {...props}
       >
         {children}
@@ -81,8 +78,8 @@ export function MarkdownRenderer({
     ),
     h3: ({ children, ...props }) => (
       <h3
-        className="mb-3 mt-6 text-2xl font-normal leading-snug text-foreground"
-        style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
+        className="mb-2 mt-8 text-xl font-semibold tracking-tight text-white"
+        style={HEADING_SCROLL}
         {...props}
       >
         {children}
@@ -90,8 +87,8 @@ export function MarkdownRenderer({
     ),
     h4: ({ children, ...props }) => (
       <h4
-        className="mb-2 mt-5 text-xl font-normal text-foreground"
-        style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
+        className="mb-2 mt-6 text-lg font-semibold text-white"
+        style={HEADING_SCROLL}
         {...props}
       >
         {children}
@@ -99,8 +96,8 @@ export function MarkdownRenderer({
     ),
     h5: ({ children, ...props }) => (
       <h5
-        className="mb-2 mt-4 text-lg font-normal text-foreground"
-        style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
+        className="mb-2 mt-5 text-base font-semibold text-white"
+        style={HEADING_SCROLL}
         {...props}
       >
         {children}
@@ -108,22 +105,22 @@ export function MarkdownRenderer({
     ),
     h6: ({ children, ...props }) => (
       <h6
-        className="mb-2 mt-4 text-base font-normal text-muted"
-        style={{ scrollMarginTop: "var(--sticky-header-offset)" }}
+        className="mb-2 mt-4 text-sm font-semibold uppercase tracking-widest text-white/60"
+        style={HEADING_SCROLL}
         {...props}
       >
         {children}
       </h6>
     ),
     p: ({ children, ...props }) => (
-      <p className="mb-4 text-base leading-7 text-foreground" {...props}>
+      <p className="my-4 text-[15px] leading-7 text-white/85" {...props}>
         {children}
       </p>
     ),
     a: ({ children, href }) => {
       const value = typeof href === "string" ? href : "";
       const className =
-        "text-accent underline underline-offset-2 transition-colors hover:text-foreground";
+        "text-white underline underline-offset-4 decoration-white/40 hover:decoration-white transition-colors";
 
       if (value.startsWith("/")) {
         return (
@@ -132,7 +129,6 @@ export function MarkdownRenderer({
           </Link>
         );
       }
-
       if (value.startsWith("#")) {
         return (
           <a href={value} className={className}>
@@ -140,7 +136,6 @@ export function MarkdownRenderer({
           </a>
         );
       }
-
       return (
         <a
           href={value || undefined}
@@ -152,27 +147,34 @@ export function MarkdownRenderer({
         </a>
       );
     },
+    strong: ({ children, ...props }) => (
+      <strong className="font-semibold text-white" {...props}>
+        {children}
+      </strong>
+    ),
+    em: ({ children, ...props }) => (
+      <em className="italic" {...props}>
+        {children}
+      </em>
+    ),
     ul: ({ children, ...props }) => (
-      <ul className="mb-4 ml-6 list-disc space-y-1 text-foreground" {...props}>
+      <ul className="my-4 ml-6 list-disc space-y-1.5 text-white/85" {...props}>
         {children}
       </ul>
     ),
     ol: ({ children, ...props }) => (
-      <ol
-        className="mb-4 ml-6 list-decimal space-y-1 text-foreground"
-        {...props}
-      >
+      <ol className="my-4 ml-6 list-decimal space-y-1.5 text-white/85" {...props}>
         {children}
       </ol>
     ),
     li: ({ children, ...props }) => (
-      <li className="leading-7" {...props}>
+      <li className="leading-7 text-[15px]" {...props}>
         {children}
       </li>
     ),
     blockquote: ({ children, ...props }) => (
       <blockquote
-        className="mb-4 border-l-4 border-accent pl-4 italic text-muted"
+        className="my-5 border-l-2 border-white/30 pl-4 italic text-white/60"
         {...props}
       >
         {children}
@@ -189,7 +191,7 @@ export function MarkdownRenderer({
       if (isBlock) {
         return (
           <code
-            className={`block overflow-x-auto bg-surface-alt p-4 font-mono text-sm leading-6 text-foreground ${className || ""}`}
+            className={`block font-mono text-[13px] leading-6 text-white/90 ${className || ""}`}
             {...props}
           >
             {codeText}
@@ -199,7 +201,7 @@ export function MarkdownRenderer({
 
       return (
         <code
-          className="bg-surface-alt px-1.5 py-0.5 font-mono text-sm text-foreground"
+          className="border border-white/10 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[0.85em] text-white"
           {...props}
         >
           {children}
@@ -208,9 +210,9 @@ export function MarkdownRenderer({
     },
     pre: PreBlock,
     table: ({ children, ...props }) => (
-      <div className="mb-4 overflow-x-auto">
+      <div className="my-5 overflow-x-auto">
         <table
-          className="w-full border-collapse border border-border text-sm"
+          className="w-full border-collapse border border-white/10 text-sm"
           {...props}
         >
           {children}
@@ -219,18 +221,18 @@ export function MarkdownRenderer({
     ),
     th: ({ children, ...props }) => (
       <th
-        className="border border-border bg-surface-alt px-4 py-2 text-left font-semibold text-foreground"
+        className="border border-white/10 bg-white/[0.04] px-4 py-2 text-left font-semibold text-white"
         {...props}
       >
         {children}
       </th>
     ),
     td: ({ children, ...props }) => (
-      <td className="border border-border px-4 py-2 text-foreground" {...props}>
+      <td className="border border-white/10 px-4 py-2 text-white/85" {...props}>
         {children}
       </td>
     ),
-    hr: (props) => <hr className="my-8 border-border" {...props} />,
+    hr: (props) => <hr className="my-10 border-white/10" {...props} />,
     img: ({ src, alt, ...props }) => {
       const srcStr = typeof src === "string" ? src : "";
       const themedSrc = isThemeManagedImage(srcStr)
@@ -245,7 +247,7 @@ export function MarkdownRenderer({
         <img
           src={resolvedSrc}
           alt={alt || ""}
-          className="my-4 max-w-full border border-border"
+          className="my-5 max-w-full border border-white/10"
           loading="lazy"
           {...props}
         />
@@ -254,7 +256,7 @@ export function MarkdownRenderer({
   };
 
   return (
-    <div className="prose-archive max-w-none">
+    <div className="max-w-none">
       <ReactMarkdown
         skipHtml
         remarkPlugins={[remarkGfm, remarkMath]}

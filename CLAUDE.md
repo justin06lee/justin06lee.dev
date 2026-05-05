@@ -4,7 +4,7 @@
 Personal site for justin06lee.dev. Three surfaces share one Next.js app:
 1. **Public portfolio** — animated home, ASCII donut, scramble text, gallery, articles, a pet-the-cat page.
 2. **Personal calendar / time tracker** — day/month/year views, plans + "actuals" with a single-running invariant, plan/actual overlap heatmap, prayer-time markers.
-3. **Two admin surfaces** — `/me` (item CRUD + site config) and `/author/*` (article CMS that writes back to a GitHub repo).
+3. **Two admin surfaces** — `/me` (item CRUD + site config) and `/desk/*` (article CMS that writes back to a GitHub repo).
 
 Dark-only theme, minimal black/white aesthetic, motion-driven, ASCII flourishes. Lowercase voice everywhere.
 
@@ -46,7 +46,7 @@ src/
     calendar/                     # Personal calendar — see "Calendar" section
       day/[date], month/[yyyymm], year/[yyyy], categories/
     me/                           # Item + site-config CMS (admin)
-    author/                       # Article CMS (admin) — writes to GitHub
+    desk/                         # Article CMS (admin) — writes to GitHub
       [slug]/, new-article/, content-actions.ts (server actions)
     oddjobs/                      # Placeholder
 
@@ -58,7 +58,7 @@ src/
       pats/             # global cat-pat counter (origin-gated)
       pats/, calendar/  # calendar tasks/actuals/categories/prayer-times CRUD
       geocode/reverse/  # reverse-geocode helper for prayer location detect
-      operator/upload/  # admin image upload to GitHub
+      desk/upload/      # admin image upload to GitHub
       articles/revalidate/
 
   components/
@@ -121,7 +121,7 @@ Prayer times come from the Aladhan API, fetched per month, with a three-tier cac
 - **Route Handlers**: `requireAdmin(req)` returns a 401 NextResponse or null; `requireAdminWithMutationRate(req)` also enforces 200/min per-IP write throttle.
 - **Server Components / Server Actions**: `isAdminServer()` / `requireAdminServer()` (uses `cookies()` from `next/headers`).
 - `/api/pats` is the only public mutation — Origin-header gated, separate token-bucket rate limit, `delta` capped per-request.
-- `/me` is in `robots.ts` `disallow`. `/author/*` is metadata `noindex, nofollow`.
+- `/me` is in `robots.ts` `disallow`. `/desk/*` is metadata `noindex, nofollow`.
 
 ## Conventions
 - Path alias `@/*` → `src/*`.

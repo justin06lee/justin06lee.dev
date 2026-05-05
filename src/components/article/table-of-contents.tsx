@@ -44,18 +44,18 @@ export function TableOfContents({ content }: { content: string }) {
         top: "var(--sticky-header-offset)",
       }}
     >
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
-        On this page
+      <p className="mb-3 text-xs text-white/40 font-mono uppercase tracking-widest">
+        on this page
       </p>
-      <ul className="space-y-1">
+      <ul className="space-y-0.5">
         {headings.map((h) => (
           <li key={h.id}>
             <a
               href={`#${h.id}`}
               className={`block py-1 text-sm leading-5 transition-colors ${
                 activeId === h.id
-                  ? "text-foreground font-medium"
-                  : "text-muted hover:text-foreground"
+                  ? "text-white"
+                  : "text-white/50 hover:text-white"
               }`}
             >
               {h.text}

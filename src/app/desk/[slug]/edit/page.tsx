@@ -12,7 +12,7 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export default async function OperatorEditPage({ params }: Props) {
+export default async function DeskEditPage({ params }: Props) {
   const { slug } = await params;
   const actualName = await resolveArticleSegment(slug, { noCache: true });
   if (!actualName) notFound();
@@ -27,7 +27,7 @@ export default async function OperatorEditPage({ params }: Props) {
   const assets = await getOperatorImageAssetsByPath(articlePath);
 
   return (
-    <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6">
+    <main className="mx-auto max-w-[1600px] px-4 sm:px-6 pb-16">
       <OperatorArticleEditor
         articlePath={articlePath}
         initialAssets={assets}

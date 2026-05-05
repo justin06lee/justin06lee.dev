@@ -27,11 +27,10 @@ export function ArticleContent({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       style={{ willChange: "opacity, transform" }}
+      className="select-text"
     >
       {title && (
-        <h1
-          className="mb-8 text-5xl font-normal leading-tight tracking-tight text-foreground"
-        >
+        <h1 className="mb-10 text-3xl sm:text-4xl font-semibold leading-tight tracking-tight text-white">
           {title}
         </h1>
       )}

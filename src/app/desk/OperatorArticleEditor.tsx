@@ -319,7 +319,7 @@ export function OperatorArticleEditor({
     [articleName, raw]
   );
   const currentSha = state?.sha ?? initialSha ?? "";
-  const previewHref = `/author/${articlePath.join("/")}`;
+  const previewHref = `/desk/${articlePath.join("/")}`;
   const publicHref = routeForPath(articlePath);
 
   useEffect(() => {
@@ -453,7 +453,7 @@ export function OperatorArticleEditor({
           const form = new FormData();
           form.append("file", file);
           form.append("articlePath", articlePath.join("/"));
-          const response = await fetch("/api/operator/upload", {
+          const response = await fetch("/api/desk/upload", {
             method: "POST",
             body: form,
           });
@@ -753,54 +753,49 @@ export function OperatorArticleEditor({
   }, [vimEnabled]);
 
   return (
-    <div className="border border-border bg-surface">
+    <div className="border border-white/10 bg-white/[0.02]">
       <form ref={formRef} action={formAction}>
         <input type="hidden" name="articlePath" value={articlePath.join("/")} />
         <input type="hidden" name="sha" value={currentSha} />
 
-        <div className="border-b border-border px-4 py-4">
+        <div className="border-b border-white/10 px-4 py-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Article Editor
-              </p>
-              <h1 className="mt-1 text-3xl tracking-tight text-foreground">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">
                 {parsed.title || articleName}
               </h1>
-              <p className="mt-2 text-sm text-muted">
-                {articleLabel}
-              </p>
+              <p className="mt-1 text-xs text-white/50">{articleLabel}</p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={openDrawingWindow}
-                className="border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors"
               >
-                New drawing window
+                new drawing
               </button>
               <button
                 type="button"
                 onClick={toggleVimMode}
-                className={`border px-3 py-2 text-sm transition-colors ${
+                className={`border px-3 py-1.5 text-sm transition-colors ${
                   vimEnabled
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-surface text-foreground hover:bg-surface-alt"
+                    ? "border-white bg-white text-black"
+                    : "border-white/20 hover:bg-white/10"
                 }`}
               >
-                Vim {vimEnabled ? "on" : "off"}
+                vim {vimEnabled ? "on" : "off"}
               </button>
-              <div className="flex border border-border">
+              <div className="flex border border-white/20">
                 {(["edit", "preview", "split"] as EditorMode[]).map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => setMode(option)}
-                    className={`px-3 py-2 text-sm transition-colors ${
+                    className={`px-3 py-1.5 text-sm transition-colors ${
                       mode === option
-                        ? "bg-foreground text-background"
-                        : "bg-surface text-foreground hover:bg-surface-alt"
+                        ? "bg-white text-black"
+                        : "hover:bg-white/10"
                     }`}
                   >
                     {option}
@@ -810,24 +805,24 @@ export function OperatorArticleEditor({
 
               <Link
                 href={previewHref}
-                className="border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors"
               >
-                View operator page
+                preview
               </Link>
               <Link
                 href={publicHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors"
               >
-                Open public page
+                public page
               </Link>
               <button
                 type="submit"
                 disabled={pending}
-                className="border border-foreground bg-foreground px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-white text-black px-4 py-1.5 text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-60"
               >
-                {pending ? "Saving..." : "Save article"}
+                {pending ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
@@ -844,20 +839,20 @@ export function OperatorArticleEditor({
                     action.placeholder ?? ""
                   )
                 }
-                className="border border-border px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-3 py-1 text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors"
               >
-                {action.label}
+                {action.label.toLowerCase()}
               </button>
             ))}
-            <span className="ml-auto text-xs text-muted">
+            <span className="ml-auto text-xs text-white/60">
               {vimEnabled
-                ? `Vim ${vimMode}${pendingVimCommand ? ` \u00b7 ${pendingVimCommand}` : ""}`
-                : "Cmd/Ctrl + S to save"}
+                ? `vim \u00b7 ${vimMode}${pendingVimCommand ? ` \u00b7 ${pendingVimCommand}` : ""}`
+                : "save: cmd/ctrl+s"}
             </span>
           </div>
 
           {vimEnabled ? (
-            <p className="mt-3 text-xs leading-5 text-muted">
+            <p className="mt-3 text-xs leading-5 text-white/50">
               Normal mode supports `hjkl`, `w`, `b`, `e`, `0`, `$`, `gg`, `G`,
               `i`, `a`, `I`, `A`, `o`, `O`, `x`, and `dd`. Press `Esc` to leave
               insert mode.
@@ -865,36 +860,32 @@ export function OperatorArticleEditor({
           ) : null}
 
           {state?.error ? (
-            <p className="mt-4 text-sm text-red-600 dark:text-red-400">
-              {state.error}
-            </p>
+            <p className="mt-4 text-sm text-red-400">{state.error}</p>
           ) : null}
           {state?.message ? (
-            <p className="mt-4 text-sm text-foreground">{state.message}</p>
+            <p className="mt-4 text-sm text-green-400">{state.message}</p>
           ) : null}
           {assetError && !assetToDelete ? (
-            <p className="mt-4 text-sm text-red-600 dark:text-red-400">
-              {assetError}
-            </p>
+            <p className="mt-4 text-sm text-red-400">{assetError}</p>
           ) : null}
         </div>
 
-        <div className="grid min-h-[70vh] gap-0 xl:grid-cols-[18rem_1fr]">
-          <aside className="border-b border-border bg-surface-alt xl:border-b-0 xl:border-r">
-            <div className="border-b border-border px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Images
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                Drag into the editor or click insert. Save the article to persist
-                image references.
+        <div className="grid min-h-[70vh] gap-0 xl:grid-cols-[18rem_1fr] xl:items-start">
+          <aside
+            className="border-b border-white/10 bg-white/[0.02] xl:border-b-0 xl:border-r xl:sticky xl:flex xl:flex-col xl:h-[calc(100vh-var(--sticky-header-offset,80px))]"
+            style={{ top: "var(--sticky-header-offset, 80px)" }}
+          >
+            <div className="border-b border-white/10 px-4 py-3 xl:shrink-0">
+              <h3 className="font-semibold text-white">images</h3>
+              <p className="mt-1 text-xs text-white/50 leading-5">
+                drag into the editor or click insert. save to persist references.
               </p>
             </div>
 
-            <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4 xl:max-h-none xl:flex-1 xl:min-h-0">
               {assets.length === 0 ? (
-                <p className="text-sm text-muted">
-                  No images yet. Use the drawing window or upload assets later.
+                <p className="text-sm text-white/60">
+                  no images yet. use the drawing window or upload assets later.
                 </p>
               ) : (
                 assets.map((asset) => (
@@ -908,9 +899,9 @@ export function OperatorArticleEditor({
                       );
                       event.dataTransfer.effectAllowed = "copy";
                     }}
-                    className="border border-border bg-surface p-3"
+                    className="border border-white/10 bg-black p-3"
                   >
-                    <div className="relative mb-3 aspect-video w-full border border-border bg-[#efede7]">
+                    <div className="relative mb-3 aspect-video w-full border border-white/10 bg-[#efede7]">
                       <Image
                         src={
                           theme === "dark" && asset.darkUrl
@@ -923,10 +914,10 @@ export function OperatorArticleEditor({
                         className="object-contain"
                       />
                     </div>
-                    <p className="truncate text-sm font-medium text-foreground">
+                    <p className="truncate text-sm font-medium text-white">
                       {asset.displayName}
                     </p>
-                    <p className="mt-1 truncate font-mono text-xs text-muted">
+                    <p className="mt-1 truncate font-mono text-xs text-white/40">
                       {theme === "dark" && asset.themeManaged
                         ? getThemeImageVariant(asset.markdownPath, "dark")
                         : asset.markdownPath}
@@ -935,9 +926,9 @@ export function OperatorArticleEditor({
                       <button
                         type="button"
                         onClick={() => insertAssetReference(asset)}
-                        className="flex-1 border border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-foreground transition-colors hover:bg-surface-alt"
+                        className="flex-1 border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors"
                       >
-                        Insert
+                        insert
                       </button>
                       <button
                         type="button"
@@ -946,9 +937,9 @@ export function OperatorArticleEditor({
                           setAssetError("");
                           setAssetToDelete(asset);
                         }}
-                        className="border border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-foreground transition-colors hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-60"
+                        className="border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {deletingAsset === asset.filename ? "Deleting..." : "Delete"}
+                        {deletingAsset === asset.filename ? "deleting..." : "delete"}
                       </button>
                     </div>
                   </div>
@@ -957,10 +948,10 @@ export function OperatorArticleEditor({
             </div>
           </aside>
 
-          <div className="grid min-h-[70vh] gap-0 xl:h-[70vh] xl:grid-cols-2">
+          <div className="grid min-h-[70vh] gap-0 xl:grid-cols-2 xl:items-start">
             {mode !== "preview" ? (
               <div
-                className={`min-h-0 ${mode === "split" ? "border-r border-border" : ""}`}
+                className={`min-h-0 ${mode === "split" ? "border-r border-white/10" : ""}`}
               >
                 <textarea
                   ref={textareaRef}
@@ -977,22 +968,23 @@ export function OperatorArticleEditor({
                   }}
                   onDrop={handleTextareaDrop}
                   spellCheck={false}
-                  className={`h-full min-h-[70vh] w-full resize-none bg-background px-4 py-4 font-mono text-sm leading-6 text-foreground outline-none ${uploadingFile ? "opacity-50" : ""}`}
+                  className={`min-h-[70vh] w-full resize-none bg-black px-4 py-4 font-mono text-sm leading-6 text-white outline-none xl:sticky xl:min-h-0 xl:h-[calc(100vh-var(--sticky-header-offset,80px))] ${uploadingFile ? "opacity-50" : ""}`}
+                  style={{ top: "var(--sticky-header-offset, 80px)" }}
                 />
               </div>
             ) : null}
 
             {mode !== "edit" ? (
-              <div className="min-h-0 bg-background xl:overflow-y-auto">
-                <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
-                  Live preview
+              <div className="min-h-0 bg-black">
+                <div className="border-b border-white/10 bg-black px-4 py-3 text-xs font-medium text-white/70">
+                  live preview
                 </div>
                 <div className="px-4 py-6 lg:px-8">
-                  <h1 className="mb-3 text-5xl font-normal leading-tight tracking-tight text-foreground">
+                  <h1 className="mb-3 text-4xl font-semibold leading-tight tracking-tight text-white">
                     {parsed.title || articleName}
                   </h1>
                   {parsed.prerequisites.length > 0 ? (
-                    <p className="mb-8 text-sm leading-6 text-muted">
+                    <p className="mb-8 text-sm leading-6 text-white/60">
                       Prerequisites: {parsed.prerequisites.join(", ")}
                     </p>
                   ) : null}
@@ -1027,31 +1019,22 @@ export function OperatorArticleEditor({
       ))}
 
       {assetToDelete ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/25 px-4">
-          <div className="w-full max-w-md border border-border bg-surface p-6 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Delete Image
-            </p>
-            <h2 className="mt-2 text-2xl tracking-tight text-foreground">
-              {assetToDelete.displayName}
-            </h2>
-            <p className="mt-4 text-sm leading-6 text-muted">
-              This removes the image from GitHub. Any existing markdown references
-              to it will stop working.
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-black border border-white/20 p-6 max-w-sm w-full flex flex-col gap-4">
+            <p className="text-sm text-white">
+              Delete <span className="font-medium">{assetToDelete.displayName}</span>? Existing markdown references will break.
             </p>
             {assetError ? (
-              <p className="mt-4 text-sm leading-6 text-red-600 dark:text-red-400">
-                {assetError}
-              </p>
+              <p className="text-sm text-red-400">{assetError}</p>
             ) : null}
-            <div className="mt-6 flex gap-3">
+            <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => {
                   setAssetError("");
                   setAssetToDelete(null);
                 }}
-                className="border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-alt"
+                className="text-sm hover:bg-white/10 px-4 py-1.5 transition-colors"
               >
                 Cancel
               </button>
@@ -1059,9 +1042,9 @@ export function OperatorArticleEditor({
                 type="button"
                 disabled={deletingAsset === assetToDelete.filename}
                 onClick={confirmAssetDelete}
-                className="border border-foreground bg-foreground px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-red-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
               >
-                {deletingAsset === assetToDelete.filename ? "Deleting..." : "Delete image"}
+                {deletingAsset === assetToDelete.filename ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>

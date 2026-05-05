@@ -10,7 +10,7 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export default async function OperatorArticlePage({ params }: Props) {
+export default async function DeskArticlePage({ params }: Props) {
   const { slug } = await params;
   const actualName = await resolveArticleSegment(slug, OP);
   if (!actualName) notFound();
@@ -20,29 +20,29 @@ export default async function OperatorArticlePage({ params }: Props) {
 
   return (
     <div>
-      <div className="mx-auto flex max-w-7xl flex-wrap gap-3 px-8 py-6 lg:px-12">
+      <div className="mx-auto flex max-w-7xl flex-wrap gap-2 px-4 sm:px-6 pb-6">
         <Link
-          href={`/author/${pathSegmentSlug(actualName)}/edit`}
-          className="border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-alt"
+          href={`/desk/${pathSegmentSlug(actualName)}/edit`}
+          className="border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors"
         >
-          Edit article
+          edit article
         </Link>
         <Link
           href={routeForPath([actualName])}
           target="_blank"
           rel="noopener noreferrer"
-          className="border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-alt"
+          className="border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10 transition-colors"
         >
-          Open public page
+          open public page
         </Link>
       </div>
 
       <div className="mx-auto flex max-w-7xl gap-0">
-        <aside className="hidden w-52 shrink-0 border-r border-border px-4 pt-8 lg:block">
+        <aside className="hidden w-52 shrink-0 border-r border-white/10 px-4 pt-8 lg:block">
           <ArticleContent content={article.content} mode="toc" />
         </aside>
 
-        <main className="min-w-0 flex-1 px-8 py-8 lg:px-12">
+        <main className="min-w-0 flex-1 px-4 sm:px-6 py-8 lg:px-12">
           <ArticleContent
             content={article.content}
             imageBaseUrl={article.rawPath}
@@ -51,7 +51,7 @@ export default async function OperatorArticlePage({ params }: Props) {
           />
         </main>
 
-        <aside className="hidden w-60 shrink-0 border-l border-border px-4 pt-8 xl:block">
+        <aside className="hidden w-60 shrink-0 border-l border-white/10 px-4 pt-8 xl:block">
           <PrerequisitesSidebar
             prerequisites={article.prerequisites}
             noCache

@@ -965,14 +965,8 @@ export function OperatorDrawingWindow({
       <div
         ref={containerRef}
         data-drawing-window="true"
-        className={`pointer-events-auto fixed flex flex-col overflow-hidden border shadow-[0_18px_40px_rgba(0,0,0,0.18)] transition-[background-color,border-color,box-shadow] ${
-          theme === "dark"
-            ? active
-              ? "border-stone-700 bg-stone-950 shadow-[0_18px_40px_rgba(0,0,0,0.42)]"
-              : "border-stone-800 bg-stone-900 shadow-[0_14px_28px_rgba(0,0,0,0.34)]"
-            : active
-              ? "border-border bg-[#efede7]"
-              : "border-stone-300 bg-stone-100 shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
+        className={`pointer-events-auto fixed flex flex-col overflow-hidden border bg-black transition-[border-color] ${
+          active ? "border-white/30" : "border-white/10"
         }`}
         style={{
           height: windowSize.height,
@@ -983,14 +977,8 @@ export function OperatorDrawingWindow({
         onPointerDownCapture={onFocus}
       >
         <div
-          className={`flex cursor-move items-center justify-between border-b border-border px-4 py-3 ${
-            theme === "dark"
-              ? active
-                ? "bg-stone-900"
-                : "bg-stone-800"
-              : active
-                ? "bg-surface-alt"
-                : "bg-stone-200"
+          className={`flex cursor-move items-center justify-between border-b border-white/10 px-4 py-3 ${
+            active ? "bg-white/[0.04]" : "bg-white/[0.02]"
           }`}
           onPointerDown={(event) => {
             if (resizeRef.current) {
@@ -1013,44 +1001,42 @@ export function OperatorDrawingWindow({
           }}
         >
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Drawing Window #{windowId}
+            <p className="text-sm font-medium text-white">
+              drawing #{windowId}
             </p>
-            <p className="text-sm text-foreground">{articleLabel}</p>
+            <p className="text-xs text-white/50">{articleLabel}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="border border-border px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-foreground transition-colors hover:bg-background"
+            className="border border-white/20 px-3 py-1 text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors"
           >
-            Close
+            close
           </button>
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[1fr_240px]">
           <div
-            className={`min-h-0 border-b border-border p-3 lg:border-b-0 lg:border-r ${
+            className={`min-h-0 border-b border-white/10 p-3 lg:border-b-0 lg:border-r ${
               theme === "dark" ? "bg-stone-950" : "bg-[#efede7]"
             }`}
           >
-            <div className="mb-3 flex flex-wrap items-center gap-2 border border-border bg-surface px-3 py-2 text-xs text-muted">
-              <span className="font-semibold uppercase tracking-wider">
-                View
-              </span>
+            <div className="mb-3 flex flex-wrap items-center gap-2 border border-white/10 bg-black/60 px-3 py-2 text-xs text-white/70">
+              <span className="text-white/50">view</span>
               <button
                 type="button"
                 onClick={() => adjustZoom(-0.25)}
-                className="border border-border px-2 py-1 text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-2 py-0.5 text-white/80 hover:text-white hover:bg-white/10 transition-colors"
               >
                 -
               </button>
-              <span className="min-w-12 text-center text-foreground">
+              <span className="min-w-12 text-center text-white">
                 {Math.round(zoom * 100)}%
               </span>
               <button
                 type="button"
                 onClick={() => adjustZoom(0.25)}
-                className="border border-border px-2 py-1 text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-2 py-0.5 text-white/80 hover:text-white hover:bg-white/10 transition-colors"
               >
                 +
               </button>
@@ -1060,17 +1046,17 @@ export function OperatorDrawingWindow({
                   setZoom(1);
                   setViewOffset({ x: 0, y: 0 });
                 }}
-                className="border border-border px-2 py-1 text-foreground transition-colors hover:bg-surface-alt"
+                className="border border-white/20 px-2 py-0.5 text-white/80 hover:text-white hover:bg-white/10 transition-colors"
               >
-                Reset view
+                reset
               </button>
-              <span className="ml-auto">
-                Hold space or middle-drag to pan
+              <span className="ml-auto text-white/50">
+                space / middle-drag to pan
               </span>
             </div>
 
             <div
-              className={`flex h-full min-h-[18rem] items-center justify-center overflow-hidden border border-border ${
+              className={`flex h-full min-h-[18rem] items-center justify-center overflow-hidden border border-white/10 ${
                 theme === "dark" ? "bg-stone-950" : "bg-[#efede7]"
               }`}
             >
@@ -1091,7 +1077,7 @@ export function OperatorDrawingWindow({
                   className={`block max-h-[55vh] max-w-full select-none border touch-none ${
                     theme === "dark"
                       ? "border-stone-700 bg-black"
-                      : "border-border bg-white"
+                      : "border-stone-300 bg-white"
                   } ${
                     spacePressed || isPanning ? "cursor-grab" : "cursor-crosshair"
                   }`}
@@ -1104,11 +1090,9 @@ export function OperatorDrawingWindow({
             </div>
           </div>
 
-          <div className="min-h-0 space-y-5 overflow-hidden bg-surface p-4 pb-8 pr-6">
+          <div className="min-h-0 space-y-5 overflow-hidden bg-white/[0.02] p-4 pb-8 pr-6">
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted">
-                Canvas Size
-              </label>
+              <label className="text-xs text-white/60 mb-1 block">Canvas size</label>
               <Select<CanvasPresetKey>
                 ariaLabel="Canvas size"
                 value={canvasPreset}
@@ -1125,19 +1109,17 @@ export function OperatorDrawingWindow({
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                Tools
-              </p>
+              <p className="text-xs text-white/60 mb-1">Tools</p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setTool("brush")}
                   aria-label="Brush"
                   title="Brush"
-                  className={`flex h-11 w-11 items-center justify-center border transition-colors ${
+                  className={`flex h-10 w-10 items-center justify-center border transition-colors ${
                     tool === "brush"
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-background text-foreground hover:bg-surface-alt"
+                      ? "border-white bg-white text-black"
+                      : "border-white/15 text-white/80 hover:text-white hover:bg-white/10"
                   }`}
                 >
                   <BrushIcon />
@@ -1147,10 +1129,10 @@ export function OperatorDrawingWindow({
                   onClick={() => setTool("eraser")}
                   aria-label="Eraser"
                   title="Eraser"
-                  className={`flex h-11 w-11 items-center justify-center border transition-colors ${
+                  className={`flex h-10 w-10 items-center justify-center border transition-colors ${
                     tool === "eraser"
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-background text-foreground hover:bg-surface-alt"
+                      ? "border-white bg-white text-black"
+                      : "border-white/15 text-white/80 hover:text-white hover:bg-white/10"
                   }`}
                 >
                   <EraserIcon />
@@ -1159,9 +1141,7 @@ export function OperatorDrawingWindow({
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted">
-                Color
-              </label>
+              <label className="text-xs text-white/60 mb-1 block">Color</label>
               <div className="flex items-center gap-2">
                 {displayedPresetColors.map((presetColor) => {
                   const selected = color.toLowerCase() === presetColor.source;
@@ -1174,8 +1154,8 @@ export function OperatorDrawingWindow({
                       onClick={() => setColor(presetColor.source)}
                       className={`relative h-9 w-9 rounded-full border transition-transform hover:scale-105 ${
                         selected
-                          ? "border-foreground ring-2 ring-foreground/20"
-                          : "border-border"
+                          ? "border-white ring-2 ring-white/30"
+                          : "border-white/15"
                       }`}
                       style={{ backgroundColor: presetColor.display }}
                     >
@@ -1184,21 +1164,17 @@ export function OperatorDrawingWindow({
                   );
                 })}
                 <label
-                  className={`relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border transition-transform hover:scale-105 ${
-                    theme === "dark"
-                      ? "bg-black text-white"
-                      : "bg-white text-foreground"
-                  } ${
+                  className={`relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border bg-black text-white transition-transform hover:scale-105 ${
                     !PRESET_COLORS.some((preset) => preset.source === color.toLowerCase())
-                      ? "border-foreground ring-2 ring-foreground/20"
-                      : "border-border"
+                      ? "border-white ring-2 ring-white/30"
+                      : "border-white/15"
                   }`}
                   title="Custom color"
                 >
                   <svg
                     viewBox="0 0 24 24"
                     aria-hidden="true"
-                    className="h-4 w-4 fill-none stroke-current text-foreground"
+                    className="h-4 w-4 fill-none stroke-current text-white"
                   >
                     <path
                       d="M12 5v14M5 12h14"
@@ -1218,9 +1194,7 @@ export function OperatorDrawingWindow({
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted">
-                Brush Size
-              </label>
+              <label className="text-xs text-white/60 mb-1 block">Brush size</label>
               <div className="flex gap-2">
                 {BRUSH_SIZES.map((brushSize) => (
                   <button
@@ -1229,8 +1203,8 @@ export function OperatorDrawingWindow({
                     onClick={() => setSize(brushSize)}
                     className={`flex h-10 min-w-12 items-center justify-center border px-3 transition-colors ${
                       size === brushSize
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-background text-foreground hover:bg-surface-alt"
+                        ? "border-white bg-white text-black"
+                        : "border-white/15 text-white/80 hover:text-white hover:bg-white/10"
                     }`}
                     aria-label={`Use ${brushSize}px brush`}
                     title={`${brushSize}px`}
@@ -1248,9 +1222,7 @@ export function OperatorDrawingWindow({
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                History
-              </p>
+              <p className="text-xs text-white/60 mb-1">History</p>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1258,7 +1230,7 @@ export function OperatorDrawingWindow({
                   disabled={historyState.undo === 0}
                   aria-label="Undo"
                   title="Undo"
-                  className="flex h-10 w-10 items-center justify-center border border-border bg-background text-foreground transition-colors hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-10 w-10 items-center justify-center border border-white/15 text-white/80 hover:text-white hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <UndoIcon />
                 </button>
@@ -1268,7 +1240,7 @@ export function OperatorDrawingWindow({
                   disabled={historyState.redo === 0}
                   aria-label="Redo"
                   title="Redo"
-                  className="flex h-10 w-10 items-center justify-center border border-border bg-background text-foreground transition-colors hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-10 w-10 items-center justify-center border border-white/15 text-white/80 hover:text-white hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <RedoIcon />
                 </button>
@@ -1277,7 +1249,7 @@ export function OperatorDrawingWindow({
                   onClick={handleClear}
                   aria-label="Clear canvas"
                   title="Clear canvas"
-                  className="flex h-10 w-10 items-center justify-center border border-border bg-background text-foreground transition-colors hover:bg-surface-alt"
+                  className="flex h-10 w-10 items-center justify-center border border-white/15 text-white/80 hover:text-white hover:bg-white/10 transition-colors"
                 >
                   <ClearIcon />
                 </button>
@@ -1285,17 +1257,17 @@ export function OperatorDrawingWindow({
             </div>
 
             {error ? (
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <p className="text-sm text-red-400">{error}</p>
             ) : null}
 
             <button
               type="button"
               disabled={isSaving || saveLocked}
               onClick={handleSave}
-              className="w-full border border-foreground bg-foreground px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full bg-white text-black px-4 py-2 text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isSaving
-                ? "Saving image..."
+                ? "Saving..."
                 : saveLocked
                   ? "Another window is saving..."
                   : "Save image"}
@@ -1304,7 +1276,7 @@ export function OperatorDrawingWindow({
         </div>
 
         <div
-          className={`absolute bottom-0 right-0 flex h-6 w-6 cursor-nwse-resize items-center justify-center border-l border-t border-border bg-surface-alt text-muted ${
+          className={`absolute bottom-0 right-0 flex h-6 w-6 cursor-nwse-resize items-center justify-center border-l border-t border-white/15 bg-white/[0.04] text-white/50 ${
             isResizing ? "opacity-100" : "opacity-70"
           }`}
           onPointerDown={(event) => {

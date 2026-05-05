@@ -23,6 +23,18 @@ body {
   -ms-overflow-style: none;
 }
 
+/* The site is intentionally scrollbar-free everywhere. The html-level rule
+   above only hides the page scrollbar; inner scroll containers
+   (overflow-x/y-auto, like code blocks, sidebar TOCs, and tab strips) need
+   their own rule, so apply it universally. */
+*::-webkit-scrollbar {
+  display: none;
+}
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
