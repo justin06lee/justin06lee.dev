@@ -31,7 +31,12 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       actuals={day.actuals}
       categories={day.categories}
       prayersSlot={
-        <Suspense fallback={null}>
+        // Keyed because DayView renders this Suspense as one sibling in a
+        // multi-child array; when the prayer fetch suspends, the streamed
+        // reveal re-reconciles that array and React flags this prop-passed
+        // child as keyless. The static siblings carry React's internal
+        // validated flag and are exempt; this one isn't.
+        <Suspense key="prayers" fallback={null}>
           <PrayerMarkers date={date} />
         </Suspense>
       }

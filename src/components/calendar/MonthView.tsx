@@ -54,9 +54,9 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="min-h-28" />;
           // Two heatmap signals coexist intentionally: cell background uses
-          // overlapMinutes (how well plan/actuals lined up for the day), and
-          // the corner ratio shows done/total tasks. Different axes, both
-          // useful at a glance.
+          // the fill ratio (how fully the day's plan was followed, out of
+          // min(8h, planned)), and the corner ratio shows done/total tasks.
+          // Different axes, both useful at a glance.
           const dayTasks = (byDate.get(date) ?? []).sort((a, b) => {
             const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
             const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
@@ -71,12 +71,12 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
           const isToday = date === today;
           const visible = dayTasks.slice(0, 3);
           const extra = total - visible.length;
-          const overlapMinutes = heatmap?.[date] ?? 0;
+          const overlapRatio = heatmap?.[date] ?? 0;
           return (
             <Link
               key={date}
               href={`/calendar/day/${date}`}
-              className={`min-h-28 p-2 flex flex-col gap-1 transition hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapMinutes, "month")} ${isToday ? "ring-1 ring-inset ring-white/80" : ""}`}
+              className={`min-h-28 p-2 flex flex-col gap-1 transition hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapRatio, "month")} ${isToday ? "ring-1 ring-inset ring-white/80" : ""}`}
             >
               <div className="flex items-baseline justify-between">
                 <span className={`font-mono text-sm tabular-nums ${isToday ? "text-white font-semibold" : "text-white/80"}`}>

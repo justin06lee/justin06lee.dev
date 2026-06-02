@@ -15,13 +15,23 @@ export default async function PrayerMarkers({ date }: { date: string }) {
       </div>
     );
   }
+  const markers: [string, string][] = [
+    ["Fajr", prayers.Fajr],
+    ["Dhuhr", prayers.Dhuhr],
+    ["Asr", prayers.Asr],
+    ["Maghrib", prayers.Maghrib],
+    ["Isha", prayers.Isha],
+  ];
+  // Single wrapper, not a fragment: this is handed to DayView as the
+  // `prayersSlot` prop, and a multi-child fragment passed through a prop gets
+  // flattened into a keyless child list at the boundary. The wrapper overlays
+  // the plan column (absolute inset-0) so each marker's top% still resolves
+  // against the same box.
   return (
-    <>
-      <PrayerTimeMarker name="Fajr" time={prayers.Fajr} />
-      <PrayerTimeMarker name="Dhuhr" time={prayers.Dhuhr} />
-      <PrayerTimeMarker name="Asr" time={prayers.Asr} />
-      <PrayerTimeMarker name="Maghrib" time={prayers.Maghrib} />
-      <PrayerTimeMarker name="Isha" time={prayers.Isha} />
-    </>
+    <div className="absolute inset-0 pointer-events-none">
+      {markers.map(([name, time]) => (
+        <PrayerTimeMarker key={name} name={name} time={time} />
+      ))}
+    </div>
   );
 }

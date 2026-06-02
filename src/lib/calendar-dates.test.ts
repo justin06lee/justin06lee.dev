@@ -263,23 +263,23 @@ describe("epochToLocalInput / localInputToEpoch", () => {
 });
 
 describe("overlapIntensityClass", () => {
-  it("returns the lowest bucket for 0 minutes", () => {
+  it("returns the lowest bucket for a 0 ratio", () => {
     expect(overlapIntensityClass(0, "year")).toBe("bg-white/[0.04]");
     expect(overlapIntensityClass(0, "month")).toBe("");
   });
-  it("scales monotonically with minutes", () => {
+  it("scales monotonically with the fill ratio", () => {
     const buckets = [
       overlapIntensityClass(0, "year"),
-      overlapIntensityClass(20, "year"),
-      overlapIntensityClass(60, "year"),
-      overlapIntensityClass(150, "year"),
-      overlapIntensityClass(240, "year"),
+      overlapIntensityClass(0.1, "year"),
+      overlapIntensityClass(0.35, "year"),
+      overlapIntensityClass(0.7, "year"),
+      overlapIntensityClass(1, "year"),
     ];
     // Each bucket should be different (assuming the scale is monotonic).
     expect(new Set(buckets).size).toBe(5);
   });
-  it("clamps high values into the top bucket", () => {
-    expect(overlapIntensityClass(10_000, "year")).toBe("bg-white/85");
-    expect(overlapIntensityClass(10_000, "month")).toBe("bg-white/[0.18]");
+  it("puts a fully followed plan (ratio 1) in the top bucket", () => {
+    expect(overlapIntensityClass(1, "year")).toBe("bg-white/85");
+    expect(overlapIntensityClass(1, "month")).toBe("bg-white/[0.18]");
   });
 });

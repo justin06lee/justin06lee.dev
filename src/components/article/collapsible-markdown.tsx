@@ -29,7 +29,7 @@ export function CollapsibleMarkdown({
         <MarkdownRenderer content={intro} imageBaseUrl={imageBaseUrl} />
       ) : null}
       {sections.map((section) => (
-        <details key={section.id} className="group">
+        <details key={section.id} className="group" open>
           <summary className="flex cursor-pointer list-none items-center gap-3 py-1.5 [&::-webkit-details-marker]:hidden">
             <ChevronRight
               className="size-4 shrink-0 text-white/40 transition-transform group-hover:text-white/70 group-open:rotate-90"

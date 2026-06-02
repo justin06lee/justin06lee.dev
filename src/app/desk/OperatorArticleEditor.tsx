@@ -15,9 +15,9 @@ import { parseArticleDraft } from "@/lib/article-draft";
 import { routeForPath } from "@/lib/github";
 import type { OperatorImageAsset } from "@/lib/operator-content";
 import { getThemeImageVariant } from "@/lib/theme-images";
-import { CollapsibleMarkdown } from "@/components/article/collapsible-markdown";
 import { useTheme } from "next-themes";
 import { OperatorDrawingWindow } from "./OperatorDrawingWindow";
+import { SyncedPreview, type SyncedPreviewHandle } from "./SyncedPreview";
 import {
   deleteImageAction,
   saveArticleAction,
@@ -271,6 +271,25 @@ function moveToWordEnd(text: string, index: number): number {
   return cursor;
 }
 
+// textarea metrics for line-sync: `text-sm leading-6` => 24px line box, `py-4`
+// => 16px top padding. EDITOR_ANCHOR keeps the synced line just below the top.
+const EDITOR_LINE_HEIGHT = 24;
+const EDITOR_PAD_TOP = 16;
+const EDITOR_ANCHOR = 24;
+
+// byte offset where a 1-based line begins, for moving the textarea caret
+function lineStartOffset(text: string, line: number): number {
+  if (line <= 1) return 0;
+  let seen = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === "\n") {
+      seen += 1;
+      if (seen === line - 1) return i + 1;
+    }
+  }
+  return text.length;
+}
+
 export function OperatorArticleEditor({
   articlePath,
   initialAssets,
@@ -310,6 +329,10 @@ export function OperatorArticleEditor({
   const formRef = useRef<HTMLFormElement>(null);
   const preferredColumnRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previewApiRef = useRef<SyncedPreviewHandle>(null);
+  // 1-based raw (textarea) line currently highlighted on both panes
+  const [syncLine, setSyncLine] = useState<number | null>(null);
+  const [editorScrollTop, setEditorScrollTop] = useState(0);
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
   const articleName = articlePath[articlePath.length - 1] ?? "Untitled";
@@ -321,6 +344,49 @@ export function OperatorArticleEditor({
   const currentSha = state?.sha ?? initialSha ?? "";
   const previewHref = `/desk/${articlePath.join("/")}`;
   const publicHref = routeForPath(articlePath);
+
+  // Preview line numbers are relative to the parsed body, the editor's are
+  // relative to the full draft. This is the count of raw lines (title +
+  // metadata + blanks) before the body starts, used to convert between them.
+  const bodyOffset = useMemo(() => {
+    if (!parsed.content) return 0;
+    const index = raw.indexOf(parsed.content);
+    if (index < 0) return 0;
+    return raw.slice(0, index).split("\n").length - 1;
+  }, [raw, parsed.content]);
+
+  function scrollEditorToLine(rawLine: number) {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const top = EDITOR_PAD_TOP + (rawLine - 1) * EDITOR_LINE_HEIGHT;
+    textarea.scrollTop = Math.max(0, top - EDITOR_ANCHOR);
+  }
+
+  // editor -> preview: highlight the caret's line and align the preview block
+  function syncFromEditor() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const rawLine = raw.slice(0, textarea.selectionStart).split("\n").length;
+    setSyncLine(rawLine);
+    scrollEditorToLine(rawLine);
+    const contentLine = rawLine - bodyOffset;
+    if (contentLine >= 1) {
+      previewApiRef.current?.scrollToLine(contentLine);
+    }
+  }
+
+  // preview -> editor: move the caret to the matching line and align the editor
+  function handlePreviewSelectLine(contentLine: number) {
+    const rawLine = contentLine + bodyOffset;
+    setSyncLine(rawLine);
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const offset = lineStartOffset(raw, rawLine);
+      textarea.focus();
+      textarea.setSelectionRange(offset, offset);
+    }
+    scrollEditorToLine(rawLine);
+  }
 
   useEffect(() => {
     function handleDocumentPointerDown(event: PointerEvent) {
@@ -951,8 +1017,21 @@ export function OperatorArticleEditor({
           <div className="grid min-h-[70vh] gap-0 xl:grid-cols-2 xl:items-start">
             {mode !== "preview" ? (
               <div
-                className={`min-h-0 ${mode === "split" ? "border-r border-white/10" : ""}`}
+                className={`relative min-h-0 overflow-hidden ${mode === "split" ? "border-r border-white/10" : ""}`}
               >
+                {syncLine != null ? (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute left-0 right-0 z-10 bg-white/10"
+                    style={{
+                      top:
+                        EDITOR_PAD_TOP +
+                        (syncLine - 1) * EDITOR_LINE_HEIGHT -
+                        editorScrollTop,
+                      height: EDITOR_LINE_HEIGHT,
+                    }}
+                  />
+                ) : null}
                 <textarea
                   ref={textareaRef}
                   name="raw"
@@ -960,7 +1039,13 @@ export function OperatorArticleEditor({
                   onChange={(event) => setRaw(event.target.value)}
                   onFocus={syncNormalCursorPosition}
                   onKeyDown={handleEditorKeyDown}
-                  onMouseUp={syncNormalCursorPosition}
+                  onMouseUp={() => {
+                    syncNormalCursorPosition();
+                    syncFromEditor();
+                  }}
+                  onScroll={(event) =>
+                    setEditorScrollTop(event.currentTarget.scrollTop)
+                  }
                   onDragOver={(event) => {
                     if (event.dataTransfer.types.includes("Files")) {
                       event.preventDefault();
@@ -975,25 +1060,14 @@ export function OperatorArticleEditor({
             ) : null}
 
             {mode !== "edit" ? (
-              <div className="min-h-0 bg-black">
-                <div className="border-b border-white/10 bg-black px-4 py-3 text-xs font-medium text-white/70">
-                  live preview
-                </div>
-                <div className="px-4 py-6 lg:px-8">
-                  <h1 className="mb-3 text-4xl font-semibold leading-tight tracking-tight text-white">
-                    {parsed.title || articleName}
-                  </h1>
-                  {parsed.prerequisites.length > 0 ? (
-                    <p className="mb-8 text-sm leading-6 text-white/60">
-                      Prerequisites: {parsed.prerequisites.join(", ")}
-                    </p>
-                  ) : null}
-                  <CollapsibleMarkdown
-                    content={parsed.content}
-                    imageBaseUrl={previewBaseUrl}
-                  />
-                </div>
-              </div>
+              <SyncedPreview
+                ref={previewApiRef}
+                title={parsed.title || articleName}
+                prerequisites={parsed.prerequisites}
+                content={parsed.content}
+                imageBaseUrl={previewBaseUrl}
+                onSelectLine={handlePreviewSelectLine}
+              />
             ) : null}
           </div>
         </div>

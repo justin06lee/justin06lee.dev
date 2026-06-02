@@ -677,7 +677,9 @@ export async function loadDayPageData(date: string, yesterday: string): Promise<
 }
 
 /**
- * Returns { "YYYY-MM-DD": overlapMinutes } across the given inclusive date range.
+ * Returns { "YYYY-MM-DD": fillRatio } across the given inclusive date range,
+ * where fillRatio in (0, 1] is fulfilled overlap minutes divided by
+ * min(8h, total planned minutes that day) — see the loop below.
  *
  * Each plan has one "parent" candidate (its own interval + category) and, if
  * it's uncertain, one extra candidate per alternative (alt's interval +
@@ -788,12 +790,19 @@ export async function getOverlapHeatmapForRange(
   }
 
   const FULL_DAY: [number, number][] = [[0, 1440]];
+  // Heatmap fills relative to the day's own plan, not an absolute clock: a fully
+  // followed light day should light up as much as a fully followed heavy one.
+  // Denominator = min(8h, total planned minutes); 8h caps the "full" threshold so
+  // marathon plans don't require an unreachable amount of follow-through.
+  const FULL_TARGET_MIN = 8 * 60;
   const out: Record<string, number> = {};
   for (const [date, plans] of plansByDate) {
     const dayActuals = actualsByDate.get(date);
     if (!dayActuals || dayActuals.length === 0) continue;
     let total = 0;
+    let plannedMinutes = 0;
     for (const plan of plans) {
+      plannedMinutes += plan.interval[1] - plan.interval[0];
       // Collect fulfilled sub-intervals across the parent + alternatives. Each
       // matching actual gets clipped to its candidate's interval before being
       // unioned, so a candidate at 18:00–19:00 fulfilled by an actual that
@@ -830,7 +839,10 @@ export async function getOverlapHeatmapForRange(
       // normalize step — saves us exporting normalizeIntervals just for this.
       total += intervalIntersectionMinutes(fulfilled, FULL_DAY);
     }
-    if (total > 0) out[date] = total;
+    if (total > 0 && plannedMinutes > 0) {
+      const denom = Math.min(FULL_TARGET_MIN, plannedMinutes);
+      out[date] = Math.min(1, total / denom);
+    }
   }
   return out;
 }

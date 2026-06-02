@@ -223,20 +223,22 @@ export function localInputToEpoch(s: string, timezone: string): number {
   return guess;
 }
 
-/** Heatmap intensity scale based on plan/actual overlap minutes per day.
+/** Heatmap intensity scale based on how fully a day's plan was followed.
+ *  Input is a fill ratio in [0, 1] (fulfilled overlap / min(8h, planned)),
+ *  not raw minutes, so light and heavy days are graded on the same curve.
  *  Exported so legends/swatches stay in sync with cell rendering. */
 export const OVERLAP_INTENSITY_CLASSES = {
-  // 0 / ≤30 / ≤90 / ≤180 / >180 minutes
+  // 0 / <25% / <50% / <85% / ≥85% of the day's plan followed
   year: ["bg-white/[0.04]", "bg-white/15", "bg-white/30", "bg-white/55", "bg-white/85"],
   month: ["", "bg-white/[0.06]", "bg-white/[0.10]", "bg-white/[0.14]", "bg-white/[0.18]"],
 } as const;
 
-export function overlapIntensityClass(minutes: number, scale: "year" | "month"): string {
+export function overlapIntensityClass(ratio: number, scale: "year" | "month"): string {
   const buckets = OVERLAP_INTENSITY_CLASSES[scale];
-  if (minutes <= 0) return buckets[0];
-  if (minutes <= 30) return buckets[1];
-  if (minutes <= 90) return buckets[2];
-  if (minutes <= 180) return buckets[3];
+  if (ratio <= 0) return buckets[0];
+  if (ratio < 0.25) return buckets[1];
+  if (ratio < 0.5) return buckets[2];
+  if (ratio < 0.85) return buckets[3];
   return buckets[4];
 }
 

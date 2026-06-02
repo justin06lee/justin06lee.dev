@@ -21,13 +21,9 @@ type Props = {
   today: string;
 };
 
-function fmtMinutes(n: number): string {
-  if (n <= 0) return "0m";
-  const h = Math.floor(n / 60);
-  const m = n % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
+// heatmap value is a 0..1 fill ratio (plan followed out of min(8h, planned))
+function fmtFillRatio(ratio: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}% on plan`;
 }
 
 function MonthGrid({ year, month, heatmap, today }: { year: number; month: number; heatmap: Record<string, number>; today: string }) {
@@ -50,14 +46,14 @@ function MonthGrid({ year, month, heatmap, today }: { year: number; month: numbe
       <div className="grid grid-cols-7 gap-[3px]">
         {cells.map((date, i) => {
           if (!date) return <div key={i} className="aspect-square" />;
-          const minutes = heatmap[date] ?? 0;
+          const ratio = heatmap[date] ?? 0;
           const isToday = date === today;
           return (
             <Link
               key={i}
               href={`/calendar/day/${date}`}
-              title={`${date} — ${fmtMinutes(minutes)} on plan${isToday ? " (today)" : ""}`}
-              className={`aspect-square ${overlapIntensityClass(minutes, "year")} ${isToday ? "ring-1 ring-white" : "hover:ring-1 hover:ring-white/60"} transition`}
+              title={`${date} — ${fmtFillRatio(ratio)}${isToday ? " (today)" : ""}`}
+              className={`aspect-square ${overlapIntensityClass(ratio, "year")} ${isToday ? "ring-1 ring-white" : "hover:ring-1 hover:ring-white/60"} transition`}
             />
           );
         })}
