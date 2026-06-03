@@ -1,21 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// Self-hosted, version-pinned via the `geist` package instead of next/font/google.
+// next/font/google re-fetches the font from Google at build time, so an upstream
+// metrics change silently shifts the monospace glyph grid and breaks every ascii
+// render (donut aspect, art alignment) on any new build. Pinning the font in the
+// lockfile makes builds reproducible. Exposes --font-geist-sans / --font-geist-mono.
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DialogProvider } from "@/components/Dialog";
 import { Analytics } from "@vercel/analytics/next";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://justin06lee.dev";
-
-const geistSans = Geist({
-	variable: "--font-geist-sans",
-	subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-	variable: "--font-geist-mono",
-	subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
 	metadataBase: new URL(SITE_URL),
@@ -73,7 +69,7 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning className="bg-black">
-			<body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}>
+			<body className={`${GeistSans.variable} ${GeistMono.variable} antialiased bg-black text-white`}>
 				<ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
 					<DialogProvider>
 						{children}
