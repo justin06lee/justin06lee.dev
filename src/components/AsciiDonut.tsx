@@ -128,6 +128,8 @@ export default function AsciiSpinningDonut({
 		const zbuf = new Float32Array(bufSize);
 		const outBuf = new Uint8Array(bufSize); // index into chars
 		const spaceIdx = 0; // chars[0] is space
+		const Ky = K * yScale; // fold yScale into the y-projection scale once
+		const cmax = charsLen - 1; // top luminance-ramp index
 
 		// Pre-compute trig tables for u and v
 		const cosU = new Float32Array(uSteps);
@@ -163,54 +165,49 @@ export default function AsciiSpinningDonut({
 			const cosAx = Math.cos(ax), sinAx = Math.sin(ax);
 			const cosAz = Math.cos(az), sinAz = Math.sin(az);
 
+			// Expand the X-then-Z rotation symbolically and hoist every term that
+			// doesn't depend on v out of the inner loop. Each projected coordinate
+			// reduces to  A + B*cv + C*sv  (A,B per-u; C constant per frame), and the
+			// surface normal never needs to be materialised: luminance collapses to
+			// cv*lumC + sv*lumS. See /tmp verify — identical to the full rotation to 1e-15.
+			const cosAxSinAz = cosAx * sinAz;
+			const cosAxCosAz = cosAx * cosAz;
+			const Cpx = r * sinAx * sinAz;   // sv coefficient of px2 (const per frame)
+			const Cpy = -r * sinAx * cosAz;  // sv coefficient of py2
+			const Cz = r * cosAx;            // sv coefficient of z
+			const lumS = sinAx * sinAz * Lx - sinAx * cosAz * Ly + cosAx * Lz; // sv coefficient of luminance
+
 			for (let ui = 0; ui < uSteps; ui++) {
 				const cu = cosU[ui], su = sinU[ui];
+
+				// Per-u coefficients (amortised over the whole v ring).
+				const k1 = cu * cosAz - su * cosAxSinAz;
+				const k2 = cu * sinAz + su * cosAxCosAz;
+				const ss = su * sinAx;
+				const Apx = R * k1, Bpx = r * k1;
+				const Apy = R * k2, Bpy = r * k2;
+				const Az = R * ss + D, Bz = r * ss;
+				const lumC = k1 * Lx + k2 * Ly + ss * Lz; // cv coefficient of luminance
 
 				for (let vi = 0; vi < vSteps; vi++) {
 					const cv = cosV[vi], sv = sinV[vi];
 
-					// Torus point
-					const Rcv = R + r * cv;
-					const px0 = Rcv * cu;
-					const py0 = Rcv * su;
-					const pz0 = r * sv;
-
-					// Normal
-					const nx0 = cv * cu;
-					const ny0 = cv * su;
-					const nz0 = sv;
-
-					// Rotate X then Z (inlined)
-					const px1 = px0;
-					const py1 = py0 * cosAx - pz0 * sinAx;
-					const pz1 = py0 * sinAx + pz0 * cosAx;
-					const px2 = px1 * cosAz - py1 * sinAz;
-					const py2 = px1 * sinAz + py1 * cosAz;
-					const pz2 = pz1;
-
-					const nx1 = nx0;
-					const ny1 = ny0 * cosAx - nz0 * sinAx;
-					const nz1 = ny0 * sinAx + nz0 * cosAx;
-					const nx2 = nx1 * cosAz - ny1 * sinAz;
-					const ny2 = nx1 * sinAz + ny1 * cosAz;
-					const nz2 = nz1;
-
-					const z = pz2 + D;
+					// Depth first so back/behind samples bail before any projection work.
+					const z = Az + Bz * cv + Cz * sv;
 					if (z <= 0) continue;
 					const ooz = 1 / z;
 
-					const xProj = (cx + (K * px2) * ooz) | 0;
-					const yProj = (cy - (K * py2) * ooz * yScale) | 0;
+					const px2 = Apx + Bpx * cv + Cpx * sv;
+					const py2 = Apy + Bpy * cv + Cpy * sv;
+					const xProj = (cx + K * px2 * ooz) | 0;
+					const yProj = (cy - Ky * py2 * ooz) | 0;
 
 					if (xProj >= 0 && xProj < width && yProj >= 0 && yProj < height) {
 						const idx = xProj + yProj * width;
 						if (ooz > zbuf[idx]) {
 							zbuf[idx] = ooz;
-
-							// n is already unit length (built unit; orthonormal rotations preserve it),
-							// so skip the per-pixel hypot + 3 divides.
-							const lum = nx2 * Lx + ny2 * Ly + nz2 * Lz;
-							if (lum > 0) outBuf[idx] = Math.min(charsLen - 1, (lum * (charsLen - 1)) | 0);
+							const lum = cv * lumC + sv * lumS;
+							if (lum > 0) outBuf[idx] = Math.min(cmax, (lum * cmax) | 0);
 						}
 					}
 				}
