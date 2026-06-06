@@ -24,8 +24,8 @@ export default function AsciiSpinningDonut({
 	r = 0.25,
 	K = 120,
 	D = 4,
-	du = 0.035,
-	dv = 0.01,
+	du,
+	dv,
 	luminanceChars = " ,-~:;=!*#$@",
 	lightDirection = [0, 1, -1],
 	speed = 0.75,
@@ -77,9 +77,37 @@ export default function AsciiSpinningDonut({
 		const memory = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8;
 		const isLowEnd = cores <= 4 || memory <= 4;
 
-		// Adaptive step sizes — coarser on low-end
-		const adaptiveDu = isLowEnd ? Math.max(du, 0.07) : du;
-		const adaptiveDv = isLowEnd ? Math.max(dv, 0.02) : dv;
+		// Sample the torus densely enough that adjacent samples land <1 char apart
+		// in screen space, else a large donut shows gaps. Derive step counts from the
+		// projected circumference of each ring at its nearest (most-magnified) depth.
+		// Fixed du/dv don't scale with size: they under-sample u (gaps grow with the
+		// donut) while massively over-sampling v (wasted frames). Geometry-driven
+		// counts fill the surface and cut total samples at the same time.
+		const TWO_PI = Math.PI * 2;
+		const oozNear = 1 / Math.max(D - r, 0.0001); // closest point projects largest
+		const oversample = 1.5; // >1 guarantees sub-char spacing along each ring
+		let uSteps = Math.ceil(TWO_PI * (R + r) * K * oozNear * oversample);
+		let vSteps = Math.ceil(TWO_PI * r * K * oozNear * oversample);
+		// Explicit du/dv still pin a fixed density when a caller asks for one.
+		if (du && du > 0) uSteps = Math.ceil(TWO_PI / du);
+		if (dv && dv > 0) vSteps = Math.ceil(TWO_PI / dv);
+		// Floor avoids degenerate tiny rings; cap bounds worst-case cost.
+		uSteps = Math.min(2048, Math.max(48, uSteps));
+		vSteps = Math.min(2048, Math.max(48, vSteps));
+		// Bound total per-frame work so a huge donut can't tank the framerate.
+		// Scale both dims together to keep the fill ratio even when over budget.
+		const MAX_SAMPLES = 96000;
+		if (uSteps * vSteps > MAX_SAMPLES) {
+			const k = Math.sqrt(MAX_SAMPLES / (uSteps * vSteps));
+			uSteps = Math.max(48, Math.ceil(uSteps * k));
+			vSteps = Math.max(48, Math.ceil(vSteps * k));
+		}
+		if (isLowEnd) {
+			uSteps = Math.max(48, Math.ceil(uSteps * 0.6));
+			vSteps = Math.max(48, Math.ceil(vSteps * 0.6));
+		}
+		const adu = TWO_PI / uSteps;
+		const adv = TWO_PI / vSteps;
 
 		// Throttle to ~30fps on low-end, ~60fps otherwise
 		const frameBudget = isLowEnd ? 33 : 0;
@@ -102,20 +130,18 @@ export default function AsciiSpinningDonut({
 		const spaceIdx = 0; // chars[0] is space
 
 		// Pre-compute trig tables for u and v
-		const uSteps = Math.ceil((Math.PI * 2) / adaptiveDu);
-		const vSteps = Math.ceil((Math.PI * 2) / adaptiveDv);
 		const cosU = new Float32Array(uSteps);
 		const sinU = new Float32Array(uSteps);
 		const cosV = new Float32Array(vSteps);
 		const sinV = new Float32Array(vSteps);
 
 		for (let i = 0; i < uSteps; i++) {
-			const u = i * adaptiveDu;
+			const u = i * adu;
 			cosU[i] = Math.cos(u);
 			sinU[i] = Math.sin(u);
 		}
 		for (let i = 0; i < vSteps; i++) {
-			const v = i * adaptiveDv;
+			const v = i * adv;
 			cosV[i] = Math.cos(v);
 			sinV[i] = Math.sin(v);
 		}
@@ -181,10 +207,10 @@ export default function AsciiSpinningDonut({
 						if (ooz > zbuf[idx]) {
 							zbuf[idx] = ooz;
 
-							// Normalize n inline
-							const nMag = Math.hypot(nx2, ny2, nz2) || 1;
-							const lum = Math.max(0, (nx2 / nMag) * Lx + (ny2 / nMag) * Ly + (nz2 / nMag) * Lz);
-							outBuf[idx] = Math.min(charsLen - 1, (lum * (charsLen - 1)) | 0);
+							// n is already unit length (built unit; orthonormal rotations preserve it),
+							// so skip the per-pixel hypot + 3 divides.
+							const lum = nx2 * Lx + ny2 * Ly + nz2 * Lz;
+							if (lum > 0) outBuf[idx] = Math.min(charsLen - 1, (lum * (charsLen - 1)) | 0);
 						}
 					}
 				}
