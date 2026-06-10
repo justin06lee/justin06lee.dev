@@ -135,12 +135,25 @@ async function putContent({
   });
 
   if (!response.ok) {
+    // 422 means the supplied sha is stale — someone else wrote to this path
+    // since the editor last loaded it. Surface a distinct, actionable message
+    // instead of the generic "check your token" error.
+    if (response.status === 422) {
+      console.error("[operator-content] GitHub write failed with status 422 (sha mismatch)");
+      throw new Error("this article was modified by someone else. refresh and try again.");
+    }
     reportGithubError("write", response.status);
   }
 
   const data = await response.json();
+  const newSha = data.content?.sha as string | undefined;
+  // A 2xx without a content sha would silently corrupt editor state and break
+  // subsequent sha-dependent saves, so fail loudly here.
+  if (!newSha) {
+    throw new Error("github write succeeded but returned no file sha.");
+  }
   return {
-    sha: data.content?.sha as string | undefined,
+    sha: newSha,
   };
 }
 
@@ -362,7 +375,10 @@ export async function uploadOperatorImageByPath({
     assertSafeSegment(segment);
   }
 
-  if (!ALLOWED_UPLOAD_TYPES.test(mimeType)) {
+  // The browser-supplied mimeType can legitimately be empty (some OS/extension
+  // combos), so don't reject on that alone — the byte-sniffing below is the
+  // real gate. Only reject here when a type is present AND not an allowed image.
+  if (mimeType && !ALLOWED_UPLOAD_TYPES.test(mimeType)) {
     throw new Error("Unsupported image format.");
   }
 
@@ -377,8 +393,13 @@ export async function uploadOperatorImageByPath({
     throw new Error("File exceeds the 10 MB size limit.");
   }
 
+  // detectImageMime only returns allowed image types, so its result is the
+  // authoritative format. When the browser did declare a type, it must agree.
   const detected = detectImageMime(buffer);
-  if (!detected || detected !== mimeType) {
+  if (!detected) {
+    throw new Error("Unsupported image format.");
+  }
+  if (mimeType && detected !== mimeType) {
     throw new Error("Image content does not match its declared type.");
   }
 

@@ -773,7 +773,13 @@ export async function getOverlapHeatmapForRange(
   }[]) {
     const startsOn = row.date;
     const endsOn = epochToDateInTz(row.end_at ?? now, timezone);
-    const datesToCheck = startsOn === endsOn ? [startsOn] : [startsOn, endsOn];
+    // Walk every day the actual touches, not just its endpoints: an actual
+    // spanning 3+ days must populate intermediate days too, or plans on those
+    // days never match and their heatmap fill is wrongly zero.
+    const datesToCheck: string[] = [];
+    for (let current = startsOn; current <= endsOn; current = addDays(current, 1)) {
+      datesToCheck.push(current);
+    }
     const titleLower = row.title ? row.title.trim().toLowerCase() : null;
     for (const d of datesToCheck) {
       if (d < from || d > to) continue;

@@ -29,6 +29,9 @@ export default function CatPage() {
     const lastEdgeRef = useRef<"left" | "right" | null>(null);
     const pendingPatsRef = useRef(0);
     const flushingRef = useRef(false);
+    // flush() runs on unmount to drain pending pats; guard its post-await setState
+    // so we don't update state on an unmounted component.
+    const mountedRef = useRef(true);
     const [pats, setPats] = useState(0);
     const [displayPats, setDisplayPats] = useState(0);
     const [ready, setReady] = useState(false);
@@ -69,7 +72,7 @@ export default function CatPage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (typeof data.count === "number") {
+                if (mountedRef.current && typeof data.count === "number") {
                     setPats((p) => Math.max(p, data.count));
                 }
             } else {
@@ -117,6 +120,7 @@ export default function CatPage() {
             window.clearInterval(poll);
             window.clearInterval(flushTimer);
             window.removeEventListener("beforeunload", onUnload);
+            mountedRef.current = false;
             flush();
         };
     }, []);

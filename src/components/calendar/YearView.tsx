@@ -45,12 +45,14 @@ function MonthGrid({ year, month, heatmap, today }: { year: number; month: numbe
       </div>
       <div className="grid grid-cols-7 gap-[3px]">
         {cells.map((date, i) => {
-          if (!date) return <div key={i} className="aspect-square" />;
+          // keep keys tied to the date (not the index) so padding nulls don't make
+          // react reuse a day link under a different href as the grid shifts
+          if (!date) return <div key={`empty-${i}`} className="aspect-square" />;
           const ratio = heatmap[date] ?? 0;
           const isToday = date === today;
           return (
             <Link
-              key={i}
+              key={date}
               href={`/calendar/day/${date}`}
               title={`${date} — ${fmtFillRatio(ratio)}${isToday ? " (today)" : ""}`}
               className={`aspect-square ${overlapIntensityClass(ratio, "year")} ${isToday ? "ring-1 ring-white" : "hover:ring-1 hover:ring-white/60"} transition`}

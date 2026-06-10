@@ -104,6 +104,7 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -127,7 +128,7 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
     });
     if (!ok) return;
     setSubmitting(true);
-    const res = await fetch(`/api/calendar/tasks/${task.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/calendar/tasks/${task.id}`, { method: "DELETE", credentials: "include" });
     setSubmitting(false);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

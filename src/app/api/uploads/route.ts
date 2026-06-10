@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminWithMutationRate } from "@/lib/auth";
 
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -26,7 +26,8 @@ function detectMime(buf: Buffer): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdmin(req);
+  // state-changing write: enforce per-IP mutation throttle, matching other admin write endpoints
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   await initDb();

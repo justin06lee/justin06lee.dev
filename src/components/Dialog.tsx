@@ -62,7 +62,11 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!state) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close(false);
+      // stop Escape from also reaching globally-listening components (e.g. an open Select) beneath the modal
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close(false);
+      }
       if (e.key === "Enter") close(true);
     }
     document.addEventListener("keydown", onKey);

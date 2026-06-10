@@ -43,13 +43,21 @@ export default function Select<T extends string | number>({
       }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        // Own Escape while the dropdown is open: a capture-phase listener runs
+        // before bubble-phase document listeners (e.g. a surrounding Dialog's),
+        // and stopImmediatePropagation halts the event there, so one press
+        // closes only this dropdown rather than also closing the modal.
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        setOpen(false);
+      }
     }
     document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
 

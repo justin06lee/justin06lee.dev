@@ -24,6 +24,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "lat and lon required" }, { status: 400 });
   }
 
+  // reject out-of-range coordinates before hitting nominatim; the format regex
+  // above alone would let through values like lat=181 or lon=-200.
+  const latNum = Number(lat);
+  const lonNum = Number(lon);
+  if (latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
+    return NextResponse.json({ error: "lat and lon must be valid coordinates" }, { status: 400 });
+  }
+
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en&zoom=10`;
   try {
     const res = await fetch(url, {

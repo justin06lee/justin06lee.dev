@@ -14,11 +14,20 @@ function slugBase(text: string): string {
     .replace(/\s+/g, "-");
 }
 
-function uniqueSlug(text: string, counts: Map<string, number>): string {
+// disambiguate against every id already emitted, not just the base slug's
+// count: a title literally named "section-1" would otherwise collide with the
+// suffix generated for a duplicate "section", silently overwriting its body.
+// Numbering follows the conventional base, base-1, base-2 sequence.
+function uniqueSlug(text: string, usedIds: Set<string>): string {
   const base = slugBase(text) || "section";
-  const count = counts.get(base) ?? 0;
-  counts.set(base, count + 1);
-  return count === 0 ? base : `${base}-${count + 1}`;
+  let id = base;
+  let counter = 0;
+  while (usedIds.has(id)) {
+    counter += 1;
+    id = `${base}-${counter}`;
+  }
+  usedIds.add(id);
+  return id;
 }
 
 export function parseArticleSections(content: string): {
@@ -28,7 +37,7 @@ export function parseArticleSections(content: string): {
   const introLines: string[] = [];
   const sectionLines = new Map<string, string[]>();
   const sections: ArticleSection[] = [];
-  const slugCounts = new Map<string, number>();
+  const usedIds = new Set<string>();
 
   let currentSection: ArticleSection | null = null;
 
@@ -39,7 +48,7 @@ export function parseArticleSections(content: string): {
       const title = match[1].trim();
       currentSection = {
         body: "",
-        id: uniqueSlug(title, slugCounts),
+        id: uniqueSlug(title, usedIds),
         title,
       };
       sections.push(currentSection);

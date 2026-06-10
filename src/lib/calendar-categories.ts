@@ -66,10 +66,17 @@ export async function createCategory(input: NewCategory): Promise<{ ok: true; ca
   if (dup) return { ok: false, reason: "duplicate" };
   const id = randomUUID();
   const now = Date.now();
+  // position is a small orderable integer (ORDER BY position ASC), not a
+  // timestamp — append after the current max so new categories sort last.
+  const posRes = await db.execute({
+    sql: "SELECT COALESCE(MAX(position), -1) + 1 AS next FROM calendar_categories",
+    args: [],
+  });
+  const position = Number((posRes.rows[0] as unknown as { next: number }).next ?? 0);
   await db.execute({
     sql: `INSERT INTO calendar_categories (id, name, color, is_system, archived, position, created_at, updated_at)
           VALUES (?, ?, ?, 0, 0, ?, ?, ?)`,
-    args: [id, trimmed, input.color, now, now, now],
+    args: [id, trimmed, input.color, position, now, now],
   });
   const created = await getCategoryById(id);
   if (!created) throw new Error("Failed to create category");

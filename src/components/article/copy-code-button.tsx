@@ -50,7 +50,6 @@ export function CopyCodeButton({
     <button
       type="button"
       onClick={handleCopy}
-      tabIndex={status === "idle" ? -1 : 0}
       className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 transition text-white/40 hover:text-white focus:text-white focus:outline-none"
       aria-label={label}
       title={label}

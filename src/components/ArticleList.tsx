@@ -47,7 +47,12 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
           if (!cancelled) setStillSrc(c.toDataURL("image/png"));
           URL.revokeObjectURL(url);
         };
+        // Without an error path a failed decode would leak the blob url forever.
+        img.onerror = () => URL.revokeObjectURL(url);
         img.src = url;
+      })
+      .catch(() => {
+        // Network/blob failure: nothing was allocated past this point, so just swallow.
       });
     return () => {
       cancelled = true;
@@ -69,6 +74,13 @@ function ArticleCard({ article }: { article: ArticlePreview }) {
       const img = new Image();
       img.onload = () => {
         if (wantsHover.current) setGifSrc(url);
+      };
+      // Drop the url on decode failure so the blob isn't pinned indefinitely.
+      img.onerror = () => {
+        if (gifUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          gifUrlRef.current = null;
+        }
       };
       img.src = url;
     }

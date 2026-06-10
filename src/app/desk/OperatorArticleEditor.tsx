@@ -315,7 +315,10 @@ export function OperatorArticleEditor({
   const [drawingWindows, setDrawingWindows] = useState<DrawingWindowState[]>([]);
   const [mode, setMode] = useState<EditorMode>("split");
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [raw, setRaw] = useState(initialRaw);
+  // Normalize CRLF from the source file to LF up front so the textarea, preview
+  // sync, and save payload all share one line-ending convention (GitHub can
+  // serve \r\n). Keeps line-offset math consistent across the whole session.
+  const [raw, setRaw] = useState(() => initialRaw.replace(/\r\n/g, "\n"));
   const [savingDrawingWindowId, setSavingDrawingWindowId] = useState<number | null>(
     null
   );
@@ -350,9 +353,13 @@ export function OperatorArticleEditor({
   // metadata + blanks) before the body starts, used to convert between them.
   const bodyOffset = useMemo(() => {
     if (!parsed.content) return 0;
-    const index = raw.indexOf(parsed.content);
+    // parseArticleDraft re-joins lines with "\n", so on CRLF input parsed.content
+    // never matches raw verbatim. Normalize to LF first so indexOf can find it,
+    // which keeps editor<->preview line sync working for Windows line endings.
+    const normalized = raw.replace(/\r\n/g, "\n");
+    const index = normalized.indexOf(parsed.content);
     if (index < 0) return 0;
-    return raw.slice(0, index).split("\n").length - 1;
+    return normalized.slice(0, index).split("\n").length - 1;
   }, [raw, parsed.content]);
 
   function scrollEditorToLine(rawLine: number) {
