@@ -15,14 +15,16 @@ function slugBase(text: string): string {
 }
 
 // disambiguate against every id already emitted, not just the base slug's
-// count: a title literally named "section-2" would otherwise collide with the
+// count: a title literally named "section-1" would otherwise collide with the
 // suffix generated for a duplicate "section", silently overwriting its body.
+// Numbering follows the conventional base, base-1, base-2 sequence.
 function uniqueSlug(text: string, usedIds: Set<string>): string {
   const base = slugBase(text) || "section";
   let id = base;
-  let counter = 1;
+  let counter = 0;
   while (usedIds.has(id)) {
-    id = `${base}-${++counter}`;
+    counter += 1;
+    id = `${base}-${counter}`;
   }
   usedIds.add(id);
   return id;

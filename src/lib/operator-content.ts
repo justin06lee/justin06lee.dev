@@ -375,7 +375,10 @@ export async function uploadOperatorImageByPath({
     assertSafeSegment(segment);
   }
 
-  if (!ALLOWED_UPLOAD_TYPES.test(mimeType)) {
+  // The browser-supplied mimeType can legitimately be empty (some OS/extension
+  // combos), so don't reject on that alone — the byte-sniffing below is the
+  // real gate. Only reject here when a type is present AND not an allowed image.
+  if (mimeType && !ALLOWED_UPLOAD_TYPES.test(mimeType)) {
     throw new Error("Unsupported image format.");
   }
 
@@ -390,8 +393,13 @@ export async function uploadOperatorImageByPath({
     throw new Error("File exceeds the 10 MB size limit.");
   }
 
+  // detectImageMime only returns allowed image types, so its result is the
+  // authoritative format. When the browser did declare a type, it must agree.
   const detected = detectImageMime(buffer);
-  if (!detected || detected !== mimeType) {
+  if (!detected) {
+    throw new Error("Unsupported image format.");
+  }
+  if (mimeType && detected !== mimeType) {
     throw new Error("Image content does not match its declared type.");
   }
 

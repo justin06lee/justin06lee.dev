@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { pathSegmentSlug } from "@/lib/github";
+import { getArticleByPath, pathSegmentSlug, routeForPath } from "@/lib/github";
+import { normalizePrerequisitePath } from "@/lib/article-draft";
 import { requireAdminServer } from "@/lib/auth-server";
 import {
   createOperatorArticleByPath,
@@ -56,6 +57,16 @@ export async function createArticleAction(
 
   try {
     await requireAdminServer();
+    // reject prerequisites that don't resolve to a real article so we never
+    // persist dangling references the reader would hit as broken links.
+    for (const prereq of prerequisites) {
+      const parts = normalizePrerequisitePath(prereq).split("/").filter(Boolean);
+      if (parts.length === 0) continue;
+      const exists = await getArticleByPath(parts, { noCache: true });
+      if (!exists) {
+        return { error: `prerequisite not found: ${prereq}` };
+      }
+    }
     await createOperatorArticleByPath({
       slug,
       content,
@@ -87,9 +98,10 @@ export async function saveArticleAction(
       sha,
     });
 
-    // public article routes cache with revalidate: 3600; drop that stale cache
-    // so navigating from desk to the public page reflects the just-saved content.
+    // public article routes cache with revalidate: 3600; drop the list, the
+    // specific article page, and desk so a save is reflected immediately.
     revalidatePath("/articles");
+    revalidatePath(routeForPath(articlePath));
     revalidatePath("/desk");
 
     return {
@@ -111,7 +123,12 @@ export async function saveDrawingAction(input: {
   name?: string;
 }) {
   await requireAdminServer();
-  return createOperatorDrawingAssetByPath(input);
+  const result = await createOperatorDrawingAssetByPath(input);
+  // the public article page caches for an hour; revalidate it so the newly
+  // created drawing appears without waiting for the cache to expire.
+  revalidatePath(routeForPath(input.articlePath));
+  revalidatePath("/articles");
+  return result;
 }
 
 export async function deleteImageAction(input: {
@@ -123,6 +140,9 @@ export async function deleteImageAction(input: {
 }) {
   await requireAdminServer();
   await deleteOperatorImageAssetByPath(input);
+  // keep the public article page in sync with the removed asset.
+  revalidatePath(routeForPath(input.articlePath));
+  revalidatePath("/articles");
 }
 
 export async function deleteOperatorEntryAction(input: {
@@ -133,5 +153,8 @@ export async function deleteOperatorEntryAction(input: {
 
   if (input.kind === "article") {
     await deleteOperatorArticleByPath(input.pathSegments);
+    // drop the public list and the now-deleted article page from cache.
+    revalidatePath(routeForPath(input.pathSegments));
+    revalidatePath("/articles");
   }
 }

@@ -315,7 +315,10 @@ export function OperatorArticleEditor({
   const [drawingWindows, setDrawingWindows] = useState<DrawingWindowState[]>([]);
   const [mode, setMode] = useState<EditorMode>("split");
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [raw, setRaw] = useState(initialRaw);
+  // Normalize CRLF from the source file to LF up front so the textarea, preview
+  // sync, and save payload all share one line-ending convention (GitHub can
+  // serve \r\n). Keeps line-offset math consistent across the whole session.
+  const [raw, setRaw] = useState(() => initialRaw.replace(/\r\n/g, "\n"));
   const [savingDrawingWindowId, setSavingDrawingWindowId] = useState<number | null>(
     null
   );
