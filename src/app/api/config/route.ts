@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSiteConfig, updateSiteConfig, validatePrayerLocation } from "@/lib/site-config";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWithMutationRate } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   let body: Record<string, unknown>;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, initDb } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWithMutationRate } from "@/lib/auth";
 
 const ALLOWED_CATEGORIES = ["projects", "hobbies", "in-development"] as const;
 type Category = (typeof ALLOWED_CATEGORIES)[number];
@@ -10,7 +10,7 @@ function isCategory(value: unknown): value is Category {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authError = await requireAdmin(req);
+  const authError = await requireAdminWithMutationRate(req);
   if (authError) return authError;
 
   await initDb();

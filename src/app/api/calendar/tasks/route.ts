@@ -59,8 +59,10 @@ export async function POST(req: NextRequest) {
   if (position !== undefined && !isFiniteInt32(position)) {
     return NextResponse.json({ error: "position must be a finite integer" }, { status: 400 });
   }
-  if (categoryId !== undefined && categoryId !== null && !isStringWithin(categoryId, MAX_TITLE_LEN)) {
-    return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
+  // reject empty string: createTask gates the existence check on truthiness
+  // (`if (input.categoryId && ...)`), so "" would skip categoryExists and persist a dangling FK.
+  if (categoryId !== undefined && categoryId !== null && (!isStringWithin(categoryId, MAX_TITLE_LEN) || categoryId.length === 0)) {
+    return NextResponse.json({ error: "categoryId must be a non-empty string or null" }, { status: 400 });
   }
   if (isUncertain !== undefined && typeof isUncertain !== "boolean") {
     return NextResponse.json({ error: "isUncertain must be boolean" }, { status: 400 });

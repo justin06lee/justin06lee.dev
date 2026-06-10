@@ -34,7 +34,9 @@ function coerceNullableString(v: unknown, max: number): string | null | undefine
   if (v === null) return null;
   if (typeof v === "string") {
     if (v.length > max) return undefined; // caller validates and rejects below
-    return v;
+    // Normalize empty string to null so foreign-key existence checks
+    // (categoryExists/planExists) aren't bypassed by a falsy-but-present value.
+    return v.length > 0 ? v : null;
   }
   return undefined;
 }

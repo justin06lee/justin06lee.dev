@@ -26,8 +26,22 @@ export function getClientIp(req: NextRequest): string {
 function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
+  // Pad to equal length so the comparison cost doesn't leak the secret's
+  // length: an early `length !== length` return would let an attacker time
+  // responses to enumerate the password length. timingSafeEqual still requires
+  // equal-length inputs, hence the padding rather than passing raw buffers.
+  const maxLen = Math.max(bufA.length, bufB.length);
+  const padA = Buffer.alloc(maxLen);
+  const padB = Buffer.alloc(maxLen);
+  bufA.copy(padA);
+  bufB.copy(padB);
+  try {
+    // Differing lengths must still compare unequal even though the padded
+    // buffers match in the padding region.
+    return timingSafeEqual(padA, padB) && bufA.length === bufB.length;
+  } catch {
+    return false;
+  }
 }
 
 /* ── Session store (DB-backed, survives cold starts / redeploys) ── */
@@ -90,32 +104,32 @@ export async function checkRateLimit(ip: string): Promise<boolean> {
     args: [lockoutStart],
   });
 
+  // Atomic read-modify-write so concurrent attempts from the same IP can't both
+  // read the same count and clobber each other's increment (which would let an
+  // attacker exceed MAX_ATTEMPTS under load). The CASE order encodes the same
+  // precedence as the prior app-level branches:
+  //   1. Lockout wins: once count > MAX_ATTEMPTS within LOCKOUT_WINDOW, neither
+  //      count nor first_attempt change, so the block persists the full 24h and
+  //      the rolling-window reset can't lift it early.
+  //   2. Otherwise, an expired rolling window (first_attempt < windowStart)
+  //      resets the counter to 1 and re-anchors the window.
+  //   3. Otherwise, increment.
   const result = await db.execute({
-    sql: "SELECT count, first_attempt FROM login_attempts WHERE ip = ?",
-    args: [ip],
+    sql: `INSERT INTO login_attempts (ip, count, first_attempt) VALUES (?, 1, ?)
+          ON CONFLICT(ip) DO UPDATE SET
+            count = CASE
+              WHEN login_attempts.count > ? AND login_attempts.first_attempt >= ? THEN login_attempts.count
+              WHEN login_attempts.first_attempt < ? THEN 1
+              ELSE login_attempts.count + 1 END,
+            first_attempt = CASE
+              WHEN login_attempts.count > ? AND login_attempts.first_attempt >= ? THEN login_attempts.first_attempt
+              WHEN login_attempts.first_attempt < ? THEN ?
+              ELSE login_attempts.first_attempt END
+          RETURNING count`,
+    args: [ip, now, MAX_ATTEMPTS, lockoutStart, windowStart, MAX_ATTEMPTS, lockoutStart, windowStart, now],
   });
-
-  const row = result.rows[0] as unknown as { count: number; first_attempt: number } | undefined;
-
-  // Lockout: once an IP exceeds MAX_ATTEMPTS, block for LOCKOUT_WINDOW regardless of rolling window
-  if (row && row.count > MAX_ATTEMPTS && row.first_attempt >= lockoutStart) {
-    return false;
-  }
-
-  if (!row || row.first_attempt < windowStart) {
-    await db.execute({
-      sql: "INSERT OR REPLACE INTO login_attempts (ip, count, first_attempt) VALUES (?, 1, ?)",
-      args: [ip, now],
-    });
-    return true;
-  }
-
-  const nextCount = row.count + 1;
-  await db.execute({
-    sql: "UPDATE login_attempts SET count = ? WHERE ip = ?",
-    args: [nextCount, ip],
-  });
-  return nextCount <= MAX_ATTEMPTS;
+  const count = Number((result.rows[0] as unknown as { count: number }).count);
+  return count <= MAX_ATTEMPTS;
 }
 
 /* ── API mutation rate limiter (per-IP, sliding 1-minute window) ── */
@@ -140,26 +154,21 @@ export async function checkApiMutationRate(ip: string): Promise<boolean> {
     args: [windowStart],
   });
 
+  // Atomic read-modify-write: a non-atomic SELECT-then-UPDATE lets two
+  // concurrent requests from the same IP both read the same count and both
+  // write count+1, lowering the effective count and letting the limit be
+  // exceeded. A single upsert with RETURNING closes that window. When the
+  // window has expired (first_attempt < windowStart) the counter resets to 1.
   const result = await db.execute({
-    sql: "SELECT count, first_attempt FROM api_mutation_rate WHERE ip = ?",
-    args: [ip],
+    sql: `INSERT INTO api_mutation_rate (ip, count, first_attempt) VALUES (?, 1, ?)
+          ON CONFLICT(ip) DO UPDATE SET
+            count = CASE WHEN api_mutation_rate.first_attempt < ? THEN 1 ELSE api_mutation_rate.count + 1 END,
+            first_attempt = CASE WHEN api_mutation_rate.first_attempt < ? THEN ? ELSE api_mutation_rate.first_attempt END
+          RETURNING count`,
+    args: [ip, now, windowStart, windowStart, now],
   });
-  const row = result.rows[0] as unknown as { count: number; first_attempt: number } | undefined;
-
-  if (!row || row.first_attempt < windowStart) {
-    await db.execute({
-      sql: "INSERT OR REPLACE INTO api_mutation_rate (ip, count, first_attempt) VALUES (?, 1, ?)",
-      args: [ip, now],
-    });
-    return true;
-  }
-
-  const next = row.count + 1;
-  await db.execute({
-    sql: "UPDATE api_mutation_rate SET count = ? WHERE ip = ?",
-    args: [next, ip],
-  });
-  return next <= MUTATION_MAX_PER_WINDOW;
+  const count = Number((result.rows[0] as unknown as { count: number }).count);
+  return count <= MUTATION_MAX_PER_WINDOW;
 }
 
 /* ── Admin verification ── */

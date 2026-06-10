@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { pathSegmentSlug } from "@/lib/github";
 import { requireAdminServer } from "@/lib/auth-server";
@@ -85,6 +86,11 @@ export async function saveArticleAction(
       raw,
       sha,
     });
+
+    // public article routes cache with revalidate: 3600; drop that stale cache
+    // so navigating from desk to the public page reflects the just-saved content.
+    revalidatePath("/articles");
+    revalidatePath("/desk");
 
     return {
       message: `Saved ${result.title}.`,

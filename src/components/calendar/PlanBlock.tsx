@@ -52,6 +52,7 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       aria-label={headerText}
       title={fullText}

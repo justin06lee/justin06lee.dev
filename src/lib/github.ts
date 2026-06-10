@@ -68,16 +68,26 @@ async function getDirectoryContents(
   segments: string[],
   opts?: FetchOptions
 ): Promise<GitHubEntry[]> {
-  const res = await fetch(contentsUrl(...segments), {
-    headers: headers(),
-    ...fetchOptions(opts),
-  });
+  // network-layer failures (DNS, timeout, connection refused) and malformed
+  // JSON both throw — degrade to an empty listing rather than crashing callers.
+  try {
+    const res = await fetch(contentsUrl(...segments), {
+      headers: headers(),
+      ...fetchOptions(opts),
+    });
 
-  if (!res.ok) {
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data as GitHubEntry[];
+  } catch {
     return [];
   }
-
-  return (await res.json()) as GitHubEntry[];
 }
 
 function visibleDirectories(entries: GitHubEntry[]): GitHubEntry[] {
@@ -134,13 +144,19 @@ export async function getArticleByPath(
   pathSegments: string[],
   opts?: FetchOptions
 ): Promise<Article | null> {
-  const res = await fetch(contentsUrl(...pathSegments, "notes.md"), {
-    headers: {
-      ...headers(),
-      Accept: "application/vnd.github.v3.raw",
-    },
-    ...fetchOptions(opts),
-  });
+  // tolerate network-layer failures; callers treat null as "article missing".
+  let res: Response;
+  try {
+    res = await fetch(contentsUrl(...pathSegments, "notes.md"), {
+      headers: {
+        ...headers(),
+        Accept: "application/vnd.github.v3.raw",
+      },
+      ...fetchOptions(opts),
+    });
+  } catch {
+    return null;
+  }
 
   if (!res.ok) {
     return null;
@@ -169,13 +185,19 @@ export async function getArticleTitle(
   const parts = normalizedPath.split("/");
   const folderName = parts.length > 0 ? parts[parts.length - 1] : "Untitled";
 
-  const res = await fetch(contentsUrl(...parts, "notes.md"), {
-    headers: {
-      ...headers(),
-      Accept: "application/vnd.github.v3.raw",
-    },
-    ...fetchOptions(opts),
-  });
+  // tolerate network-layer failures; fall back to the folder name as title.
+  let res: Response;
+  try {
+    res = await fetch(contentsUrl(...parts, "notes.md"), {
+      headers: {
+        ...headers(),
+        Accept: "application/vnd.github.v3.raw",
+      },
+      ...fetchOptions(opts),
+    });
+  } catch {
+    return folderName;
+  }
 
   if (!res.ok) {
     return folderName;
@@ -203,7 +225,15 @@ export async function listArticleSummaries(
         title: article.title,
         excerpt: article.excerpt,
         coverUrl: article.cover
-          ? rawUrl(entry.name, ...article.cover.split("/"))
+          ? (() => {
+              // cover comes straight from markdown; reject unsafe path
+              // segments (e.g. "..", ".") rather than crash the whole listing.
+              try {
+                return rawUrl(entry.name, ...article.cover.split("/"));
+              } catch {
+                return null;
+              }
+            })()
           : null,
         tags: article.tags,
         pathSegments: [entry.name],

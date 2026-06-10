@@ -25,7 +25,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const patch: ActualPatch = {};
 
   if (body.categoryId !== undefined) {
-    if (body.categoryId !== null && (typeof body.categoryId !== "string" || !isStringWithin(body.categoryId, MAX_TITLE_LEN))) {
+    // Reject empty string explicitly: updateActual truthy-checks categoryId before
+    // categoryExists, so "" would bypass validation and store an invalid FK.
+    if (body.categoryId !== null && (typeof body.categoryId !== "string" || !isStringWithin(body.categoryId, MAX_TITLE_LEN) || body.categoryId.length === 0)) {
       return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
     }
     patch.categoryId = body.categoryId as string | null;

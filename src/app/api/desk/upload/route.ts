@@ -29,6 +29,12 @@ export async function POST(req: NextRequest) {
     .map((segment) => segment.trim())
     .filter(Boolean);
 
+  // split/trim/filter can leave nothing for slash- or whitespace-only input;
+  // reject here so the caller gets a clear 400 rather than a generic upload error.
+  if (articlePath.length === 0) {
+    return NextResponse.json({ error: "Article path is required." }, { status: 400 });
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer());
   const data = buffer.toString("base64");
 

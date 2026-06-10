@@ -350,9 +350,13 @@ export function OperatorArticleEditor({
   // metadata + blanks) before the body starts, used to convert between them.
   const bodyOffset = useMemo(() => {
     if (!parsed.content) return 0;
-    const index = raw.indexOf(parsed.content);
+    // parseArticleDraft re-joins lines with "\n", so on CRLF input parsed.content
+    // never matches raw verbatim. Normalize to LF first so indexOf can find it,
+    // which keeps editor<->preview line sync working for Windows line endings.
+    const normalized = raw.replace(/\r\n/g, "\n");
+    const index = normalized.indexOf(parsed.content);
     if (index < 0) return 0;
-    return raw.slice(0, index).split("\n").length - 1;
+    return normalized.slice(0, index).split("\n").length - 1;
   }, [raw, parsed.content]);
 
   function scrollEditorToLine(rawLine: number) {

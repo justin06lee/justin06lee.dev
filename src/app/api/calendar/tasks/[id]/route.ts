@@ -73,7 +73,9 @@ export async function PATCH(
     patch.date = body.date;
   }
   if (body.categoryId !== undefined) {
-    if (body.categoryId !== null && !isStringWithin(body.categoryId, MAX_TITLE_LEN)) {
+    // empty categoryId would slip past updateTask's `if (patch.categoryId && ...)` existence
+    // check, leaving a non-null but invalid reference. reject it like the fallbacks path does.
+    if (body.categoryId !== null && (!isStringWithin(body.categoryId, MAX_TITLE_LEN) || body.categoryId.length === 0)) {
       return NextResponse.json({ error: "categoryId must be string or null" }, { status: 400 });
     }
     patch.categoryId = body.categoryId as string | null;

@@ -17,9 +17,16 @@ export async function POST(req: NextRequest) {
     // Allow empty body (e.g., quick "start sleep" with no fields).
   }
 
-  const planId = isStringWithin(body.planId, MAX_TITLE_LEN) ? body.planId : undefined;
+  // Empty string is a valid string within length, but startActual's existence
+  // checks treat it as falsy and skip validation — normalize to undefined so an
+  // empty reference id can't be stored as an invalid plan/category pointer.
+  const planId = isStringWithin(body.planId, MAX_TITLE_LEN) && body.planId.length > 0 ? body.planId : undefined;
   const categoryId =
-    body.categoryId === null ? null : isStringWithin(body.categoryId, MAX_TITLE_LEN) ? body.categoryId : undefined;
+    body.categoryId === null
+      ? null
+      : isStringWithin(body.categoryId, MAX_TITLE_LEN) && body.categoryId.length > 0
+        ? body.categoryId
+        : undefined;
   const title =
     body.title === null ? null : isStringWithin(body.title, MAX_TITLE_LEN) ? body.title : undefined;
 

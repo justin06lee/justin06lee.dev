@@ -135,12 +135,25 @@ async function putContent({
   });
 
   if (!response.ok) {
+    // 422 means the supplied sha is stale — someone else wrote to this path
+    // since the editor last loaded it. Surface a distinct, actionable message
+    // instead of the generic "check your token" error.
+    if (response.status === 422) {
+      console.error("[operator-content] GitHub write failed with status 422 (sha mismatch)");
+      throw new Error("this article was modified by someone else. refresh and try again.");
+    }
     reportGithubError("write", response.status);
   }
 
   const data = await response.json();
+  const newSha = data.content?.sha as string | undefined;
+  // A 2xx without a content sha would silently corrupt editor state and break
+  // subsequent sha-dependent saves, so fail loudly here.
+  if (!newSha) {
+    throw new Error("github write succeeded but returned no file sha.");
+  }
   return {
-    sha: data.content?.sha as string | undefined,
+    sha: newSha,
   };
 }
 
