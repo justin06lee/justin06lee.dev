@@ -335,6 +335,10 @@ export function OperatorArticleEditor({
   const previewApiRef = useRef<SyncedPreviewHandle>(null);
   // 1-based raw (textarea) line currently highlighted on both panes
   const [syncLine, setSyncLine] = useState<number | null>(null);
+  // 1-based raw line where the floating "-> preview" button sits, or null when
+  // there's no active selection to sync from. Sync is deliberate (button click),
+  // not automatic on every cursor move.
+  const [syncButtonLine, setSyncButtonLine] = useState<number | null>(null);
   const [editorScrollTop, setEditorScrollTop] = useState(0);
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
@@ -369,14 +373,26 @@ export function OperatorArticleEditor({
     textarea.scrollTop = Math.max(0, top - EDITOR_ANCHOR);
   }
 
-  // editor -> preview: highlight the caret's line and align the preview block
-  function syncFromEditor() {
+  // Show the floating "-> preview" button at the start of a non-empty selection.
+  // Collapsed caret => no button (nothing to deliberately sync).
+  function updateSyncButton() {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const rawLine = raw.slice(0, textarea.selectionStart).split("\n").length;
-    setSyncLine(rawLine);
-    scrollEditorToLine(rawLine);
-    const contentLine = rawLine - bodyOffset;
+    const { selectionStart, selectionEnd } = textarea;
+    if (selectionStart === selectionEnd) {
+      setSyncButtonLine(null);
+      return;
+    }
+    setSyncButtonLine(raw.slice(0, selectionStart).split("\n").length);
+  }
+
+  // editor -> preview: scroll+highlight the block for the selection's start line.
+  // Deliberately does not scroll the editor (the operator is already looking at
+  // their selection); only the preview moves.
+  function syncToPreview() {
+    if (syncButtonLine == null) return;
+    setSyncLine(syncButtonLine);
+    const contentLine = syncButtonLine - bodyOffset;
     if (contentLine >= 1) {
       previewApiRef.current?.scrollToLine(contentLine);
     }
@@ -1039,6 +1055,27 @@ export function OperatorArticleEditor({
                     }}
                   />
                 ) : null}
+                {mode === "split" && syncButtonLine != null ? (
+                  <button
+                    type="button"
+                    // preventDefault keeps the textarea focused and its selection
+                    // intact; otherwise clicking the button would blur the
+                    // textarea (firing onBlur) and clear the selection first.
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={syncToPreview}
+                    className="absolute right-2 z-20 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+                    style={{
+                      top: Math.max(
+                        EDITOR_PAD_TOP,
+                        EDITOR_PAD_TOP +
+                          (syncButtonLine - 1) * EDITOR_LINE_HEIGHT -
+                          editorScrollTop
+                      ),
+                    }}
+                  >
+                    {"→ preview"}
+                  </button>
+                ) : null}
                 <textarea
                   ref={textareaRef}
                   name="raw"
@@ -1048,8 +1085,10 @@ export function OperatorArticleEditor({
                   onKeyDown={handleEditorKeyDown}
                   onMouseUp={() => {
                     syncNormalCursorPosition();
-                    syncFromEditor();
+                    updateSyncButton();
                   }}
+                  onSelect={updateSyncButton}
+                  onBlur={() => setSyncButtonLine(null)}
                   onScroll={(event) =>
                     setEditorScrollTop(event.currentTarget.scrollTop)
                   }

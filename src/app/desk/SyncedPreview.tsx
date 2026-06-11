@@ -2,8 +2,10 @@
 
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
+  useState,
   type MouseEvent,
 } from "react";
 import { MarkdownRenderer } from "@/components/article/markdown-renderer";
@@ -34,22 +36,19 @@ export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>
     ref
   ) {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const highlightedRef = useRef<HTMLElement | null>(null);
+    // Highlight is React state, not a stashed DOM node: the preview re-renders on
+    // every keystroke, which would leave an imperatively-styled node detached and
+    // the highlight stranded on the wrong block. `nonce` lets the same line be
+    // re-selected (it changes object identity so the effects re-fire).
+    const [highlight, setHighlight] = useState<{
+      line: number;
+      nonce: number;
+    } | null>(null);
+    const nonceRef = useRef(0);
 
-    function clearHighlight() {
-      const previous = highlightedRef.current;
-      if (previous) {
-        previous.style.backgroundColor = "";
-        previous.style.boxShadow = "";
-        highlightedRef.current = null;
-      }
-    }
-
-    function highlightBlock(element: HTMLElement) {
-      clearHighlight();
-      element.style.backgroundColor = "rgba(255,255,255,0.08)";
-      element.style.boxShadow = "inset 3px 0 0 0 rgba(255,255,255,0.6)";
-      highlightedRef.current = element;
+    function requestHighlight(line: number) {
+      nonceRef.current += 1;
+      setHighlight({ line, nonce: nonceRef.current });
     }
 
     // pick the last top-level block whose source line is <= the target line
@@ -86,9 +85,28 @@ export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>
           top: Math.max(0, top - SCROLL_ANCHOR),
           behavior: "smooth",
         });
-        highlightBlock(element);
+        requestHighlight(line);
       },
     }));
+
+    // Apply the highlight class to the matching block. Re-runs on `content` so a
+    // re-render (typing) re-applies it to the fresh DOM node instead of leaving
+    // it stranded; cleanup pulls it off the previous node.
+    useEffect(() => {
+      if (!highlight) return;
+      const element = findBlockForLine(highlight.line);
+      if (!element) return;
+      element.classList.add("sync-highlight");
+      return () => element.classList.remove("sync-highlight");
+    }, [highlight, content]);
+
+    // Auto-clear so the highlight can never get permanently stuck. Keyed on the
+    // highlight object (not `content`), so typing doesn't keep resetting it.
+    useEffect(() => {
+      if (!highlight) return;
+      const timer = setTimeout(() => setHighlight(null), 1600);
+      return () => clearTimeout(timer);
+    }, [highlight]);
 
     function handleClick(event: MouseEvent<HTMLDivElement>) {
       if (!onSelectLine) return;
@@ -98,7 +116,7 @@ export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>
       if (!target) return;
       const line = Number(target.getAttribute("data-source-line"));
       if (!Number.isFinite(line)) return;
-      highlightBlock(target);
+      requestHighlight(line);
       onSelectLine(line);
     }
 
