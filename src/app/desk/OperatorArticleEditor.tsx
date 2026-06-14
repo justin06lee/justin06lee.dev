@@ -317,6 +317,9 @@ export interface SelectionRect {
   height: number;
 }
 
+// vertical breathing room (px) added above/below the editor's gray streak
+const STREAK_PAD = 3;
+
 // Build a hidden div that wraps text exactly like the textarea, then read the
 // pixel top of the line containing `position`. Putting the *remaining* text in
 // the measured span keeps the line breaks after `position` identical to the
@@ -437,7 +440,18 @@ export function OperatorArticleEditor({
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
   const [syncedRect, setSyncedRect] = useState<SelectionRect | null>(null);
   const [measureNonce, setMeasureNonce] = useState(0);
-  const [editorScrollTop, setEditorScrollTop] = useState(0);
+  // Overlay layer (streak + button) is translated to follow the textarea's
+  // internal scroll. Done imperatively via a ref so it tracks scroll 1:1 with no
+  // React-render lag (state-driven positioning made the streak chase the text).
+  const overlayLayerRef = useRef<HTMLDivElement>(null);
+  const editorScrollTopRef = useRef(0);
+
+  function setOverlayScroll(scrollTop: number) {
+    editorScrollTopRef.current = scrollTop;
+    if (overlayLayerRef.current) {
+      overlayLayerRef.current.style.transform = `translateY(${-scrollTop}px)`;
+    }
+  }
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
   const articleName = articlePath[articlePath.length - 1] ?? "Untitled";
@@ -541,9 +555,20 @@ export function OperatorArticleEditor({
   }: PreviewBlockSelection) {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const startOffset = lineStartOffset(raw, startLine + bodyOffset);
-    const endOffset =
-      endLine == null ? raw.length : lineStartOffset(raw, endLine + bodyOffset);
+    const rawStart = startLine + bodyOffset;
+    const startOffset = lineStartOffset(raw, rawStart);
+    // endLine is the *next* block's start line; the clicked block's last line is
+    // one above it. Trim trailing blank lines so the streak covers only this
+    // block's text, not the blank separator or the next block's ```fence/heading.
+    const lines = raw.split("\n");
+    let lastLine = endLine == null ? lines.length : endLine + bodyOffset - 1;
+    while (lastLine > rawStart && (lines[lastLine - 1] ?? "").trim() === "") {
+      lastLine -= 1;
+    }
+    // sit endOffset on the last text line (before its newline) so the streak
+    // bottom lands on that line's last visual row, not the line below it
+    let endOffset = lineStartOffset(raw, lastLine + 1);
+    if (endOffset > startOffset && raw[endOffset - 1] === "\n") endOffset -= 1;
     setSyncedRange({ start: startOffset, end: Math.max(startOffset, endOffset) });
     const rect = measureSelectionRect(textarea, startOffset, startOffset);
     if (rect) {
@@ -1183,38 +1208,47 @@ export function OperatorArticleEditor({
               <div
                 className={`relative min-h-0 overflow-hidden ${mode === "split" ? "border-r border-white/10" : ""}`}
               >
-                {syncedRect != null ? (
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute left-0 right-0 z-10 bg-white/10"
-                    style={{
-                      top: syncedRect.top - editorScrollTop,
-                      height: syncedRect.height,
-                    }}
-                  />
-                ) : null}
-                {mode === "split" && selection != null && selectionRect != null ? (
-                  <button
-                    type="button"
-                    // preventDefault keeps the textarea focused and its selection
-                    // intact; otherwise clicking the button would blur the
-                    // textarea (firing onBlur) and clear the selection first.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={syncToPreview}
-                    className="absolute right-2 z-20 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
-                    style={{
-                      top: selectionRect.top - editorScrollTop,
-                      // sit just above the first selected line; flip below when
-                      // the selection is too near the top to fit the button
-                      transform:
-                        selectionRect.top - editorScrollTop > 28
-                          ? "translateY(calc(-100% - 4px))"
-                          : "translateY(4px)",
-                    }}
-                  >
-                    {"→ preview"}
-                  </button>
-                ) : null}
+                {/* Overlay layer: translated imperatively on scroll (see
+                    setOverlayScroll) so the streak/button track the text 1:1.
+                    Children are positioned in content coords. */}
+                <div
+                  ref={overlayLayerRef}
+                  className="pointer-events-none absolute inset-0 z-10"
+                  style={{ transform: `translateY(${-editorScrollTopRef.current}px)` }}
+                >
+                  {syncedRect != null ? (
+                    <div
+                      aria-hidden
+                      className="absolute left-0 right-0 bg-white/10 rounded-sm"
+                      style={{
+                        top: syncedRect.top - STREAK_PAD,
+                        height: syncedRect.height + STREAK_PAD * 2,
+                      }}
+                    />
+                  ) : null}
+                  {mode === "split" && selection != null && selectionRect != null ? (
+                    <button
+                      type="button"
+                      // preventDefault keeps the textarea focused and its
+                      // selection intact; otherwise clicking the button would
+                      // blur the textarea (firing onBlur) and clear it first.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={syncToPreview}
+                      className="pointer-events-auto absolute right-2 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+                      style={{
+                        top: selectionRect.top,
+                        // sit just above the first selected line; flip below
+                        // when the selection is too near the top to fit
+                        transform:
+                          selectionRect.top - editorScrollTopRef.current > 28
+                            ? "translateY(calc(-100% - 4px))"
+                            : "translateY(4px)",
+                      }}
+                    >
+                      {"→ preview"}
+                    </button>
+                  ) : null}
+                </div>
                 <textarea
                   ref={textareaRef}
                   name="raw"
@@ -1229,7 +1263,7 @@ export function OperatorArticleEditor({
                   onSelect={updateSelection}
                   onBlur={() => setSelection(null)}
                   onScroll={(event) =>
-                    setEditorScrollTop(event.currentTarget.scrollTop)
+                    setOverlayScroll(event.currentTarget.scrollTop)
                   }
                   onDragOver={(event) => {
                     if (event.dataTransfer.types.includes("Files")) {
