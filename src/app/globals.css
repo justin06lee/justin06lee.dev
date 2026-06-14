@@ -277,6 +277,26 @@ html, body {
   animation: rainbow-cycle 3s linear infinite;
 }
 
+/* Editor->preview line sync: temporary highlight on the matched block. Fades to
+   transparent over its lifetime so it reads as a flash, never a stuck state even
+   if the JS auto-clear timer is delayed. */
+.sync-highlight {
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 3px 0 0 0 rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  animation: sync-highlight-fade 1.6s ease-out forwards;
+}
+@keyframes sync-highlight-fade {
+  0% {
+    background-color: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 3px 0 0 0 rgba(255, 255, 255, 0.7);
+  }
+  100% {
+    background-color: rgba(255, 255, 255, 0);
+    box-shadow: inset 3px 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
 .range-custom {
   -webkit-appearance: none;
   appearance: none;
