@@ -2,7 +2,7 @@
 
 import {
   forwardRef,
-  useEffect,
+  memo,
   useImperativeHandle,
   useRef,
   useState,
@@ -19,6 +19,10 @@ export interface PreviewBlockSelection {
   // viewport y (px) of the clicked block's top edge, so the editor can scroll
   // its matching text to the same height
   screenY: number;
+  // rendered height (px) of the clicked block, so the editor can center its
+  // (shorter, denser mono) matching text against this block instead of just
+  // aligning the top edges -- otherwise the two highlights look vertically offset
+  screenHeight: number;
 }
 
 export interface SyncedPreviewHandle {
@@ -37,26 +41,23 @@ interface SyncedPreviewProps {
   onSelectBlock?: (selection: PreviewBlockSelection) => void;
 }
 
-export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>(
-  function SyncedPreview(
+// memo so unrelated editor state changes (e.g. clearing the text selection on
+// blur) don't re-run react-markdown + KaTeX here. Each such re-render briefly
+// reflowed the preview, shifting a block out from under the pointer mid-click so
+// the click was lost. Requires onSelectBlock to be a stable (useCallback) ref.
+export const SyncedPreview = memo(
+  forwardRef<SyncedPreviewHandle, SyncedPreviewProps>(function SyncedPreview(
     { title, prerequisites, content, imageBaseUrl, onSelectBlock },
     ref
   ) {
     const scrollRef = useRef<HTMLDivElement>(null);
-    // Highlight is React state, not a stashed DOM node: the preview re-renders on
-    // every keystroke, which would leave an imperatively-styled node detached and
-    // the highlight stranded on the wrong block. `nonce` lets the same line be
-    // re-selected (it changes object identity so the effect re-fires).
-    const [highlight, setHighlight] = useState<{
-      line: number;
-      nonce: number;
-    } | null>(null);
-    const nonceRef = useRef(0);
-
-    function requestHighlight(line: number) {
-      nonceRef.current += 1;
-      setHighlight({ line, nonce: nonceRef.current });
-    }
+    // The highlighted block is driven declaratively: we hold the 1-based content
+    // line and hand it to MarkdownRenderer, which stamps data-sync-highlight on the
+    // matching block as it renders. Earlier this toggled a class imperatively in an
+    // effect, but react-markdown rebuilds its DOM on the next render (e.g. when a
+    // preview click updates the editor's state) and stranded the class, so body
+    // paragraphs lost their highlight. Rendering it into the markup survives that.
+    const [highlightLine, setHighlightLine] = useState<number | null>(null);
 
     function sourceLineBlocks(): HTMLElement[] {
       const container = scrollRef.current;
@@ -82,35 +83,33 @@ export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>
       return best ?? blocks[0];
     }
 
+    const headerRef = useRef<HTMLDivElement>(null);
+
     useImperativeHandle(ref, () => ({
       alignLineToScreenY(line: number, screenY: number) {
         const container = scrollRef.current;
         if (!container) return;
         const element = findBlockForLine(line);
         if (!element) return;
-        // scroll the block from where it is now to the editor selection's height
-        const delta = element.getBoundingClientRect().top - screenY;
+        // The "live preview" bar is sticky over the top of the scroll area, so a
+        // block scrolled to a screenY inside that band lands hidden behind it.
+        // Clamp the target to just below the bar so the block stays visible while
+        // still sitting as close as possible to the editor selection's height.
+        const containerTop = container.getBoundingClientRect().top;
+        const headerBottom =
+          containerTop + (headerRef.current?.offsetHeight ?? 0);
+        const targetY = Math.max(screenY, headerBottom);
+        // scroll the block to the target height; the browser clamps the scroll at
+        // the content bounds, so near the very bottom the block lands as close as
+        // it can. We do NOT move the other pane to compensate -- the pane the user
+        // is looking at should stay where they put it.
+        const delta = element.getBoundingClientRect().top - targetY;
         container.scrollBy({ top: delta, behavior: "smooth" });
-        requestHighlight(line);
+        setHighlightLine(line);
       },
     }));
 
-    // Apply the highlight class to the matching block. Re-runs on `content` so a
-    // re-render (typing) re-applies it to the fresh DOM node instead of leaving
-    // it stranded; cleanup pulls it off the previous node. The highlight persists
-    // (no auto-clear) until the next sync replaces it.
-    useEffect(() => {
-      if (!highlight) return;
-      const element = findBlockForLine(highlight.line);
-      if (!element) return;
-      element.classList.add("sync-highlight");
-      return () => element.classList.remove("sync-highlight");
-      // findBlockForLine reads the DOM fresh each call; content is the meaningful
-      // re-query trigger, so it is intentionally the only extra dependency.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [highlight, content]);
-
-    function handleClick(event: MouseEvent<HTMLDivElement>) {
+    function handleSelectBlock(event: MouseEvent<HTMLDivElement>) {
       if (!onSelectBlock) return;
       const target = (event.target as HTMLElement).closest<HTMLElement>(
         "[data-source-line]"
@@ -118,30 +117,39 @@ export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>
       if (!target) return;
       const startLine = Number(target.getAttribute("data-source-line"));
       if (!Number.isFinite(startLine)) return;
-      // the next tagged block's line bounds this block, so the editor can
-      // highlight the whole paragraph/range rather than a single line
-      const blocks = sourceLineBlocks();
-      const index = blocks.indexOf(target);
-      const next = index >= 0 ? blocks[index + 1] : undefined;
-      const endLine = next
-        ? Number(next.getAttribute("data-source-line"))
-        : null;
-      requestHighlight(startLine);
+      // endLine bounds the block: it's the next tagged block's line, so the editor
+      // can highlight the whole paragraph/range. Compute it by source-line VALUE
+      // (smallest line greater than startLine), not by node identity -- indexOf on
+      // a target that isn't in the freshly-queried list returns -1, which used to
+      // collapse endLine to null and run the streak to the end of the document.
+      let endLine: number | null = null;
+      for (const block of sourceLineBlocks()) {
+        const line = Number(block.getAttribute("data-source-line"));
+        if (Number.isFinite(line) && line > startLine) {
+          endLine = line;
+          break;
+        }
+      }
+      setHighlightLine(startLine);
+      const targetRect = target.getBoundingClientRect();
       onSelectBlock({
         startLine,
-        endLine: Number.isFinite(endLine as number) ? endLine : null,
-        screenY: target.getBoundingClientRect().top,
+        endLine,
+        screenY: targetRect.top,
+        screenHeight: targetRect.height,
       });
     }
 
     return (
       <div
         ref={scrollRef}
-        onClick={handleClick}
-        className="min-h-0 bg-black xl:sticky xl:h-[calc(100vh-var(--sticky-header-offset,80px))] xl:overflow-y-auto"
-        style={{ top: "var(--sticky-header-offset, 80px)" }}
+        onClick={handleSelectBlock}
+        className="min-h-0 bg-black xl:h-[calc(100vh-var(--editor-offset,var(--sticky-header-offset,80px)))] xl:overflow-y-auto"
       >
-        <div className="sticky top-0 z-10 border-b border-white/10 bg-black px-4 py-3 text-xs font-medium text-white/70">
+        <div
+          ref={headerRef}
+          className="sticky top-0 z-10 border-b border-white/10 bg-black px-4 py-3 text-xs font-medium text-white/70"
+        >
           live preview
         </div>
         <div className="px-4 py-6 lg:px-8">
@@ -153,9 +161,14 @@ export const SyncedPreview = forwardRef<SyncedPreviewHandle, SyncedPreviewProps>
               Prerequisites: {prerequisites.join(", ")}
             </p>
           ) : null}
-          <MarkdownRenderer content={content} imageBaseUrl={imageBaseUrl} lineSync />
+          <MarkdownRenderer
+            content={content}
+            imageBaseUrl={imageBaseUrl}
+            lineSync
+            highlightLine={highlightLine}
+          />
         </div>
       </div>
     );
-  }
+  })
 );

@@ -12,7 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { parseArticleDraft } from "@/lib/article-draft";
+import { bodyLineOffset, parseArticleDraft } from "@/lib/article-draft";
 import { routeForPath } from "@/lib/github";
 import type { OperatorImageAsset } from "@/lib/operator-content";
 import { getThemeImageVariant } from "@/lib/theme-images";
@@ -445,6 +445,15 @@ export function OperatorArticleEditor({
   // React-render lag (state-driven positioning made the streak chase the text).
   const overlayLayerRef = useRef<HTMLDivElement>(null);
   const editorScrollTopRef = useRef(0);
+  // The editor body (sidebar + textarea + preview) is sized to fill exactly the
+  // space below everything above it -- the fixed navbar, the operator header, and
+  // this editor's own title/toolbar. Measuring that offset (rather than assuming
+  // only the 80px navbar) keeps the panes inside the viewport, so the textarea's
+  // last line is always reachable by its own scroll instead of falling below the
+  // fold and needing the page to scroll.
+  const bodyGridRef = useRef<HTMLDivElement>(null);
+  const headerSectionRef = useRef<HTMLDivElement>(null);
+  const [editorOffset, setEditorOffset] = useState<number | null>(null);
 
   function setOverlayScroll(scrollTop: number) {
     editorScrollTopRef.current = scrollTop;
@@ -467,16 +476,13 @@ export function OperatorArticleEditor({
   // Preview line numbers are relative to the parsed body, the editor's are
   // relative to the full draft. This is the count of raw lines (title +
   // metadata + blanks) before the body starts, used to convert between them.
-  const bodyOffset = useMemo(() => {
-    if (!parsed.content) return 0;
-    // parseArticleDraft re-joins lines with "\n", so on CRLF input parsed.content
-    // never matches raw verbatim. Normalize to LF first so indexOf can find it,
-    // which keeps editor<->preview line sync working for Windows line endings.
-    const normalized = raw.replace(/\r\n/g, "\n");
-    const index = normalized.indexOf(parsed.content);
-    if (index < 0) return 0;
-    return normalized.slice(0, index).split("\n").length - 1;
-  }, [raw, parsed.content]);
+  // parseArticleDraft re-joins lines with "\n", so on CRLF input parsed.content
+  // never matches raw verbatim; normalize to LF first so the match succeeds for
+  // Windows line endings.
+  const bodyOffset = useMemo(
+    () => bodyLineOffset(raw.replace(/\r\n/g, "\n"), parsed.content),
+    [raw, parsed.content]
+  );
 
   // Track the live non-empty selection so the floating button can sit on it.
   // Collapsed caret => no button (nothing to deliberately sync).
@@ -523,9 +529,44 @@ export function OperatorArticleEditor({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Measure how far the editor body sits below the top of the page so the panes
+  // can be sized to fill the rest of the viewport exactly (see editorOffset). The
+  // offset changes when the toolbar header grows/shrinks (vim help, save messages)
+  // or the window resizes, so watch both.
+  useLayoutEffect(() => {
+    const grid = bodyGridRef.current;
+    if (!grid) return;
+    function measure() {
+      const node = bodyGridRef.current;
+      if (!node) return;
+      // document-space top (scroll-independent): everything above the body
+      const top = node.getBoundingClientRect().top + window.scrollY;
+      setEditorOffset(Math.round(top));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (headerSectionRef.current) observer.observe(headerSectionRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  // Switching modes changes the editor pane's width (full in edit, half in
+  // split), which re-wraps the text, so the cached rects are stale. It can also
+  // remount the textarea (it unmounts in preview mode), leaving editorScrollTopRef
+  // holding a scroll value the fresh element no longer has. Re-sync the overlay
+  // from the live scrollTop and force a re-measure for the new width.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    setOverlayScroll(textarea ? textarea.scrollTop : 0);
+    setMeasureNonce((n) => n + 1);
+  }, [mode]);
+
   // editor -> preview: scroll the matching preview block to the same viewport
-  // height as the selection, and leave a gray streak over the selected text
-  // (replacing the live selection). The editor itself does not move.
+  // height as the selection, and leave a gray streak over the selected text. The
+  // editor itself does not move (the user is looking at it).
   function syncToPreview() {
     const textarea = textareaRef.current;
     if (!textarea || !selection) return;
@@ -548,34 +589,55 @@ export function OperatorArticleEditor({
 
   // preview -> editor: scroll the editor so the matching text lands level with
   // the clicked preview block, and lay a gray streak over the block's lines.
-  function handlePreviewSelectBlock({
-    startLine,
-    endLine,
-    screenY,
-  }: PreviewBlockSelection) {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const rawStart = startLine + bodyOffset;
-    const startOffset = lineStartOffset(raw, rawStart);
-    // endLine is the *next* block's start line; the clicked block's last line is
-    // one above it. Trim trailing blank lines so the streak covers only this
-    // block's text, not the blank separator or the next block's ```fence/heading.
-    const lines = raw.split("\n");
-    let lastLine = endLine == null ? lines.length : endLine + bodyOffset - 1;
-    while (lastLine > rawStart && (lines[lastLine - 1] ?? "").trim() === "") {
-      lastLine -= 1;
-    }
-    // sit endOffset on the last text line (before its newline) so the streak
-    // bottom lands on that line's last visual row, not the line below it
-    let endOffset = lineStartOffset(raw, lastLine + 1);
-    if (endOffset > startOffset && raw[endOffset - 1] === "\n") endOffset -= 1;
-    setSyncedRange({ start: startOffset, end: Math.max(startOffset, endOffset) });
-    const rect = measureSelectionRect(textarea, startOffset, startOffset);
-    if (rect) {
-      const target = rect.top - (screenY - textarea.getBoundingClientRect().top);
-      textarea.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
-    }
-  }
+  // useCallback so SyncedPreview (memoized) doesn't re-render on every unrelated
+  // editor state change -- a preview re-render reflows it and can drop a click.
+  const handlePreviewSelectBlock = useCallback(
+    function handlePreviewSelectBlock({
+      startLine,
+      endLine,
+      screenY,
+      screenHeight,
+    }: PreviewBlockSelection) {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const rawStart = startLine + bodyOffset;
+      const startOffset = lineStartOffset(raw, rawStart);
+      // endLine is the *next* block's start line; the clicked block's last line is
+      // one above it. Trim trailing blank lines so the streak covers only this
+      // block's text, not the blank separator or the next block's ```fence/heading.
+      const lines = raw.split("\n");
+      let lastLine = endLine == null ? lines.length : endLine + bodyOffset - 1;
+      while (lastLine > rawStart && (lines[lastLine - 1] ?? "").trim() === "") {
+        lastLine -= 1;
+      }
+      // sit endOffset on the last text line (before its newline) so the streak
+      // bottom lands on that line's last visual row, not the line below it
+      let endOffset = lineStartOffset(raw, lastLine + 1);
+      if (endOffset > startOffset && raw[endOffset - 1] === "\n") endOffset -= 1;
+      setSyncedRange({ start: startOffset, end: Math.max(startOffset, endOffset) });
+      // measure the whole block (start..end) so we can keep its last line in view
+      const rect = measureSelectionRect(textarea, startOffset, endOffset);
+      if (rect) {
+        const taTop = textarea.getBoundingClientRect().top;
+        // preferred: line the block's CENTER up with the clicked preview block's
+        // center (not just the top edges). The editor's mono text is denser than
+        // the preview's prose, so equal blocks have different heights; centering
+        // keeps the two highlights visually level. (rect.height - screenHeight)/2
+        // nudges the top-aligned position by half the height difference.
+        const aligned =
+          rect.top - (screenY - taTop) + (rect.height - screenHeight) / 2;
+        // but if that alignment would push the block's last line below the editor,
+        // pull the block up so its bottom rests at the editor's bottom -- this is
+        // the "click the code block and see the whole thing, closing fence
+        // included" case. The editor now fits the viewport, so clientHeight is the
+        // true visible height. Capped so the first line never scrolls past the top.
+        const endAtBottom = rect.top + rect.height - textarea.clientHeight;
+        const target = Math.min(Math.max(aligned, endAtBottom), rect.top);
+        textarea.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+      }
+    },
+    [raw, bodyOffset]
+  );
 
   useEffect(() => {
     function handleDocumentPointerDown(event: PointerEvent) {
@@ -1008,12 +1070,21 @@ export function OperatorArticleEditor({
   }, [vimEnabled]);
 
   return (
-    <div className="border border-white/10 bg-white/[0.02]">
+    <div
+      className="border border-white/10 bg-white/[0.02]"
+      // panes below read this for their height/sticky-top; falls back to the
+      // navbar offset until the body's real top is measured on the client
+      style={
+        editorOffset != null
+          ? ({ "--editor-offset": `${editorOffset}px` } as React.CSSProperties)
+          : undefined
+      }
+    >
       <form ref={formRef} action={formAction}>
         <input type="hidden" name="articlePath" value={articlePath.join("/")} />
         <input type="hidden" name="sha" value={currentSha} />
 
-        <div className="border-b border-white/10 px-4 py-4">
+        <div ref={headerSectionRef} className="border-b border-white/10 px-4 py-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-white">
@@ -1125,11 +1196,11 @@ export function OperatorArticleEditor({
           ) : null}
         </div>
 
-        <div className="grid min-h-[70vh] gap-0 xl:grid-cols-[18rem_1fr] xl:items-start">
-          <aside
-            className="border-b border-white/10 bg-white/[0.02] xl:border-b-0 xl:border-r xl:sticky xl:flex xl:flex-col xl:h-[calc(100vh-var(--sticky-header-offset,80px))]"
-            style={{ top: "var(--sticky-header-offset, 80px)" }}
-          >
+        <div
+          ref={bodyGridRef}
+          className="grid min-h-[70vh] gap-0 xl:min-h-0 xl:grid-cols-[18rem_1fr] xl:items-start"
+        >
+          <aside className="border-b border-white/10 bg-white/[0.02] xl:border-b-0 xl:border-r xl:flex xl:flex-col xl:h-[calc(100vh-var(--editor-offset,var(--sticky-header-offset,80px)))]">
             <div className="border-b border-white/10 px-4 py-3 xl:shrink-0">
               <h3 className="font-semibold text-white">images</h3>
               <p className="mt-1 text-xs text-white/50 leading-5">
@@ -1203,11 +1274,21 @@ export function OperatorArticleEditor({
             </div>
           </aside>
 
-          <div className="grid min-h-[70vh] gap-0 xl:grid-cols-2 xl:items-start">
+          <div
+            className={`grid min-h-[70vh] gap-0 xl:min-h-0 xl:items-start ${mode === "split" ? "xl:grid-cols-2" : "xl:grid-cols-1"}`}
+          >
             {mode !== "preview" ? (
               <div
                 className={`relative min-h-0 overflow-hidden ${mode === "split" ? "border-r border-white/10" : ""}`}
               >
+                {/* Sticky wrapper holds BOTH the overlay and the textarea so they
+                    stick together. The textarea used to be sticky on its own while
+                    the overlay was absolute to the pane, so when the page scrolled
+                    the sticky textarea slid away from the pane and the streak (in
+                    the overlay) ended up offset by that displacement. Keeping both
+                    in one sticky box means the streak's only transform is the
+                    textarea's internal scroll. */}
+                <div className="relative min-h-[70vh] xl:min-h-0 xl:h-[calc(100vh-var(--editor-offset,var(--sticky-header-offset,80px)))]">
                 {/* Overlay layer: translated imperatively on scroll (see
                     setOverlayScroll) so the streak/button track the text 1:1.
                     Children are positioned in content coords. */}
@@ -1219,8 +1300,10 @@ export function OperatorArticleEditor({
                   {syncedRect != null ? (
                     <div
                       aria-hidden
-                      className="absolute left-0 right-0 bg-white/10 rounded-sm"
+                      className="absolute left-0 right-0 bg-white/10"
                       style={{
+                        // pad equally above and below so the streak stays
+                        // vertically centered on the synced text
                         top: syncedRect.top - STREAK_PAD,
                         height: syncedRect.height + STREAK_PAD * 2,
                       }}
@@ -1272,9 +1355,9 @@ export function OperatorArticleEditor({
                   }}
                   onDrop={handleTextareaDrop}
                   spellCheck={false}
-                  className={`min-h-[70vh] w-full resize-none bg-black px-4 py-4 font-mono text-sm leading-6 text-white outline-none xl:sticky xl:min-h-0 xl:h-[calc(100vh-var(--sticky-header-offset,80px))] ${uploadingFile ? "opacity-50" : ""}`}
-                  style={{ top: "var(--sticky-header-offset, 80px)" }}
+                  className={`block min-h-[70vh] w-full resize-none bg-black px-4 py-4 font-mono text-sm leading-6 text-white outline-none xl:min-h-0 xl:h-full ${uploadingFile ? "opacity-50" : ""}`}
                 />
+                </div>
               </div>
             ) : null}
 

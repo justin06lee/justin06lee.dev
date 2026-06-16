@@ -29,6 +29,25 @@ export function trimBlankEdges(lines: string[]): string {
   return lines.slice(start, end).join("\n");
 }
 
+// Number of raw lines (title + metadata + blank edges) that precede the parsed
+// body. The editor uses this to convert a textarea line into a body line for
+// preview sync. `content` is `parseArticleDraft(raw).content` (already LF + blank
+// edges trimmed); `raw` must be normalized to LF by the caller.
+//
+// We match `content` only at a line boundary: a bare indexOf can land on a
+// mid-line occurrence (e.g. the body's first line text also appearing inside the
+// title or a metadata value), which would shift every mapped line and sync to the
+// wrong block. Returns 0 if the body can't be located.
+export function bodyLineOffset(raw: string, content: string): number {
+  if (!content) return 0;
+  let index = raw.indexOf(content);
+  while (index > 0 && raw[index - 1] !== "\n") {
+    index = raw.indexOf(content, index + 1);
+  }
+  if (index < 0) return 0;
+  return raw.slice(0, index).split("\n").length - 1;
+}
+
 export function parseArticleDraft(
   raw: string,
   fallbackTitle: string

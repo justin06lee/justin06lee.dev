@@ -279,10 +279,36 @@ html, body {
 
 /* Editor<->preview line sync: gray highlight on the matched preview block. Plain
    gray fill (no accent border) so it mirrors the editor's gray streak; persists
-   until the next sync replaces it. */
-.sync-highlight {
+   until the next sync replaces it. Driven by a data attribute that
+   MarkdownRenderer stamps during render, so it survives react-markdown re-renders
+   -- an imperatively-added class was wiped on the next render, which dropped the
+   highlight from body paragraphs. */
+[data-sync-highlight] {
   background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+}
+
+/* For text blocks only (paragraphs + headings), bleed the streak horizontally
+   past the text so the fill doesn't hug the words. Negative margin pulls the box
+   out on each side; equal padding pushes the text back to where it was, so the
+   text doesn't move and the vertical extent is untouched. Block-ish content
+   (code, images, tables, lists, blockquotes) keeps the tight box. The bleed sits
+   inside the preview's px-4/px-8 gutter, so it never causes horizontal overflow.
+   Tweak --sync-bleed to taste. */
+:is(p, h1, h2, h3, h4, h5, h6)[data-sync-highlight] {
+  --sync-bleed: 0.5rem;
+  margin-left: calc(-1 * var(--sync-bleed));
+  margin-right: calc(-1 * var(--sync-bleed));
+  padding-left: var(--sync-bleed);
+  padding-right: var(--sync-bleed);
+}
+
+/* An opaque image hides the fill behind it, so mark a highlighted image with an
+   outline instead (outline doesn't affect layout). Covers both a standalone
+   image (wrapped in a <p>) and an image that is itself the tagged block. */
+[data-sync-highlight] img,
+img[data-sync-highlight] {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 3px;
 }
 
 .range-custom {
