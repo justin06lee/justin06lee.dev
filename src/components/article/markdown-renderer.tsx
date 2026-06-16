@@ -19,13 +19,22 @@ interface MarkdownRendererProps {
   // when true, stamp each top-level block with data-source-line so the editor
   // can map textarea lines to rendered blocks for scroll/highlight sync
   lineSync?: boolean;
+  // 1-based content line of the block to highlight (the synced block). The plugin
+  // stamps data-sync-highlight on the last block at/above this line. Declarative
+  // (rendered into the markup) so a re-render can't strand it -- an imperatively
+  // added class gets wiped when react-markdown rebuilds its DOM on the next render.
+  highlightLine?: number | null;
 }
 
 // Copies each top-level block's source line (1-based, relative to `content`)
-// onto a data-source-line attribute. Only top-level children are tagged so the
-// editor maps a line to exactly one block instead of every nested element.
-function rehypeSourceLine() {
+// onto a data-source-line attribute, and marks the highlighted block with
+// data-sync-highlight. Only top-level children are tagged so the editor maps a
+// line to exactly one block instead of every nested element.
+function rehypeSourceLine(options?: { highlightLine?: number | null }) {
+  const highlightLine = options?.highlightLine ?? null;
   return (tree: { children?: Array<Record<string, unknown>> }) => {
+    // the last top-level block at/above the target line is the one to highlight
+    let highlightTarget: Record<string, unknown> | null = null;
     for (const node of tree.children ?? []) {
       const position = node.position as
         | { start?: { line?: number } }
@@ -35,7 +44,13 @@ function rehypeSourceLine() {
         const properties = (node.properties ?? {}) as Record<string, unknown>;
         properties.dataSourceLine = line;
         node.properties = properties;
+        if (highlightLine != null && line <= highlightLine) {
+          highlightTarget = properties;
+        }
       }
+    }
+    if (highlightTarget) {
+      highlightTarget.dataSyncHighlight = true;
     }
   };
 }
@@ -76,6 +91,7 @@ export function MarkdownRenderer({
   content,
   imageBaseUrl,
   lineSync = false,
+  highlightLine = null,
 }: MarkdownRendererProps) {
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
@@ -285,7 +301,7 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={
           lineSync
-            ? [rehypeKatex, rehypeSlug, rehypeSourceLine]
+            ? [rehypeKatex, rehypeSlug, [rehypeSourceLine, { highlightLine }]]
             : [rehypeKatex, rehypeSlug]
         }
         components={components}

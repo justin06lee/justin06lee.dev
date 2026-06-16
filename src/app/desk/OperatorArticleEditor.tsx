@@ -7,17 +7,22 @@ import {
   useActionState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { parseArticleDraft } from "@/lib/article-draft";
+import { bodyLineOffset, parseArticleDraft } from "@/lib/article-draft";
 import { routeForPath } from "@/lib/github";
 import type { OperatorImageAsset } from "@/lib/operator-content";
 import { getThemeImageVariant } from "@/lib/theme-images";
 import { useTheme } from "next-themes";
 import { OperatorDrawingWindow } from "./OperatorDrawingWindow";
-import { SyncedPreview, type SyncedPreviewHandle } from "./SyncedPreview";
+import {
+  SyncedPreview,
+  type SyncedPreviewHandle,
+  type PreviewBlockSelection,
+} from "./SyncedPreview";
 import {
   deleteImageAction,
   saveArticleAction,
@@ -271,12 +276,6 @@ function moveToWordEnd(text: string, index: number): number {
   return cursor;
 }
 
-// textarea metrics for line-sync: `text-sm leading-6` => 24px line box, `py-4`
-// => 16px top padding. EDITOR_ANCHOR keeps the synced line just below the top.
-const EDITOR_LINE_HEIGHT = 24;
-const EDITOR_PAD_TOP = 16;
-const EDITOR_ANCHOR = 24;
-
 // byte offset where a 1-based line begins, for moving the textarea caret
 function lineStartOffset(text: string, line: number): number {
   if (line <= 1) return 0;
@@ -288,6 +287,97 @@ function lineStartOffset(text: string, line: number): number {
     }
   }
   return text.length;
+}
+
+// computed-style props the mirror div must copy so its text wraps exactly like
+// the textarea (same font metrics + wrapping rules => same line breaks)
+const MIRROR_STYLE_PROPS = [
+  "boxSizing",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "fontVariant",
+  "letterSpacing",
+  "lineHeight",
+  "textTransform",
+  "textIndent",
+  "whiteSpace",
+  "wordSpacing",
+  "tabSize",
+] as const;
+
+export interface SelectionRect {
+  // pixels from the top of the textarea's content (caret coords, scroll-agnostic)
+  top: number;
+  height: number;
+}
+
+// vertical breathing room (px) added above/below the editor's gray streak
+const STREAK_PAD = 3;
+
+// Build a hidden div that wraps text exactly like the textarea, then read the
+// pixel top of the line containing `position`. Putting the *remaining* text in
+// the measured span keeps the line breaks after `position` identical to the
+// textarea. (The classic textarea-caret-position technique.)
+function measureCaretTop(
+  textarea: HTMLTextAreaElement,
+  computed: CSSStyleDeclaration,
+  position: number
+): number {
+  const doc = textarea.ownerDocument;
+  const div = doc.createElement("div");
+  const style = div.style;
+  for (const prop of MIRROR_STYLE_PROPS) {
+    style[prop] = computed[prop];
+  }
+  style.position = "absolute";
+  style.top = "-9999px";
+  style.left = "-9999px";
+  style.visibility = "hidden";
+  style.overflow = "hidden";
+  style.height = "auto";
+  // clientWidth excludes any scrollbar, so wrapping matches what the user sees;
+  // border-box + copied padding then reproduces the exact content width
+  style.boxSizing = "border-box";
+  style.width = `${textarea.clientWidth}px`;
+  style.borderWidth = "0";
+
+  const value = textarea.value;
+  div.textContent = value.slice(0, position);
+  const span = doc.createElement("span");
+  // trailing "." so a position at the very end still produces a laid-out box
+  span.textContent = value.slice(position) || ".";
+  div.appendChild(span);
+
+  doc.body.appendChild(div);
+  // offsetTop is measured from the offsetParent's padding edge (inside the
+  // border), so add the textarea's top border to land in its border-box space,
+  // which is where the absolutely-positioned overlay/button live.
+  const borderTop = parseFloat(computed.borderTopWidth) || 0;
+  const top = span.offsetTop + borderTop;
+  doc.body.removeChild(div);
+  return top;
+}
+
+// A textarea can't report caret pixel coordinates, and its lines soft-wrap, so
+// line-number * line-height is wrong. Measure the selection's start and end rows
+// via the mirror div. Returns content-space coords; subtract scrollTop for the
+// viewport position.
+function measureSelectionRect(
+  textarea: HTMLTextAreaElement,
+  start: number,
+  end: number
+): SelectionRect | null {
+  const computed = window.getComputedStyle(textarea);
+  const lineHeight = parseFloat(computed.lineHeight) || 24;
+  const top = measureCaretTop(textarea, computed, start);
+  const endTop = end > start ? measureCaretTop(textarea, computed, end) : top;
+  return { top, height: Math.max(lineHeight, endTop + lineHeight - top) };
 }
 
 export function OperatorArticleEditor({
@@ -333,13 +423,44 @@ export function OperatorArticleEditor({
   const preferredColumnRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewApiRef = useRef<SyncedPreviewHandle>(null);
-  // 1-based raw (textarea) line currently highlighted on both panes
-  const [syncLine, setSyncLine] = useState<number | null>(null);
-  // 1-based raw line where the floating "-> preview" button sits, or null when
-  // there's no active selection to sync from. Sync is deliberate (button click),
-  // not automatic on every cursor move.
-  const [syncButtonLine, setSyncButtonLine] = useState<number | null>(null);
-  const [editorScrollTop, setEditorScrollTop] = useState(0);
+  // Live non-empty selection that the floating "-> preview" button acts on.
+  // Sync is deliberate (button click / preview click), not automatic on cursor
+  // moves. char offsets into `raw`.
+  const [selection, setSelection] = useState<{ start: number; end: number } | null>(
+    null
+  );
+  // The synced range shown as a persistent gray streak in the editor (set when a
+  // sync fires, in either direction). char offsets into `raw`.
+  const [syncedRange, setSyncedRange] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
+  // Pixel rects (content coords) measured from the textarea via the mirror div;
+  // recomputed when the range or text changes, not on every scroll frame.
+  const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
+  const [syncedRect, setSyncedRect] = useState<SelectionRect | null>(null);
+  const [measureNonce, setMeasureNonce] = useState(0);
+  // Overlay layer (streak + button) is translated to follow the textarea's
+  // internal scroll. Done imperatively via a ref so it tracks scroll 1:1 with no
+  // React-render lag (state-driven positioning made the streak chase the text).
+  const overlayLayerRef = useRef<HTMLDivElement>(null);
+  const editorScrollTopRef = useRef(0);
+  // The editor body (sidebar + textarea + preview) is sized to fill exactly the
+  // space below everything above it -- the fixed navbar, the operator header, and
+  // this editor's own title/toolbar. Measuring that offset (rather than assuming
+  // only the 80px navbar) keeps the panes inside the viewport, so the textarea's
+  // last line is always reachable by its own scroll instead of falling below the
+  // fold and needing the page to scroll.
+  const bodyGridRef = useRef<HTMLDivElement>(null);
+  const headerSectionRef = useRef<HTMLDivElement>(null);
+  const [editorOffset, setEditorOffset] = useState<number | null>(null);
+
+  function setOverlayScroll(scrollTop: number) {
+    editorScrollTopRef.current = scrollTop;
+    if (overlayLayerRef.current) {
+      overlayLayerRef.current.style.transform = `translateY(${-scrollTop}px)`;
+    }
+  }
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
   const articleName = articlePath[articlePath.length - 1] ?? "Untitled";
@@ -355,61 +476,168 @@ export function OperatorArticleEditor({
   // Preview line numbers are relative to the parsed body, the editor's are
   // relative to the full draft. This is the count of raw lines (title +
   // metadata + blanks) before the body starts, used to convert between them.
-  const bodyOffset = useMemo(() => {
-    if (!parsed.content) return 0;
-    // parseArticleDraft re-joins lines with "\n", so on CRLF input parsed.content
-    // never matches raw verbatim. Normalize to LF first so indexOf can find it,
-    // which keeps editor<->preview line sync working for Windows line endings.
-    const normalized = raw.replace(/\r\n/g, "\n");
-    const index = normalized.indexOf(parsed.content);
-    if (index < 0) return 0;
-    return normalized.slice(0, index).split("\n").length - 1;
-  }, [raw, parsed.content]);
+  // parseArticleDraft re-joins lines with "\n", so on CRLF input parsed.content
+  // never matches raw verbatim; normalize to LF first so the match succeeds for
+  // Windows line endings.
+  const bodyOffset = useMemo(
+    () => bodyLineOffset(raw.replace(/\r\n/g, "\n"), parsed.content),
+    [raw, parsed.content]
+  );
 
-  function scrollEditorToLine(rawLine: number) {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const top = EDITOR_PAD_TOP + (rawLine - 1) * EDITOR_LINE_HEIGHT;
-    textarea.scrollTop = Math.max(0, top - EDITOR_ANCHOR);
-  }
-
-  // Show the floating "-> preview" button at the start of a non-empty selection.
+  // Track the live non-empty selection so the floating button can sit on it.
   // Collapsed caret => no button (nothing to deliberately sync).
-  function updateSyncButton() {
+  function updateSelection() {
     const textarea = textareaRef.current;
     if (!textarea) return;
     const { selectionStart, selectionEnd } = textarea;
     if (selectionStart === selectionEnd) {
-      setSyncButtonLine(null);
+      setSelection(null);
       return;
     }
-    setSyncButtonLine(raw.slice(0, selectionStart).split("\n").length);
+    setSelection({ start: selectionStart, end: selectionEnd });
   }
 
-  // editor -> preview: scroll+highlight the block for the selection's start line.
-  // Deliberately does not scroll the editor (the operator is already looking at
-  // their selection); only the preview moves.
-  function syncToPreview() {
-    if (syncButtonLine == null) return;
-    setSyncLine(syncButtonLine);
-    const contentLine = syncButtonLine - bodyOffset;
-    if (contentLine >= 1) {
-      previewApiRef.current?.scrollToLine(contentLine);
-    }
-  }
-
-  // preview -> editor: move the caret to the matching line and align the editor
-  function handlePreviewSelectLine(contentLine: number) {
-    const rawLine = contentLine + bodyOffset;
-    setSyncLine(rawLine);
+  // Measure the button/streak pixel rects whenever the range or text changes.
+  // measureNonce lets a resize force a re-measure (wrapping depends on width).
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (textarea) {
-      const offset = lineStartOffset(raw, rawLine);
-      textarea.focus();
-      textarea.setSelectionRange(offset, offset);
+    if (!textarea || !selection) {
+      setSelectionRect(null);
+      return;
     }
-    scrollEditorToLine(rawLine);
+    setSelectionRect(
+      measureSelectionRect(textarea, selection.start, selection.end)
+    );
+  }, [selection, raw, measureNonce]);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !syncedRange) {
+      setSyncedRect(null);
+      return;
+    }
+    setSyncedRect(
+      measureSelectionRect(textarea, syncedRange.start, syncedRange.end)
+    );
+  }, [syncedRange, raw, measureNonce]);
+
+  useEffect(() => {
+    function onResize() {
+      setMeasureNonce((n) => n + 1);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Measure how far the editor body sits below the top of the page so the panes
+  // can be sized to fill the rest of the viewport exactly (see editorOffset). The
+  // offset changes when the toolbar header grows/shrinks (vim help, save messages)
+  // or the window resizes, so watch both.
+  useLayoutEffect(() => {
+    const grid = bodyGridRef.current;
+    if (!grid) return;
+    function measure() {
+      const node = bodyGridRef.current;
+      if (!node) return;
+      // document-space top (scroll-independent): everything above the body
+      const top = node.getBoundingClientRect().top + window.scrollY;
+      setEditorOffset(Math.round(top));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (headerSectionRef.current) observer.observe(headerSectionRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  // Switching modes changes the editor pane's width (full in edit, half in
+  // split), which re-wraps the text, so the cached rects are stale. It can also
+  // remount the textarea (it unmounts in preview mode), leaving editorScrollTopRef
+  // holding a scroll value the fresh element no longer has. Re-sync the overlay
+  // from the live scrollTop and force a re-measure for the new width.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    setOverlayScroll(textarea ? textarea.scrollTop : 0);
+    setMeasureNonce((n) => n + 1);
+  }, [mode]);
+
+  // editor -> preview: scroll the matching preview block to the same viewport
+  // height as the selection, and leave a gray streak over the selected text. The
+  // editor itself does not move (the user is looking at it).
+  function syncToPreview() {
+    const textarea = textareaRef.current;
+    if (!textarea || !selection) return;
+    const rect =
+      selectionRect ??
+      measureSelectionRect(textarea, selection.start, selection.end);
+    if (!rect) return;
+    const screenY =
+      textarea.getBoundingClientRect().top + rect.top - textarea.scrollTop;
+    const rawLine = raw.slice(0, selection.start).split("\n").length;
+    const contentLine = rawLine - bodyOffset;
+    if (contentLine >= 1) {
+      previewApiRef.current?.alignLineToScreenY(contentLine, screenY);
+    }
+    setSyncedRange({ start: selection.start, end: selection.end });
+    // swap the native selection for our gray streak; keep focus + caret
+    textarea.setSelectionRange(selection.start, selection.start);
+    setSelection(null);
   }
+
+  // preview -> editor: scroll the editor so the matching text lands level with
+  // the clicked preview block, and lay a gray streak over the block's lines.
+  // useCallback so SyncedPreview (memoized) doesn't re-render on every unrelated
+  // editor state change -- a preview re-render reflows it and can drop a click.
+  const handlePreviewSelectBlock = useCallback(
+    function handlePreviewSelectBlock({
+      startLine,
+      endLine,
+      screenY,
+      screenHeight,
+    }: PreviewBlockSelection) {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const rawStart = startLine + bodyOffset;
+      const startOffset = lineStartOffset(raw, rawStart);
+      // endLine is the *next* block's start line; the clicked block's last line is
+      // one above it. Trim trailing blank lines so the streak covers only this
+      // block's text, not the blank separator or the next block's ```fence/heading.
+      const lines = raw.split("\n");
+      let lastLine = endLine == null ? lines.length : endLine + bodyOffset - 1;
+      while (lastLine > rawStart && (lines[lastLine - 1] ?? "").trim() === "") {
+        lastLine -= 1;
+      }
+      // sit endOffset on the last text line (before its newline) so the streak
+      // bottom lands on that line's last visual row, not the line below it
+      let endOffset = lineStartOffset(raw, lastLine + 1);
+      if (endOffset > startOffset && raw[endOffset - 1] === "\n") endOffset -= 1;
+      setSyncedRange({ start: startOffset, end: Math.max(startOffset, endOffset) });
+      // measure the whole block (start..end) so we can keep its last line in view
+      const rect = measureSelectionRect(textarea, startOffset, endOffset);
+      if (rect) {
+        const taTop = textarea.getBoundingClientRect().top;
+        // preferred: line the block's CENTER up with the clicked preview block's
+        // center (not just the top edges). The editor's mono text is denser than
+        // the preview's prose, so equal blocks have different heights; centering
+        // keeps the two highlights visually level. (rect.height - screenHeight)/2
+        // nudges the top-aligned position by half the height difference.
+        const aligned =
+          rect.top - (screenY - taTop) + (rect.height - screenHeight) / 2;
+        // but if that alignment would push the block's last line below the editor,
+        // pull the block up so its bottom rests at the editor's bottom -- this is
+        // the "click the code block and see the whole thing, closing fence
+        // included" case. The editor now fits the viewport, so clientHeight is the
+        // true visible height. Capped so the first line never scrolls past the top.
+        const endAtBottom = rect.top + rect.height - textarea.clientHeight;
+        const target = Math.min(Math.max(aligned, endAtBottom), rect.top);
+        textarea.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+      }
+    },
+    [raw, bodyOffset]
+  );
 
   useEffect(() => {
     function handleDocumentPointerDown(event: PointerEvent) {
@@ -842,12 +1070,21 @@ export function OperatorArticleEditor({
   }, [vimEnabled]);
 
   return (
-    <div className="border border-white/10 bg-white/[0.02]">
+    <div
+      className="border border-white/10 bg-white/[0.02]"
+      // panes below read this for their height/sticky-top; falls back to the
+      // navbar offset until the body's real top is measured on the client
+      style={
+        editorOffset != null
+          ? ({ "--editor-offset": `${editorOffset}px` } as React.CSSProperties)
+          : undefined
+      }
+    >
       <form ref={formRef} action={formAction}>
         <input type="hidden" name="articlePath" value={articlePath.join("/")} />
         <input type="hidden" name="sha" value={currentSha} />
 
-        <div className="border-b border-white/10 px-4 py-4">
+        <div ref={headerSectionRef} className="border-b border-white/10 px-4 py-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-white">
@@ -959,11 +1196,11 @@ export function OperatorArticleEditor({
           ) : null}
         </div>
 
-        <div className="grid min-h-[70vh] gap-0 xl:grid-cols-[18rem_1fr] xl:items-start">
-          <aside
-            className="border-b border-white/10 bg-white/[0.02] xl:border-b-0 xl:border-r xl:sticky xl:flex xl:flex-col xl:h-[calc(100vh-var(--sticky-header-offset,80px))]"
-            style={{ top: "var(--sticky-header-offset, 80px)" }}
-          >
+        <div
+          ref={bodyGridRef}
+          className="grid min-h-[70vh] gap-0 xl:min-h-0 xl:grid-cols-[18rem_1fr] xl:items-start"
+        >
+          <aside className="border-b border-white/10 bg-white/[0.02] xl:border-b-0 xl:border-r xl:flex xl:flex-col xl:h-[calc(100vh-var(--editor-offset,var(--sticky-header-offset,80px)))]">
             <div className="border-b border-white/10 px-4 py-3 xl:shrink-0">
               <h3 className="font-semibold text-white">images</h3>
               <p className="mt-1 text-xs text-white/50 leading-5">
@@ -1037,45 +1274,64 @@ export function OperatorArticleEditor({
             </div>
           </aside>
 
-          <div className="grid min-h-[70vh] gap-0 xl:grid-cols-2 xl:items-start">
+          <div
+            className={`grid min-h-[70vh] gap-0 xl:min-h-0 xl:items-start ${mode === "split" ? "xl:grid-cols-2" : "xl:grid-cols-1"}`}
+          >
             {mode !== "preview" ? (
               <div
                 className={`relative min-h-0 overflow-hidden ${mode === "split" ? "border-r border-white/10" : ""}`}
               >
-                {syncLine != null ? (
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute left-0 right-0 z-10 bg-white/10"
-                    style={{
-                      top:
-                        EDITOR_PAD_TOP +
-                        (syncLine - 1) * EDITOR_LINE_HEIGHT -
-                        editorScrollTop,
-                      height: EDITOR_LINE_HEIGHT,
-                    }}
-                  />
-                ) : null}
-                {mode === "split" && syncButtonLine != null ? (
-                  <button
-                    type="button"
-                    // preventDefault keeps the textarea focused and its selection
-                    // intact; otherwise clicking the button would blur the
-                    // textarea (firing onBlur) and clear the selection first.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={syncToPreview}
-                    className="absolute right-2 z-20 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
-                    style={{
-                      top: Math.max(
-                        EDITOR_PAD_TOP,
-                        EDITOR_PAD_TOP +
-                          (syncButtonLine - 1) * EDITOR_LINE_HEIGHT -
-                          editorScrollTop
-                      ),
-                    }}
-                  >
-                    {"→ preview"}
-                  </button>
-                ) : null}
+                {/* Sticky wrapper holds BOTH the overlay and the textarea so they
+                    stick together. The textarea used to be sticky on its own while
+                    the overlay was absolute to the pane, so when the page scrolled
+                    the sticky textarea slid away from the pane and the streak (in
+                    the overlay) ended up offset by that displacement. Keeping both
+                    in one sticky box means the streak's only transform is the
+                    textarea's internal scroll. */}
+                <div className="relative min-h-[70vh] xl:min-h-0 xl:h-[calc(100vh-var(--editor-offset,var(--sticky-header-offset,80px)))]">
+                {/* Overlay layer: translated imperatively on scroll (see
+                    setOverlayScroll) so the streak/button track the text 1:1.
+                    Children are positioned in content coords. */}
+                <div
+                  ref={overlayLayerRef}
+                  className="pointer-events-none absolute inset-0 z-10"
+                  style={{ transform: `translateY(${-editorScrollTopRef.current}px)` }}
+                >
+                  {syncedRect != null ? (
+                    <div
+                      aria-hidden
+                      className="absolute left-0 right-0 bg-white/10"
+                      style={{
+                        // pad equally above and below so the streak stays
+                        // vertically centered on the synced text
+                        top: syncedRect.top - STREAK_PAD,
+                        height: syncedRect.height + STREAK_PAD * 2,
+                      }}
+                    />
+                  ) : null}
+                  {mode === "split" && selection != null && selectionRect != null ? (
+                    <button
+                      type="button"
+                      // preventDefault keeps the textarea focused and its
+                      // selection intact; otherwise clicking the button would
+                      // blur the textarea (firing onBlur) and clear it first.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={syncToPreview}
+                      className="pointer-events-auto absolute right-2 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+                      style={{
+                        top: selectionRect.top,
+                        // sit just above the first selected line; flip below
+                        // when the selection is too near the top to fit
+                        transform:
+                          selectionRect.top - editorScrollTopRef.current > 28
+                            ? "translateY(calc(-100% - 4px))"
+                            : "translateY(4px)",
+                      }}
+                    >
+                      {"→ preview"}
+                    </button>
+                  ) : null}
+                </div>
                 <textarea
                   ref={textareaRef}
                   name="raw"
@@ -1085,12 +1341,12 @@ export function OperatorArticleEditor({
                   onKeyDown={handleEditorKeyDown}
                   onMouseUp={() => {
                     syncNormalCursorPosition();
-                    updateSyncButton();
+                    updateSelection();
                   }}
-                  onSelect={updateSyncButton}
-                  onBlur={() => setSyncButtonLine(null)}
+                  onSelect={updateSelection}
+                  onBlur={() => setSelection(null)}
                   onScroll={(event) =>
-                    setEditorScrollTop(event.currentTarget.scrollTop)
+                    setOverlayScroll(event.currentTarget.scrollTop)
                   }
                   onDragOver={(event) => {
                     if (event.dataTransfer.types.includes("Files")) {
@@ -1099,9 +1355,9 @@ export function OperatorArticleEditor({
                   }}
                   onDrop={handleTextareaDrop}
                   spellCheck={false}
-                  className={`min-h-[70vh] w-full resize-none bg-black px-4 py-4 font-mono text-sm leading-6 text-white outline-none xl:sticky xl:min-h-0 xl:h-[calc(100vh-var(--sticky-header-offset,80px))] ${uploadingFile ? "opacity-50" : ""}`}
-                  style={{ top: "var(--sticky-header-offset, 80px)" }}
+                  className={`block min-h-[70vh] w-full resize-none bg-black px-4 py-4 font-mono text-sm leading-6 text-white outline-none xl:min-h-0 xl:h-full ${uploadingFile ? "opacity-50" : ""}`}
                 />
+                </div>
               </div>
             ) : null}
 
@@ -1112,7 +1368,7 @@ export function OperatorArticleEditor({
                 prerequisites={parsed.prerequisites}
                 content={parsed.content}
                 imageBaseUrl={previewBaseUrl}
-                onSelectLine={handlePreviewSelectLine}
+                onSelectBlock={handlePreviewSelectBlock}
               />
             ) : null}
           </div>
