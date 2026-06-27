@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { makeDonutRenderer, indicesToString, type DonutConfig } from "./donut-frames";
+import { makeDonutRenderer, type DonutConfig } from "./donut-frames";
 import type { BakeResult } from "./AsciiDonut.worker";
 
 export type AsciiSpinningDonutProps = {
@@ -90,37 +90,26 @@ export default function AsciiSpinningDonut({
 		// Renderer used only for the few frames before the background bake lands.
 		const live = makeDonutRenderer(cfg);
 		const N = live.N;
-		const bufSize = live.bufSize;
 
 		const frameBudget = isLowEnd ? 33 : 0; // ~30fps on low-end, vsync otherwise
 		let lastFrameTime = 0;
 		let fi = 0;
 
-		// Full loop baked off-thread into an index buffer; strings materialised lazily
-		// on first replay of each frame (spreads the allocation, no main-thread bake).
-		let baked: Uint8Array | null = null;
-		const strCache: (string | undefined)[] = new Array(N);
+		// Whole loop baked off-thread into finished <pre> strings. Once it lands,
+		// playback is a pure array swap — no per-frame math or string building.
+		let baked: string[] | null = null;
 
 		let worker: Worker | null = null;
 		if (typeof Worker !== "undefined") {
 			try {
 				worker = new Worker(new URL("./AsciiDonut.worker.ts", import.meta.url), { type: "module" });
 				worker.onmessage = (e: MessageEvent<BakeResult>) => {
-					if (!terminated) baked = e.data.buf;
+					if (!terminated) baked = e.data.frames;
 				};
 				worker.postMessage(cfg);
 			} catch {
 				worker = null; // no worker → live render forever (still cheap)
 			}
-		}
-
-		function replayString(i: number): string {
-			let s = strCache[i];
-			if (s === undefined) {
-				s = indicesToString(baked!, i * bufSize, width, height, chars);
-				strCache[i] = s;
-			}
-			return s;
 		}
 
 		function frame(now: number) {
@@ -131,7 +120,7 @@ export default function AsciiSpinningDonut({
 			lastFrameTime = now;
 
 			const pre = preRef.current;
-			if (pre) pre.textContent = baked ? replayString(fi) : live.renderString(fi);
+			if (pre) pre.textContent = baked ? baked[fi] : live.renderString(fi);
 			fi = (fi + 1) % N;
 
 			rafId = requestAnimationFrame(frame);
