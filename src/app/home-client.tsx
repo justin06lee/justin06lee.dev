@@ -6,6 +6,7 @@ import * as motion from "motion/react-client";
 import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
+import { Intro as ChromeIntro } from "@/components/chrome/intro";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { SiteConfig } from "@/lib/site-config";
 
@@ -98,61 +99,16 @@ function Intro({ config, onDone }: { config: SiteConfig; onDone: () => void }) {
     </span>
   );
 
-  const steps: { node: React.ReactNode; in: number; out: number }[] = [
-    { node: "hi.", in: 2, out: 5 },
-    { node: justinStep, in: 6, out: 10 },
-    { node: "welcome to my website.", in: 11, out: 15 },
-  ];
-
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center -mt-8">
-      <motion.div
-        initial={{ opacity: 1, y: 0 }}
-        animate={{ opacity: 0, y: 10 }}
-        transition={{ duration: 0.8, delay: 15 }}
-        className="mb-12"
-      >
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1 }}
-          className="text-white"
-        >
+    <ChromeIntro
+      hero={
+        <div className="text-white -mt-8 mb-4">
           <AsciiSpinningDonut />
-        </motion.div>
-      </motion.div>
-
-      <div
-        className="relative text-white text-lg leading-tight"
-        style={{ height: "1.75em", width: "250px" }}
-      >
-        {steps.map((s, i) => (
-          <motion.div
-            key={i}
-            className="absolute inset-0 flex items-center justify-center"
-            initial={{ opacity: 1, y: 0 }}
-            animate={{ opacity: 0, y: 10 }}
-            transition={{ duration: 1, delay: s.out }}
-            onAnimationComplete={i === steps.length - 1 ? onDone : undefined}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: s.in }}
-            >
-              <div>{s.node}</div>
-            </motion.div>
-          </motion.div>
-        ))}
-      </div>
-
-      <button
-        onClick={onDone}
-        className="fixed bottom-12 text-sm text-white underline-offset-4 hover:underline"
-        aria-label="Skip intro"
-      >
-        Skip
-      </button>
-    </div>
+        </div>
+      }
+      lines={["hi.", justinStep, "welcome to my website."]}
+      skipLabel="Skip"
+      onComplete={onDone}
+    />
   );
 }

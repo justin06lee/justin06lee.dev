@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "skills": {
+    "chrome": {
+      "name": "chrome",
+      "description": "Use when building UI with the chrome component library (chrome.justin06lee.dev / @justin06lee/chrome) — installing its components, composing them into pages, matching its dark brutalist design language, or deciding which chrome component fits a job. Triggers on phrases like \"use chrome components\", \"add a chrome component\", \"install from chrome.justin06lee.dev\", \"chrome-ui\", \"justin06lee's components\", or any work inside a project that has a chrome.json.",
+      "scope": "project",
+      "source": "justin06lee/chrome.md",
+      "installed_path": "/Users/huiyunlee/Workspace/github.com/justin06lee/justin06lee.dev/.claude/skills/chrome",
+      "installed_at": "2026-07-15T04:13:29Z",
+      "updated_at": "2026-07-15T04:13:29Z",
+      "source_ref": "master",
+      "source_type": "github"
+    }
+  }
+}

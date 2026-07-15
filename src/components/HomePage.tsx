@@ -1,106 +1,15 @@
 "use client";
 
 import AsciiSpinningDonut from "@/components/AsciiDonut";
-import React, { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { useEffect, useState } from "react";
 import * as motion from "motion/react-client";
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import SocialBar from "@/components/Socials";
 import PfpTile from "@/components/PfpTile";
+import { Scramble } from "@/components/chrome/scramble";
+import { Ascii } from "@/components/chrome/ascii";
 import type { SiteConfig } from "@/lib/site-config";
-
-const LETTERS = "abcdefghijklmnopqrstuvwxyz";
-
-function ScrambleWord({ text }: { text: string }) {
-    const visRef = useRef<HTMLSpanElement | null>(null);
-    const sizerRef = useRef<HTMLSpanElement | null>(null);
-    const intervalRef = useRef<number | null>(null);
-    const [widthPx, setWidthPx] = useState<number | null>(null);
-
-    useLayoutEffect(() => {
-        const measure = () => {
-            if (!sizerRef.current) return;
-            const w = sizerRef.current.getBoundingClientRect().width;
-            if (w) setWidthPx(Math.ceil(w));
-        };
-
-        measure();
-
-        const onResize = () => measure();
-        window.addEventListener("resize", onResize);
-
-        let fontsReadyCancelled = false;
-        if ("fonts" in document) {
-            (document).fonts.ready.then(() => {
-                if (!fontsReadyCancelled) measure();
-            });
-        }
-
-        const ro = new ResizeObserver(() => measure());
-        if (sizerRef.current) ro.observe(sizerRef.current);
-
-        return () => {
-            window.removeEventListener("resize", onResize);
-            fontsReadyCancelled = true;
-            ro.disconnect();
-        };
-    }, [text]);
-
-    useEffect(() => {
-        return () => {
-            if (intervalRef.current) window.clearInterval(intervalRef.current);
-        };
-    }, []);
-
-    const handleMouseEnter = () => {
-        const el = visRef.current;
-        if (!el) return;
-        const targetValue = text;
-
-        let iteration = 0;
-        if (intervalRef.current) window.clearInterval(intervalRef.current);
-
-        intervalRef.current = window.setInterval(() => {
-            const node = visRef.current;
-            if (!node) return;
-
-            const scrambled = targetValue
-                .split("")
-                .map((_, idx) => (idx < iteration ? targetValue[idx] : LETTERS[Math.floor(Math.random() * 26)]))
-                .join("");
-
-            node.textContent = scrambled;
-
-            iteration += 1 / 3;
-            if (iteration >= targetValue.length) {
-                window.clearInterval(intervalRef.current!);
-                intervalRef.current = null;
-                node.textContent = targetValue;
-            }
-        }, 30);
-    };
-
-    return (
-        <>
-            <span ref={sizerRef} className="absolute -left-[9999px] -top-[9999px] whitespace-pre" aria-hidden>
-                {text}
-            </span>
-
-            <span
-                className="inline-block whitespace-nowrap align-baseline cursor-default"
-                style={widthPx ? { minWidth: `${widthPx}px` } : undefined}
-                onMouseEnter={handleMouseEnter}
-            >
-                <span ref={visRef}>{text}</span>
-            </span>
-        </>
-    );
-}
-
-function ScrambleText({ text }: { text: string }) {
-    const parts = text.split(/(\s+)/);
-    return <>{parts.map((p, i) => (/\s+/.test(p) ? <span key={i}>{p}</span> : <ScrambleWord key={i} text={p} />))}</>;
-}
 
 function useBreakpointScale() {
     const [s, setS] = useState(1);
@@ -225,29 +134,30 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.8, delay: 2 }}
                         >
-                            <ScrambleText text="im justin." />
+                            <Scramble>im justin.</Scramble>
                         </motion.div>
                     </div>
 
                     <div className="leading-relaxed xl:block hidden">
                         {config.description.map((line, i) => (
                             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 2.2 + i * 0.1 }}>
-                                <ScrambleText text={line} />
+                                <Scramble>{line}</Scramble>
                                 <br />
                             </motion.div>
                         ))}
                     </div>
 
                     <div className="xl:hidden flex justify-center">
-                        <motion.pre
+                        <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: ascii ? 1 : 0, y: 0 }}
                             transition={{ duration: 0.6, delay: 2 }}
-                            className="font-mono text-lg md:text-base leading-tight whitespace-pre text-left text-white/80 select-none inline-block"
-                            aria-hidden
+                            className="inline-block"
                         >
-                            {ascii}
-                        </motion.pre>
+                            <Ascii size={16} lineHeight={1.1} className="text-left text-white/80">
+                                {ascii || " "}
+                            </Ascii>
+                        </motion.div>
                     </div>
 
                     <div>
