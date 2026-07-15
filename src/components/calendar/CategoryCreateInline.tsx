@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { CATEGORY_PALETTE, pickNextUnusedColor } from "@/lib/colors";
 import type { CalendarCategory } from "@/lib/calendar-categories";
+import { Input } from "@/components/chrome/input";
+import { Button } from "@/components/chrome/button";
+import { ColorSwatchPicker } from "@/components/chrome/color-swatch";
 
 type Props = {
   initialName: string;
@@ -40,43 +43,28 @@ export default function CategoryCreateInline({ initialName, existingCategories, 
 
   return (
     <div className="border border-white/20 bg-black p-3 text-sm space-y-3">
-      <input
+      <Input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Category name"
-        className="w-full bg-transparent border border-white/20 px-2 py-1 text-white focus:border-white/60 outline-none"
+        className="w-full"
       />
-      <div className="grid grid-cols-8 gap-2">
-        {CATEGORY_PALETTE.map((c) => (
-          <button
-            key={c.hex}
-            type="button"
-            onClick={() => setColor(c.hex)}
-            aria-label={c.name}
-            title={c.name}
-            className={`h-6 w-6 border ${color === c.hex ? "border-white" : "border-white/20"}`}
-            style={{ backgroundColor: c.hex }}
-          />
-        ))}
-      </div>
+      {/* Palette restricted to the app's 8 category hexes. */}
+      <ColorSwatchPicker value={color} onChange={setColor} palette={CATEGORY_PALETTE} ariaLabel="Category color" />
       {error && <div className="text-xs text-red-400">{error}</div>}
       <div className="flex gap-2 justify-end">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs text-white/60 hover:text-white px-2 py-1"
-        >
+        <Button variant="link" size="sm" onClick={onCancel} className="text-white/60 hover:text-white">
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={submit}
           disabled={submitting || name.trim().length === 0}
-          className="text-xs border border-white/30 hover:bg-white/10 disabled:opacity-40 px-2 py-1"
         >
           {submitting ? "Creating..." : "Create"}
-        </button>
+        </Button>
       </div>
     </div>
   );

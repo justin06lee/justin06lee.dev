@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { addDays } from "@/lib/calendar-dates";
+import { CalendarNav, type CalendarView } from "@/components/chrome/calendar-nav";
 
 type View = "day" | "month" | "year";
 
@@ -51,6 +52,7 @@ export default function CalendarShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const onCategories = pathname === "/calendar/categories";
   const { view, token } = parsePath(pathname);
 
@@ -63,42 +65,44 @@ export default function CalendarShell({
   const prevHref =
     view === "day" && prev ? dayHref(prev) :
     view === "month" && prev ? monthHref(prev) :
-    view === "year" && prev ? yearHref(prev) : "#";
+    view === "year" && prev ? yearHref(prev) : null;
   const nextHref =
     view === "day" && next ? dayHref(next) :
     view === "month" && next ? monthHref(next) :
-    view === "year" && next ? yearHref(next) : "#";
+    view === "year" && next ? yearHref(next) : null;
   const todayHref = view === "month" ? monthHref(todayMonth) : view === "year" ? yearHref(todayYear) : dayHref(today);
-  const currentToken =
-    view === "day" ? today :
-    view === "month" ? todayMonth :
-    todayYear;
-  const isOnCurrent = token === currentToken;
   const currentLabel = view === "month" ? "this month" : view === "year" ? "this year" : "today";
-  const middleLabel = isOnCurrent ? currentLabel : (token ?? currentLabel);
+  // CalendarNav is controlled: it owns no routing, so wire every control back
+  // through the router to preserve the shell's existing per-view navigation.
+  const go = (href: string) => router.push(href);
+  const viewHref = (v: CalendarView) =>
+    v === "day" ? dayHref(today) : v === "month" ? monthHref(todayMonth) : yearHref(todayYear);
 
   return (
     <div className="min-h-screen bg-black text-white pt-16 pb-16 px-4 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3 mb-6">
-          <div className="flex items-center gap-4 text-sm">
-            <Link href={dayHref(today)} className={`underline-offset-4 hover:underline ${view === "day" && !onCategories ? "text-white" : "text-white/60"}`}>day</Link>
-            <Link href={monthHref(todayMonth)} className={`underline-offset-4 hover:underline ${view === "month" && !onCategories ? "text-white" : "text-white/60"}`}>month</Link>
-            <Link href={yearHref(todayYear)} className={`underline-offset-4 hover:underline ${view === "year" && !onCategories ? "text-white" : "text-white/60"}`}>year</Link>
-            {isAdmin && (
-              <Link
-                href="/calendar/categories"
-                className={`underline-offset-4 hover:underline ml-2 pl-4 border-l border-white/10 ${onCategories ? "text-white" : "text-white/60"}`}
-              >
-                categories
-              </Link>
-            )}
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Link href={prevHref} aria-label="Previous" className="text-white/60 hover:text-white">‹</Link>
-            <Link href={todayHref} title={isOnCurrent ? currentLabel : `jump to ${currentLabel}`} className="text-white/60 hover:text-white underline-offset-4 hover:underline font-mono tabular-nums">{middleLabel}</Link>
-            <Link href={nextHref} aria-label="Next" className="text-white/60 hover:text-white">›</Link>
-          </div>
+        <div className="flex flex-wrap items-center gap-4 border-b border-white/10 pb-3 mb-6">
+          <CalendarNav
+            className="flex-1 border-b-0 pb-0"
+            // On /calendar/categories `view` holds "categories" (not in the
+            // switcher options), so no segment highlights — matching the old shell.
+            view={view as CalendarView}
+            views={["day", "month", "year"]}
+            onViewChange={(v) => go(viewHref(v))}
+            label={token ?? currentLabel}
+            todayLabel={currentLabel}
+            onToday={() => go(todayHref)}
+            onPrev={prevHref ? () => go(prevHref) : undefined}
+            onNext={nextHref ? () => go(nextHref) : undefined}
+          />
+          {isAdmin && (
+            <Link
+              href="/calendar/categories"
+              className={`text-sm underline-offset-4 hover:underline ${onCategories ? "text-white" : "text-white/60"}`}
+            >
+              categories
+            </Link>
+          )}
         </div>
         {children}
       </div>

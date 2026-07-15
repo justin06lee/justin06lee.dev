@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import type { CalendarCategory } from "@/lib/calendar-categories";
 import CategoryPicker from "./CategoryPicker";
 import { epochToLocalInput, localInputToEpoch } from "@/lib/calendar-dates";
+import { Input } from "@/components/chrome/input";
+import { Button } from "@/components/chrome/button";
+import { Segmented } from "@/components/chrome/segmented";
 
 type Props = {
   categories?: CalendarCategory[];
@@ -77,72 +80,54 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
         <div className="text-xs uppercase tracking-wider text-white/60">
           {mode === "now" ? "New activity" : "Backfill activity"}
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setMode("now")}
-            className={`text-[10px] uppercase tracking-widest px-1.5 py-0.5 ${
-              mode === "now" ? "border border-white/40 text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Now
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("backfill")}
-            className={`text-[10px] uppercase tracking-widest px-1.5 py-0.5 ${
-              mode === "backfill" ? "border border-white/40 text-white" : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Backfill
-          </button>
-        </div>
+        <Segmented<"now" | "backfill">
+          size="compact"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "now", label: "Now" },
+            { value: "backfill", label: "Backfill" },
+          ]}
+          ariaLabel="Activity mode"
+        />
       </div>
       <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />
-      <input
+      <Input
         placeholder="Title (optional)"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm focus:border-white/60 outline-none"
+        className="w-full"
       />
       {mode === "backfill" && (
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <label className="text-xs text-white/60">Start</label>
-            <input
+            <Input
               type="datetime-local"
               value={startInput}
               onChange={(e) => setStartInput(e.target.value)}
-              className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm focus:border-white/60 outline-none"
+              className="w-full"
             />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-white/60">End</label>
-            <input
+            <Input
               type="datetime-local"
               value={endInput}
               onChange={(e) => setEndInput(e.target.value)}
-              className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm focus:border-white/60 outline-none"
+              className="w-full"
             />
           </div>
         </div>
       )}
       {error && <div className="text-xs text-red-400">{error}</div>}
       <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs text-white/60 hover:text-white px-2 py-1"
-        >
+        <Button variant="link" size="sm" onClick={onCancel} className="text-white/60 hover:text-white">
           Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="text-xs border border-white/30 hover:bg-white/10 disabled:opacity-40 px-2 py-1"
-        >
+        </Button>
+        <Button type="submit" variant="outline" size="sm" disabled={submitting}>
           {submitting ? "Saving..." : mode === "now" ? "Start" : "Add"}
-        </button>
+        </Button>
       </div>
     </form>
   );

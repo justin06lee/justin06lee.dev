@@ -64,3 +64,129 @@ about a missing component but they blocked the migration.
    should be deterministic across runs.
 
 ---
+
+# Component gaps by surface
+
+Everything below is a place where a chrome component either doesn't exist or
+can't (yet) express what the site needed, so a bit of bespoke code was kept.
+The affected surface still builds and works; these are registry wishlist items.
+
+## desk (article CMS) — the biggest gaps
+
+### desk / editor — no editor `onKeyDown` escape hatch → vim mode lost
+**Site need:** the old editor had an optional vim keymap (hjkl / w / b / e / dd …)
+toggled via localStorage. **Chrome:** `Desk` fully owns its textarea and exposes
+no `onKeyDown`, so the keymap can't be layered on. (`EditorTextarea` *does* expose
+`onKeyDown` per the docs, but composing `EditorTextarea` + `EditorToolbar` +
+`AssetSidebar` + `EditorPreview` + `useLineSync` by hand means re-implementing all
+of Desk's splice/save glue.) **Suggested:** let `Desk` forward an
+`editorProps.onKeyDown` (or a `textareaProps`) down to its `EditorTextarea`.
+**Status:** vim mode dropped in the migration — flag for the site owner.
+
+### desk / prose line-sync assumes preview === editor value 1:1 → front-matter shows in preview
+**Site need:** the editor value carries front-matter (`# title`, `cover:`,
+`excerpt:`, `tags:`, `prerequisites:`) that the old preview parsed out, rendering
+only the styled body. **Chrome:** `useLineSync` maps editor line N ↔ preview block
+N with no offset, so the preview must render exactly what the textarea holds — the
+front-matter lines now appear in the preview. **Suggested:** a `bodyLineOffset` (or
+a `transformSource`) on `Editor`/`Desk`/`Prose lineSync` so a host can strip/skip a
+front-matter region while keeping line mapping correct.
+
+### breadcrumb — not installed / not in registry set used here
+`OperatorHeader` (breadcrumb trail + new-article / sign-out links) stayed bespoke.
+A `breadcrumb` component exists in the registry docs but wasn't needed elsewhere;
+if adopted, the header could use it.
+
+### file browser / grid — no chrome equivalent
+`OperatorFileGrid` (a grid of `file-card`s with drag-to-trash delete and a
+type-the-name-to-confirm modal) has no chrome counterpart. Kept bespoke.
+**Suggested:** a `file-grid` / asset-manager component (distinct from
+`asset-sidebar`, which is an in-editor insert rail, not a browser).
+
+### asset upload — drop-onto-textarea path lost
+Chrome `AssetSidebar` uploads via its own dashed drop zone; the old
+drop-a-file-directly-onto-the-editor upload path is gone (dragging a sidebar row
+into the textarea still inserts the markdown ref). Minor.
+
+## articles
+
+### prose — no theme-managed (light/dark) image variant swap
+The old `markdown-renderer` swapped `foo-light.png` ↔ `foo-dark.png` via
+`theme-images.ts`. Chrome `Prose` renders images as-is. The site is dark-only so
+impact is limited, but an article authored with light/dark variants won't swap.
+**Suggested:** an optional image `srcResolver`/`onResolveImage` hook on `Prose`.
+
+### prose — no `linkComponent` for client-side internal routing
+Chrome `Prose` renders every link as a plain `<a>` (external → `target=_blank`).
+Internal `/…` links and `#` anchors that used `next/link` now do full navigations.
+**Suggested:** a `linkComponent` prop like `sidebar` already has.
+
+### article-list — no per-card entrance stagger
+The bespoke index staggered each card's fade-in; chrome `ArticleList` renders the
+grid with no stagger (top-level heading/grid fade is still present). Cosmetic.
+
+### prerequisites-sidebar & file-card — no chrome equivalent
+Prerequisite parsing/resolution (async GitHub title fetch + route mapping) and the
+animated stacked-paper download card have no chrome counterparts. Both are used by
+`/desk`, so they were kept regardless. (chrome `stack` could be the visual base for
+a `file-card`-style component.)
+
+## calendar
+
+### calendar — month grid needs rich day cells
+Chrome `Calendar` is a compact `size-9` date *picker*; the site's `MonthView` has
+tall cells (`min-h-28`) listing each day's task titles, a done/total counter, a
+per-cell heatmap background, and "+N more". `renderDay` only injects small content
+under the day number and can't restructure the cell. **Kept `MonthView` bespoke.**
+**Suggested:** a `month-grid` variant (or a `cellClassName` + full-cell
+`renderDay` replacement) for schedule/agenda month views.
+
+### manager-table — no protected/system rows or in-use delete guards
+Chrome `ManagerTable`'s row model `{ id, name, color?, archived? }` has no
+`isSystem` concept, so it would offer rename/delete on the built-in **Sleep**
+category (which must be protected), and it can't express "block delete because the
+category is in use" or the optimistic name-draft/rollback. **Kept
+`CategoriesManager` bespoke** (it does use chrome `Select` + `ColorSwatchPicker`).
+**Suggested:** `ManagerRow.locked`/`protected` flags + an async `onDelete` that can
+reject with a surfaced error.
+
+### timeline — display-only; no interactive/editable blocks
+Chrome `Timeline` renders positioned blocks but they aren't clickable/editable, and
+it's single-track. The site's day view is a **dual-track** (plan + actuals)
+interactive editor. Resolution: render chrome `Timeline` for the visual track
+(border, hour grid, now-line) in both columns and overlay the bespoke
+`PlanBlock`/`ActualBlock` interaction layer on top. **Suggested:** an
+`onEventClick` (and optional editable/drag) affordance, plus a multi-track mode.
+
+### timeline markers — can't consume a streamed/server slot
+The site streams prayer-time markers in via `<Suspense>` (a deliberate
+architecture so a slow Aladhan API never blocks day render). Timeline's `markers`
+prop needs the data client-side up front, which would break the streaming, so
+`PrayerMarkers`/`PrayerTimeMarker` stayed bespoke (their markup already matches
+Timeline's marker lines). **Suggested:** allow `markers` to accept a React node /
+children slot that can be `<Suspense>`-streamed.
+
+### heatmap — month labels aren't linkable
+The old year view linked each month name to that month's view; chrome `Heatmap`
+renders plain month labels. Minor navigation affordance lost.
+
+## cat
+
+### sprite-scrubber — edge dead-zones double as frame dead-zones
+`edgeLeft`/`edgeRight` clamp *both* the pointer-to-pat detection and the frame
+mapping, so within the outer ~22% margins the sprite now freezes on the first/last
+frame instead of continuing to sweep. The old code mapped the full width to frames
+and used the edges only for pat detection. Also `SpriteScrubber` has no load state,
+so the "loading…" overlay stayed bespoke. **Suggested:** decouple the pat/callback
+dead-zones from the frame-mapping range (or expose a full-range mode with a
+separate `onEdge` callback).
+
+## me
+
+### Minor
+- `ManagerTable` didn't fit gallery items (title/tech/year/repo/live/pin/move), so
+  the item list was rebuilt from `Card` + `Badge` + `Button`. (Same root cause as
+  the calendar entry — `ManagerTable` is name/color/archive only.)
+- The item **move** dropdown popover stayed bespoke; chrome `menu` exists but the
+  underline-style **tab bar** was kept over chrome `Tabs` (pill look) for fidelity.
+

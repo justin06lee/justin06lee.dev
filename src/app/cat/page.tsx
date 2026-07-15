@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { animate, useMotionValue, useMotionValueEvent } from "motion/react";
 import Navbar from "@/components/Navbar";
+import { SpriteScrubber } from "@/components/chrome/sprite-scrubber";
+import { CountUp } from "@/components/chrome/count-up";
 
 const TOTAL_FRAMES = 115;
 const SPRITE_COLS = 12;
@@ -13,19 +14,14 @@ const POLL_INTERVAL_MS = 5000;
 const EDGE_LEFT = 0.22;
 const EDGE_RIGHT = 0.78;
 
-// Map mouse X position (0 = left, 1 = right) to a frame index.
-// Left side of image = later in the animation (forward play as mouse moves left).
-const relXToFrame = (relX: number) => {
-    const clamped = Math.min(1, Math.max(0, relX));
-    return Math.round((1 - clamped) * (TOTAL_FRAMES - 1));
-};
+// With SpriteScrubber's reverse mapping, the left dead zone (relX <= EDGE_LEFT)
+// clamps to the last frame and the right dead zone (relX >= EDGE_RIGHT) clamps
+// to frame 0. That lets us detect edge crossings — and thus count pats — purely
+// from the frame index, without owning the pointer math.
+const LEFT_EDGE_FRAME = TOTAL_FRAMES - 1;
+const RIGHT_EDGE_FRAME = 0;
 
 export default function CatPage() {
-    const spriteRef = useRef<HTMLDivElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const rafRef = useRef<number | null>(null);
-    const pendingFrameRef = useRef<number | null>(null);
-    const currentFrameRef = useRef(-1);
     const lastEdgeRef = useRef<"left" | "right" | null>(null);
     const pendingPatsRef = useRef(0);
     const flushingRef = useRef(false);
@@ -33,21 +29,7 @@ export default function CatPage() {
     // so we don't update state on an unmounted component.
     const mountedRef = useRef(true);
     const [pats, setPats] = useState(0);
-    const [displayPats, setDisplayPats] = useState(0);
     const [ready, setReady] = useState(false);
-    const patsMotion = useMotionValue(0);
-
-    useMotionValueEvent(patsMotion, "change", (v) => {
-        setDisplayPats(Math.round(v));
-    });
-
-    useEffect(() => {
-        const controls = animate(patsMotion, pats, {
-            duration: 0.5,
-            ease: [0.22, 1, 0.36, 1],
-        });
-        return () => controls.stop();
-    }, [pats, patsMotion]);
 
     useEffect(() => {
         let cancelled = false;
@@ -125,19 +107,6 @@ export default function CatPage() {
         };
     }, []);
 
-    const applyFrame = () => {
-        rafRef.current = null;
-        const idx = pendingFrameRef.current;
-        if (idx === null || !spriteRef.current) return;
-        if (idx === currentFrameRef.current) return;
-        currentFrameRef.current = idx;
-        const col = idx % SPRITE_COLS;
-        const row = Math.floor(idx / SPRITE_COLS);
-        const x = (col / (SPRITE_COLS - 1)) * 100;
-        const y = (row / (SPRITE_ROWS - 1)) * 100;
-        spriteRef.current.style.backgroundPosition = `${x}% ${y}%`;
-    };
-
     const registerPat = () => {
         const wasIdle = pendingPatsRef.current === 0;
         pendingPatsRef.current += 1;
@@ -145,55 +114,17 @@ export default function CatPage() {
         if (wasIdle && !flushingRef.current) flush();
     };
 
-    const scheduleFrame = (idx: number) => {
-        pendingFrameRef.current = idx;
-        if (rafRef.current === null) {
-            rafRef.current = requestAnimationFrame(applyFrame);
-        }
-    };
-
-    const updateFromClientX = (clientX: number) => {
-        const c = containerRef.current;
-        if (!c) return;
-        const rect = c.getBoundingClientRect();
-        const relX = (clientX - rect.left) / rect.width;
-        scheduleFrame(relXToFrame(relX));
-
-        if (relX <= EDGE_LEFT) {
-            if (lastEdgeRef.current === "right") {
-                registerPat();
-            }
+    // A pat is one full sweep between the two edge zones. Guarding on the
+    // opposite prior edge (with a null start) means the first pat only fires
+    // after a complete left<->right pass — no spurious pat on entry.
+    const handleFrameChange = (frame: number) => {
+        if (frame === LEFT_EDGE_FRAME) {
+            if (lastEdgeRef.current === "right") registerPat();
             lastEdgeRef.current = "left";
-        } else if (relX >= EDGE_RIGHT) {
-            if (lastEdgeRef.current === "left") {
-                registerPat();
-            }
+        } else if (frame === RIGHT_EDGE_FRAME) {
+            if (lastEdgeRef.current === "left") registerPat();
             lastEdgeRef.current = "right";
         }
-    };
-
-    const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.pointerType !== "mouse" && e.buttons === 0) return;
-        updateFromClientX(e.clientX);
-    };
-
-    const handleEnter = (e: React.PointerEvent<HTMLDivElement>) => {
-        const c = containerRef.current;
-        if (!c) return;
-        const rect = c.getBoundingClientRect();
-        const relX = (e.clientX - rect.left) / rect.width;
-        lastEdgeRef.current = relX < 0.5 ? "left" : "right";
-        updateFromClientX(e.clientX);
-    };
-
-    const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        (e.currentTarget as HTMLDivElement).setPointerCapture?.(e.pointerId);
-        handleEnter(e);
-    };
-
-    const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        (e.currentTarget as HTMLDivElement).releasePointerCapture?.(e.pointerId);
-        if (e.pointerType !== "mouse") lastEdgeRef.current = null;
     };
 
     return (
@@ -201,35 +132,30 @@ export default function CatPage() {
             <Navbar />
             <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
                 <div className="flex flex-col items-center gap-2">
-                    <div className="font-mono text-5xl sm:text-6xl tracking-tight tabular-nums">
-                        {displayPats.toLocaleString()}
-                    </div>
+                    <CountUp
+                        value={pats}
+                        as="div"
+                        format={(n) => Math.round(n).toLocaleString()}
+                        className="font-mono text-5xl sm:text-6xl tracking-tight"
+                    />
                     <div className="text-xs text-white/50 uppercase tracking-widest">
-                        {displayPats === 1 ? "time bothered, globally" : "times bothered, globally"}
+                        {pats === 1 ? "time bothered, globally" : "times bothered, globally"}
                     </div>
                 </div>
 
-                <div
-                    ref={containerRef}
-                    className="relative select-none cursor-grab active:cursor-grabbing max-w-[480px] w-[80vw] aspect-square border border-white/15 touch-none"
-                    onPointerEnter={handleEnter}
-                    onPointerMove={handleMove}
-                    onPointerDown={handleDown}
-                    onPointerUp={handleUp}
-                    onPointerCancel={handleUp}
-                    role="img"
-                    aria-label="cat"
-                >
-                    <div
-                        ref={spriteRef}
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                            backgroundImage: `url(${SPRITE_URL})`,
-                            backgroundSize: `${SPRITE_COLS * 100}% ${SPRITE_ROWS * 100}%`,
-                            backgroundPosition: "0% 0%",
-                            backgroundRepeat: "no-repeat",
-                            imageRendering: "auto",
-                        }}
+                <div className="relative select-none max-w-[480px] w-[80vw]">
+                    <SpriteScrubber
+                        src={SPRITE_URL}
+                        frames={TOTAL_FRAMES}
+                        cols={SPRITE_COLS}
+                        rows={SPRITE_ROWS}
+                        edgeLeft={EDGE_LEFT}
+                        edgeRight={EDGE_RIGHT}
+                        reverse
+                        aspectRatio="1 / 1"
+                        onFrameChange={handleFrameChange}
+                        className="w-full"
+                        aria-label="cat"
                     />
                     {!ready && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/60 text-xs">
