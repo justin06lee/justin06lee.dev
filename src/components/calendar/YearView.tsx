@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heatmap } from "@/components/chrome/heatmap";
 
@@ -26,6 +27,10 @@ export default function YearView({ year, heatmap, today }: Props) {
       max={1}
       onSelectDay={(date) => router.push(`/calendar/day/${date}`)}
       title={(date, value) => `${date} — ${fmtFillRatio(value)}${date === today ? " (today)" : ""}`}
+      // Each month label links to that month's view; next/link keeps it
+      // client-side. index is 0-based, so +1 for the "YYYY-MM" token.
+      monthHref={({ index }) => `/calendar/month/${year}-${String(index + 1).padStart(2, "0")}`}
+      linkComponent={Link}
     />
   );
 }

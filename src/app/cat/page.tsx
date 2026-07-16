@@ -11,34 +11,14 @@ const SPRITE_ROWS = 10;
 const SPRITE_URL = "/cat-sprite.jpg";
 const FLUSH_INTERVAL_MS = 1000;
 const POLL_INTERVAL_MS = 5000;
-const EDGE_LEFT = 0.22;
-const EDGE_RIGHT = 0.78;
-
-// With SpriteScrubber's reverse mapping, the left dead zone (relX <= EDGE_LEFT)
-// clamps to the last frame and the right dead zone (relX >= EDGE_RIGHT) clamps
-// to frame 0. That lets us detect edge crossings — and thus count pats — purely
-// from the frame index, without owning the pointer math.
-const LEFT_EDGE_FRAME = TOTAL_FRAMES - 1;
-const RIGHT_EDGE_FRAME = 0;
 
 export default function CatPage() {
-    const lastEdgeRef = useRef<"left" | "right" | null>(null);
     const pendingPatsRef = useRef(0);
     const flushingRef = useRef(false);
     // flush() runs on unmount to drain pending pats; guard its post-await setState
     // so we don't update state on an unmounted component.
     const mountedRef = useRef(true);
     const [pats, setPats] = useState(0);
-    const [ready, setReady] = useState(false);
-
-    useEffect(() => {
-        let cancelled = false;
-        const img = new Image();
-        img.onload = () => { if (!cancelled) setReady(true); };
-        img.onerror = () => { if (!cancelled) setReady(true); };
-        img.src = SPRITE_URL;
-        return () => { cancelled = true; };
-    }, []);
 
     const flush = async () => {
         if (flushingRef.current) return;
@@ -114,18 +94,10 @@ export default function CatPage() {
         if (wasIdle && !flushingRef.current) flush();
     };
 
-    // A pat is one full sweep between the two edge zones. Guarding on the
-    // opposite prior edge (with a null start) means the first pat only fires
-    // after a complete left<->right pass — no spurious pat on entry.
-    const handleFrameChange = (frame: number) => {
-        if (frame === LEFT_EDGE_FRAME) {
-            if (lastEdgeRef.current === "right") registerPat();
-            lastEdgeRef.current = "left";
-        } else if (frame === RIGHT_EDGE_FRAME) {
-            if (lastEdgeRef.current === "left") registerPat();
-            lastEdgeRef.current = "right";
-        }
-    };
+    // A pat is one full sweep between the two edge zones. SpriteScrubber's onEdge
+    // fires exactly once per sweep — on reaching either edge after last visiting
+    // the opposite — which is the same cadence the old frame-index hack counted.
+    const handleEdge = () => registerPat();
 
     return (
         <div className="min-h-screen bg-black text-white flex flex-col">
@@ -143,25 +115,18 @@ export default function CatPage() {
                     </div>
                 </div>
 
-                <div className="relative select-none max-w-[480px] w-[80vw]">
+                <div className="max-w-[480px] w-[80vw]">
                     <SpriteScrubber
                         src={SPRITE_URL}
                         frames={TOTAL_FRAMES}
                         cols={SPRITE_COLS}
                         rows={SPRITE_ROWS}
-                        edgeLeft={EDGE_LEFT}
-                        edgeRight={EDGE_RIGHT}
                         reverse
                         aspectRatio="1 / 1"
-                        onFrameChange={handleFrameChange}
+                        onEdge={handleEdge}
                         className="w-full"
                         aria-label="cat"
                     />
-                    {!ready && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/60 text-xs">
-                            loading...
-                        </div>
-                    )}
                 </div>
 
                 <p className="text-xs text-white/50 text-center max-w-xs">

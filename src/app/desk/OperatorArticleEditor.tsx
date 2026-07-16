@@ -1,15 +1,16 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useCallback, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Desk } from "@/components/chrome/desk";
 import { Prose } from "@/components/chrome/prose";
 import { Button } from "@/components/chrome/button";
 import type { Asset } from "@/components/chrome/asset-sidebar";
 import type { DrawingSaveResult } from "@/components/chrome/drawing-window";
-import { parseArticleDraft } from "@/lib/article-draft";
+import { bodyLineOffset, parseArticleDraft } from "@/lib/article-draft";
 import { routeForPath } from "@/lib/github";
 import type { OperatorImageAsset } from "@/lib/operator-content";
+import { useVimKeymap } from "./useVimKeymap";
 import {
   deleteImageAction,
   saveArticleAction,
@@ -53,6 +54,23 @@ export function OperatorArticleEditor({
   );
   const previewHref = `/desk/${articlePath.join("/")}`;
   const publicHref = routeForPath(articlePath);
+
+  const vim = useVimKeymap({ value: raw, onChange: setRaw });
+
+  // Strip the leading front-matter region (`# title`, `cover:`, `excerpt:`,
+  // `tags:`, `prerequisites:`) so the preview renders body-only and doesn't
+  // echo the raw metadata. `lineOffset` is the count of stripped source lines,
+  // which keeps the two-way line-sync aligned (editor line N <-> preview block
+  // line N - lineOffset). Reused across renders (stable ref keyed on the
+  // fallback title) as Desk requires.
+  const transformSource = useCallback(
+    (source: string) => {
+      const normalized = source.replace(/\r\n/g, "\n");
+      const { content } = parseArticleDraft(normalized, articleName);
+      return { body: content, lineOffset: bodyLineOffset(normalized, content) };
+    },
+    [articleName],
+  );
 
   // Map the operator asset model onto the chrome sidebar's Asset shape. The
   // preview thumbnail uses the theme-appropriate rendered image (dark variant
@@ -208,8 +226,23 @@ export function OperatorArticleEditor({
         onUploadAssets={handleUploadAssets}
         onSaveDrawing={handleSaveDrawing}
         drawingDarkMapping
+        textareaProps={vim.textareaProps}
+        transformSource={transformSource}
         actions={
           <>
+            {vim.vimEnabled ? (
+              <span className="hidden text-xs text-white/60 sm:inline">
+                vim &middot; {vim.vimMode}
+                {vim.pendingCommand ? ` · ${vim.pendingCommand}` : ""}
+              </span>
+            ) : null}
+            <Button
+              onClick={vim.toggleVim}
+              variant={vim.vimEnabled ? "solid" : "outline"}
+              size="sm"
+            >
+              vim {vim.vimEnabled ? "on" : "off"}
+            </Button>
             <Button href={previewHref} variant="outline" size="sm">
               preview
             </Button>

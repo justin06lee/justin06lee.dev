@@ -58,6 +58,8 @@ export type CalendarProps = {
   renderCell?: (day: CalendarDay) => React.ReactNode;
   /** Per-cell classes — heatmap tint, min-height. Works in both modes. */
   cellClassName?: string | ((day: CalendarDay) => string);
+  /** Show the built-in prev/next month header. Set false when an external nav (e.g. calendar-nav) already pages the month. */
+  showHeader?: boolean;
   className?: string;
 };
 
@@ -76,6 +78,7 @@ export function Calendar({
   renderDay,
   renderCell,
   cellClassName,
+  showHeader = true,
   className,
 }: CalendarProps) {
   const [y, m] = month.split("-").map(Number) as [number, number];
@@ -83,6 +86,7 @@ export function Calendar({
 
   return (
     <div className={cn("w-fit select-none", className)}>
+      {showHeader && (
       <div className="mb-3 flex items-center justify-between gap-4">
         <button
           type="button"
@@ -106,6 +110,7 @@ export function Calendar({
           ›
         </button>
       </div>
+      )}
 
       <div className="grid grid-cols-7 gap-[3px]">
         {WEEKDAY_LETTERS.map((w, i) => (

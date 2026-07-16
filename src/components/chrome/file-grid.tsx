@@ -292,7 +292,7 @@ export function FileGrid<T extends FileGridFile>({
                     delete <span className="font-medium">{pendingDelete.name}</span>?
                   </div>
                   <div className="text-xs text-white/60">
-                    this can't be undone. type the exact name to confirm.
+                    this can&apos;t be undone. type the exact name to confirm.
                   </div>
                 </div>
                 <Input

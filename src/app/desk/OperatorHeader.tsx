@@ -1,20 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { Breadcrumb, crumbsFromPath } from "@/components/chrome/breadcrumb";
+import { Button } from "@/components/chrome/button";
 
 const BASE = "/desk";
-
-function formatSegment(segment: string): string {
-  return decodeURIComponent(segment).replace(/-/g, " ");
-}
 
 export function OperatorHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const segments = pathname?.replace(BASE, "").split("/").filter(Boolean) ?? [];
+
+  // "desk" root crumb, then the cumulative path segments below it. The last
+  // crumb renders as the current page (the Breadcrumb component owns that).
+  const items = [
+    { label: "desk", href: BASE },
+    ...crumbsFromPath(pathname ?? BASE, { basePath: BASE }),
+  ];
 
   async function handleLogout() {
     try {
@@ -32,39 +35,26 @@ export function OperatorHeader() {
     <div className="pt-16 px-4 sm:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3 mb-6">
-          <nav className="flex min-w-0 items-center gap-2 text-sm font-mono tabular-nums">
-            <Link href={BASE} className="text-white/60 hover:text-white underline-offset-4 hover:underline">
-              desk
-            </Link>
-            {segments.map((segment, i) => (
-              <span key={`${segment}-${i}`} className="flex items-center gap-2">
-                <span className="text-white/30">/</span>
-                {i < segments.length - 1 ? (
-                  <Link
-                    href={`${BASE}/${segments.slice(0, i + 1).join("/")}`}
-                    className="text-white/60 hover:text-white underline-offset-4 hover:underline"
-                  >
-                    {formatSegment(segment)}
-                  </Link>
-                ) : (
-                  <span className="text-white">{formatSegment(segment)}</span>
-                )}
-              </span>
-            ))}
-          </nav>
+          <Breadcrumb items={items} />
 
-          <div className="flex items-center gap-4 text-sm">
-            <Link href="/desk/new-article" className="text-white/60 hover:text-white underline-offset-4 hover:underline">
+          <div className="flex items-center gap-2 text-sm">
+            <Button
+              href="/desk/new-article"
+              variant="link"
+              size="sm"
+              className="text-white/60"
+            >
               new article
-            </Link>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={handleLogout}
+              variant="link"
+              size="sm"
               disabled={pending}
-              className="text-white/60 hover:text-white underline-offset-4 hover:underline disabled:opacity-60"
+              className="text-white/60"
             >
               sign out
-            </button>
+            </Button>
           </div>
         </div>
       </div>

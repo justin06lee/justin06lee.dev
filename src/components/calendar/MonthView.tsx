@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as motion from "motion/react-client";
 import type { CalendarTask } from "@/lib/calendar";
-import { buildMonthGrid, WEEKDAY_LETTERS, MONTH_NAMES_SHORT, hhmmToMinutes, overlapIntensityClass } from "@/lib/calendar-dates";
+import { hhmmToMinutes, overlapIntensityClass } from "@/lib/calendar-dates";
+import { Calendar } from "@/components/chrome/calendar";
 
 const fadeIn = {
   initial: { opacity: 0, y: -10 },
@@ -19,65 +20,58 @@ type Props = {
 };
 
 export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
-  const cells = buildMonthGrid(yyyymm);
-  const [y, m] = yyyymm.split("-").map(Number);
+  const router = useRouter();
+
   const byDate = new Map<string, CalendarTask[]>();
   for (const t of tasks) {
     const arr = byDate.get(t.date) ?? [];
     arr.push(t);
     byDate.set(t.date, arr);
   }
+  // Sort each day's tasks once: by start time, then position, then id. Untimed
+  // (or same-time) tasks tie-break on position, then id for determinism.
+  for (const arr of byDate.values()) {
+    arr.sort((a, b) => {
+      const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
+      const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
+      if (aMin !== bMin) return aMin - bMin;
+      if (a.position !== b.position) return a.position - b.position;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <motion.h2
-        {...fadeIn}
-        transition={{ duration: 0.4 }}
-        className="font-mono text-sm uppercase tracking-widest text-white/70"
-      >
-        {MONTH_NAMES_SHORT[m - 1]} {y}
-      </motion.h2>
-      <motion.div
-        {...fadeIn}
-        transition={{ duration: 0.4, delay: 0.05 }}
-        className="grid grid-cols-7 gap-[3px] text-[10px] font-mono uppercase tracking-widest text-white/40"
-      >
-        {WEEKDAY_LETTERS.map((w, i) => (
-          <div key={i} className="px-2 py-1">{w}</div>
-        ))}
-      </motion.div>
-      <motion.div
-        {...fadeIn}
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className="grid grid-cols-7 gap-[3px]"
-      >
-        {cells.map((date, i) => {
-          if (!date) return <div key={i} className="min-h-28" />;
-          // Two heatmap signals coexist intentionally: cell background uses
-          // the fill ratio (how fully the day's plan was followed, out of
-          // min(8h, planned)), and the corner ratio shows done/total tasks.
-          // Different axes, both useful at a glance.
-          const dayTasks = (byDate.get(date) ?? []).sort((a, b) => {
-            const aMin = hhmmToMinutes(a.startTime) ?? Infinity;
-            const bMin = hhmmToMinutes(b.startTime) ?? Infinity;
-            if (aMin !== bMin) return aMin - bMin;
-            // Tie-break for untimed (or same-time) tasks: position, then id.
-            if (a.position !== b.position) return a.position - b.position;
-            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-          });
+    <motion.div {...fadeIn} transition={{ duration: 0.4 }}>
+      <Calendar
+        className="w-full"
+        // CalendarShell already renders the period nav (prev/today/next +
+        // switcher) above this grid, so hide Calendar's built-in header to
+        // avoid a duplicate month nav.
+        showHeader={false}
+        month={yyyymm}
+        onMonthChange={(m) => router.push(`/calendar/month/${m}`)}
+        // Month view never keeps a persisted selection — clicking a day
+        // navigates straight to that day's page.
+        selected={null}
+        onSelect={(date) => router.push(`/calendar/day/${date}`)}
+        today={today}
+        // Cell sizing lives here; the per-day heatmap tint is the fill ratio
+        // (how fully the day's plan was followed). The today ring and any
+        // selection tint are applied by Calendar itself.
+        cellClassName={(day) => {
+          const overlapRatio = heatmap?.[day.date] ?? 0;
+          return `min-h-28 gap-1 p-2 hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapRatio, "month")}`;
+        }}
+        renderCell={({ date, day, isToday }) => {
+          // The corner ratio shows done/total tasks — a different axis from the
+          // background fill ratio, both useful at a glance.
+          const dayTasks = byDate.get(date) ?? [];
           const done = dayTasks.filter((t) => t.done).length;
           const total = dayTasks.length;
-          const day = Number(date.split("-")[2]);
-          const isToday = date === today;
           const visible = dayTasks.slice(0, 3);
           const extra = total - visible.length;
-          const overlapRatio = heatmap?.[date] ?? 0;
           return (
-            <Link
-              key={date}
-              href={`/calendar/day/${date}`}
-              className={`min-h-28 p-2 flex flex-col gap-1 transition hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapRatio, "month")} ${isToday ? "ring-1 ring-inset ring-white/80" : ""}`}
-            >
+            <>
               <div className="flex items-baseline justify-between">
                 <span className={`font-mono text-sm tabular-nums ${isToday ? "text-white font-semibold" : "text-white/80"}`}>
                   {day}
@@ -102,10 +96,10 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
                   <span className="text-[9px] font-mono uppercase tracking-widest text-white/40">+{extra} more</span>
                 )}
               </div>
-            </Link>
+            </>
           );
-        })}
-      </motion.div>
-    </div>
+        }}
+      />
+    </motion.div>
   );
 }

@@ -75,14 +75,18 @@ export default function DayView({
           transition={{ duration: 0.4 }}
           className="relative min-h-[960px]"
         >
-          {/* chrome Timeline draws the static track: border, hour grid and the
-              live now-line. Interactive plan/actual blocks overlay it below —
-              Timeline blocks aren't clickable, so they stay bespoke. nowMinutes
-              is driven by our tz-aware clock (not Timeline's browser-local one). */}
-          <Timeline events={[]} nowMinutes={nowMinutes ?? undefined} className="absolute inset-0" />
+          {/* chrome Timeline draws the static track: border, hour grid, the
+              live now-line, and the streamed prayer markers (via markersSlot).
+              Interactive plan/actual blocks overlay it below — Timeline blocks
+              aren't clickable, so they stay bespoke. nowMinutes is driven by
+              our tz-aware clock (not Timeline's browser-local one). */}
+          <Timeline
+            events={[]}
+            nowMinutes={nowMinutes ?? undefined}
+            markersSlot={prayersSlot}
+            className="absolute inset-0"
+          />
           <div className="absolute inset-0">
-            {prayersSlot}
-
             {/* Header / +add task — z-20 so it sits above the now-line (z-10) */}
             {isAdmin && (
               <button

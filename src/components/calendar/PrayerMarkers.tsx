@@ -1,10 +1,12 @@
 import { getPrayerTimesForDate } from "@/lib/prayer-times";
-import PrayerTimeMarker from "./PrayerTimeMarker";
+import { hhmmToMinutes } from "@/lib/calendar-dates";
+import { TimelineMarker } from "@/components/chrome/timeline";
 
 /**
- * Async server component that fetches prayer times for a date and renders
- * the markers. Wrap in <Suspense> at the page level so the rest of the day
- * view isn't blocked on this (potentially slow) fetch.
+ * Async server component that fetches prayer times for a date and renders them
+ * as chrome Timeline markers. Handed to DayView as the Timeline `markersSlot`
+ * and wrapped in <Suspense> at the page level, so a slow Aladhan fetch streams
+ * in without blocking the day view.
  */
 export default async function PrayerMarkers({ date }: { date: string }) {
   const prayers = await getPrayerTimesForDate(date);
@@ -22,16 +24,15 @@ export default async function PrayerMarkers({ date }: { date: string }) {
     ["Maghrib", prayers.Maghrib],
     ["Isha", prayers.Isha],
   ];
-  // Single wrapper, not a fragment: this is handed to DayView as the
-  // `prayersSlot` prop, and a multi-child fragment passed through a prop gets
-  // flattened into a keyless child list at the boundary. The wrapper overlays
-  // the plan column (absolute inset-0) so each marker's top% still resolves
-  // against the same box.
+  // TimelineMarker resolves its own top% against the full 24h track, so the
+  // markers sit correctly once slotted into Timeline's marker layer.
   return (
-    <div className="absolute inset-0 pointer-events-none">
-      {markers.map(([name, time]) => (
-        <PrayerTimeMarker key={name} name={name} time={time} />
-      ))}
-    </div>
+    <>
+      {markers.map(([name, time]) => {
+        const minutes = hhmmToMinutes(time);
+        if (minutes == null) return null;
+        return <TimelineMarker key={name} minutes={minutes} label={`${name} ${time}`} />;
+      })}
+    </>
   );
 }
