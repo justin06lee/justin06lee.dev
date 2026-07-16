@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { relXToFrame, seedEdge, stepEdge, type Edge } from "./scrub";
 
 export interface SpriteScrubberProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange" | "onLoad"> {
   /** URL (or data URI) of the sprite sheet grid. */
   src: string;
   /** Total number of frames in the sheet. */
@@ -13,9 +14,9 @@ export interface SpriteScrubberProps
   cols: number;
   /** Number of rows in the sprite grid. */
   rows: number;
-  /** Left dead zone as a fraction in [0,1]. Pointer X at/under this maps to the first scrubbed frame. */
+  /** Left edge zone as a fraction in [0,1]. Bounds onEdge sweep detection only — frames always map across the full width. */
   edgeLeft?: number;
-  /** Right dead zone as a fraction in [0,1]. Pointer X at/over this maps to the last scrubbed frame. */
+  /** Right edge zone as a fraction in [0,1]. Bounds onEdge sweep detection only — frames always map across the full width. */
   edgeRight?: number;
   /** Reverse the mapping so moving left plays forward (matches the original). */
   reverse?: boolean;
@@ -25,6 +26,12 @@ export interface SpriteScrubberProps
   mode?: "pointer";
   /** Fired when the displayed frame changes. */
   onFrameChange?: (frame: number) => void;
+  /** Fired when the pointer reaches one edge zone after last visiting the opposite one — once per full sweep. */
+  onEdge?: (edge: Edge) => void;
+  /** Fired once the sprite sheet image has loaded. */
+  onLoad?: () => void;
+  /** Custom node rendered over the sprite while the sheet loads. Defaults to a minimal "loading..." overlay; return null to disable. */
+  renderLoading?: () => React.ReactNode;
 }
 
 export function SpriteScrubber({
@@ -40,6 +47,9 @@ export function SpriteScrubber({
   className,
   style,
   onFrameChange,
+  onEdge,
+  onLoad,
+  renderLoading,
   ...rest
 }: SpriteScrubberProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -50,22 +60,37 @@ export function SpriteScrubber({
   const rectRef = React.useRef<DOMRect | null>(null);
   const pendingFrameRef = React.useRef<number | null>(null);
   const currentFrameRef = React.useRef(-1);
+  const lastEdgeRef = React.useRef<Edge | null>(null);
   const onFrameChangeRef = React.useRef(onFrameChange);
   onFrameChangeRef.current = onFrameChange;
+  const onEdgeRef = React.useRef(onEdge);
+  onEdgeRef.current = onEdge;
+  const onLoadRef = React.useRef(onLoad);
+  onLoadRef.current = onLoad;
 
-  // Map a relative X position (0 = left, 1 = right) to a frame index.
-  const relXToFrame = React.useCallback(
-    (relX: number) => {
-      const span = edgeRight - edgeLeft;
-      const clamped =
-        span <= 0
-          ? 0
-          : Math.min(1, Math.max(0, (relX - edgeLeft) / span));
-      const t = reverse ? 1 - clamped : clamped;
-      return Math.round(t * (frames - 1));
-    },
-    [edgeLeft, edgeRight, reverse, frames],
-  );
+  const [loaded, setLoaded] = React.useState(false);
+
+  // Preload the sheet so the loading overlay clears once it can paint. A
+  // failed load also clears it — the bordered black box stays as fallback.
+  React.useEffect(() => {
+    setLoaded(false);
+    let done = false;
+    const settle = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      setLoaded(true);
+      if (ok) onLoadRef.current?.();
+    };
+    const img = new Image();
+    img.onload = () => settle(true);
+    img.onerror = () => settle(false);
+    img.src = src;
+    // Cached and data-URI images can be complete synchronously.
+    if (img.complete && img.naturalWidth > 0) settle(true);
+    return () => {
+      done = true;
+    };
+  }, [src]);
 
   const applyFrame = React.useCallback(() => {
     rafRef.current = null;
@@ -109,9 +134,12 @@ export function SpriteScrubber({
       const rect = rectRef.current ?? measureRect();
       if (!rect || rect.width <= 0) return;
       const relX = (clientX - rect.left) / rect.width;
-      scheduleFrame(relXToFrame(relX));
+      scheduleFrame(relXToFrame(relX, frames, reverse));
+      const { last, swept } = stepEdge(lastEdgeRef.current, relX, edgeLeft, edgeRight);
+      lastEdgeRef.current = last;
+      if (swept) onEdgeRef.current?.(swept);
     },
-    [measureRect, relXToFrame, scheduleFrame],
+    [measureRect, scheduleFrame, frames, reverse, edgeLeft, edgeRight],
   );
 
   const handleMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -122,19 +150,26 @@ export function SpriteScrubber({
 
   const handleEnter = (e: React.PointerEvent<HTMLDivElement>) => {
     if (mode !== "pointer") return;
-    measureRect();
+    const rect = measureRect();
+    // Seed the edge tracker by which half the pointer entered on, so a sweep
+    // completed outside the container never fires onEdge on re-entry.
+    if (rect && rect.width > 0) {
+      lastEdgeRef.current = seedEdge((e.clientX - rect.left) / rect.width);
+    }
     updateFromClientX(e.clientX);
   };
 
   const handleDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (mode !== "pointer") return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    measureRect();
-    updateFromClientX(e.clientX);
+    handleEnter(e);
   };
 
   const handleUp = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.releasePointerCapture?.(e.pointerId);
+    // Touch drags start fresh — the next drag's first edge visit only arms
+    // the tracker (no onEdge until a full sweep within that drag).
+    if (e.pointerType !== "mouse") lastEdgeRef.current = null;
   };
 
   return (
@@ -170,6 +205,14 @@ export function SpriteScrubber({
           imageRendering: "auto",
         }}
       />
+      {!loaded &&
+        (renderLoading ? (
+          renderLoading()
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white/60">
+            loading...
+          </div>
+        ))}
     </div>
   );
 }

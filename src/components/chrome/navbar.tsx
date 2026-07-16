@@ -7,38 +7,76 @@ import { cn } from "@/lib/utils";
 import { useNavbar } from "@/hooks/use-navbar";
 
 export type NavLink = {
-  label: string;
-  href: string;
+  /** Plain text or any node (e.g. a styled span). */
+  label: React.ReactNode;
+  /** Renders a plain <a href>. Omit it (with onClick) to render a <button> instead. */
+  href?: string;
+  /** Runs on click. Without href the item is a <button>; with href it runs alongside navigation. */
+  onClick?: () => void;
+  /** Stable React key. Recommended when labels are nodes or hrefs repeat (e.g. "#"). */
+  id?: string;
 };
 
 export type NavbarProps = {
   /** Left-side brand — your logo, name, or any node. */
   brand?: React.ReactNode;
+  /** Items next to the brand on desktop; listed before `links` in the mobile panel. */
+  leftLinks?: NavLink[];
+  /** Right-side items on desktop; listed after `leftLinks` in the mobile panel. */
   links?: NavLink[];
   /** Right-side extras shown on desktop (e.g. a theme toggle). */
   actions?: React.ReactNode;
-  /**
-   * Extra nodes rendered at the top of the mobile slide-in panel, above `links`.
-   * Use for controls that live outside the plain `links` list on desktop (a
-   * left-side button, a ReactNode link) but still belong in the mobile menu.
-   * See MISSING.md — the general fix is ReactNode labels + a left link group.
-   */
-  mobilePanelExtras?: React.ReactNode;
   className?: string;
   /** Heading shown at the top of the mobile panel. Defaults to "menu". */
   menuLabel?: string;
 };
 
+// Labels can be ReactNodes and placeholder hrefs (e.g. "#") can repeat, so keys
+// always fold in the index — `id` exists for callers who want stability across reorders.
+function navItemKey(link: NavLink, index: number) {
+  return link.id ?? `${link.href ?? "button"}-${index}`;
+}
+
+function NavItem({
+  link,
+  className,
+  onNavigate,
+}: {
+  link: NavLink;
+  className?: string;
+  onNavigate?: () => void;
+}) {
+  const handleClick = () => {
+    link.onClick?.();
+    onNavigate?.();
+  };
+
+  if (link.href === undefined) {
+    return (
+      <button type="button" onClick={handleClick} className={className}>
+        {link.label}
+      </button>
+    );
+  }
+  return (
+    <a href={link.href} onClick={handleClick} className={className}>
+      {link.label}
+    </a>
+  );
+}
+
 /**
- * Fixed top navigation. Desktop shows inline links; below `md` it collapses to a
- * hamburger that opens a right-side slide-in panel. Routes are caller-supplied —
- * plain <a href>, framework-agnostic. Behavior lives in the headless useNavbar hook.
+ * Fixed top navigation. Desktop shows a left cluster (brand + leftLinks) and a
+ * right cluster (links + actions); below `md` it collapses to a hamburger whose
+ * slide-in panel lists the union of leftLinks and links. Routes are caller-supplied —
+ * plain <a href> (or a <button> when an item has onClick and no href), framework-
+ * agnostic. Behavior lives in the headless useNavbar hook.
  */
 export function Navbar({
   brand,
+  leftLinks = [],
   links = [],
   actions,
-  mobilePanelExtras,
   className,
   menuLabel = "menu",
 }: NavbarProps) {
@@ -50,13 +88,22 @@ export function Navbar({
   return (
     <nav className={cn("fixed inset-x-0 top-0 z-40 w-full", className)}>
       <div className="flex items-center gap-6 px-4 py-2 sm:px-6">
-        {brand && <div className="mr-auto flex items-center gap-6">{brand}</div>}
+        {(brand || leftLinks.length > 0) && (
+          <div className="mr-auto flex items-center gap-6">
+            {brand}
+            {leftLinks.length > 0 && (
+              <div className="hidden items-center gap-6 md:flex">
+                {leftLinks.map((l, i) => (
+                  <NavItem key={navItemKey(l, i)} link={l} className={linkClass} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="ml-auto hidden items-center gap-1 md:flex">
           {links.map((l, i) => (
-            <a key={`${l.label}-${i}`} href={l.href} className={cn(linkClass, "px-4 py-2")}>
-              {l.label}
-            </a>
+            <NavItem key={navItemKey(l, i)} link={l} className={cn(linkClass, "px-4 py-2")} />
           ))}
           {actions}
         </div>
@@ -105,16 +152,14 @@ export function Navbar({
                 </button>
               </div>
               <div className="flex flex-col items-start gap-2 px-4">
-                {mobilePanelExtras}
-                {links.map((l, i) => (
-                  <a
-                    key={`${l.label}-${i}`}
-                    href={l.href}
-                    onClick={() => setOpen(false)}
+                {/* Union of both clusters — left first, indexed continuously for key safety. */}
+                {[...leftLinks, ...links].map((l, i) => (
+                  <NavItem
+                    key={navItemKey(l, i)}
+                    link={l}
                     className={cn(linkClass, "py-1")}
-                  >
-                    {l.label}
-                  </a>
+                    onNavigate={() => setOpen(false)}
+                  />
                 ))}
               </div>
             </motion.div>

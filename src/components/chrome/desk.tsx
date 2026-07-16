@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { AssetSidebar, type Asset } from "@/components/chrome/asset-sidebar";
-import { EditorTextarea, editorSizeClass, type EditorSize } from "@/components/chrome/editor";
+import {
+  EditorTextarea,
+  editorSizeClass,
+  type EditorSize,
+  type EditorTextareaElementProps,
+} from "@/components/chrome/editor";
 import { EditorPreview } from "@/components/chrome/editor-preview";
 import {
   EditorToolbar,
@@ -34,8 +39,13 @@ export interface DeskProps {
   onInsertAsset?: (asset: Asset) => void;
   /** Forwarded from the sidebar's delete button — the parent owns any confirm. */
   onDeleteAsset?: (asset: Asset) => void;
-  /** Files dropped on the sidebar's drop zone. Omit to hide the drop zone. */
-  onUploadAssets?: (files: File[]) => void;
+  /**
+   * Files dropped on the sidebar's drop zone OR directly onto the editor
+   * textarea. Omit to hide the drop zone and disable textarea file drops.
+   * Return the created assets (sync or async) and a textarea drop also splices
+   * their markdown refs at the caret; a void return just uploads.
+   */
+  onUploadAssets?: (files: File[]) => void | Asset[] | Promise<Asset[] | void>;
   /** Called on Save and on cmd/ctrl+s. */
   onSave?: (value: string) => void | Promise<void>;
   /** Called when a drawing window saves; the window then closes. */
@@ -44,10 +54,31 @@ export interface DeskProps {
   drawingDarkMapping?: boolean;
   /** Extra toolbar actions, inserted before the Save button. */
   actions?: ReactNode;
+  /**
+   * Extra props for the underlying `<textarea>` (e.g. `onKeyDown` to layer a
+   * vim keymap). Handlers compose with the internal ones — internal splice/
+   * save/drop glue runs first, then yours with the same event; `className` is
+   * merged. `value`/`onChange` stay owned by the desk.
+   */
+  textareaProps?: EditorTextareaElementProps;
+  /**
+   * Derive the preview's markdown from the editor value — e.g. strip a leading
+   * front-matter region (`# title`, `cover:`, `tags:`, …) — and report how many
+   * source lines were removed so the two-way line-sync stays aligned: editor
+   * line N maps to preview block line N − `lineOffset`, and selections inside
+   * the stripped region clamp to the first preview block. Keep the reference
+   * stable (define it outside the render). Omit for 1:1 sync on the raw value.
+   */
+  transformSource?: (source: string) => { body: string; lineOffset: number };
   /** Size preset (height + width); defaults to the container-filling `screen`. */
   size?: EditorSize;
   /** Extra classes for the root; `h-*` / `w-*` classes here override `size`. */
   className?: string;
+}
+
+// True while the drag carries OS files (vs. e.g. a sidebar row's text/plain).
+function isFileDrag(event: DragEvent<HTMLTextAreaElement>): boolean {
+  return Array.from(event.dataTransfer.types).includes("Files");
 }
 
 /**
@@ -72,10 +103,18 @@ export function Desk({
   onSaveDrawing,
   drawingDarkMapping,
   actions,
+  textareaProps,
+  transformSource,
   size = "screen",
   className,
 }: DeskProps) {
-  const sync = useLineSync({ value });
+  // When a transform strips a leading front-matter region, the preview renders
+  // the body and the sync engine shifts line numbers by the reported offset.
+  const transformed = useMemo(
+    () => (transformSource ? transformSource(value) : null),
+    [transformSource, value],
+  );
+  const sync = useLineSync({ value, bodyLineOffset: transformed?.lineOffset ?? 0 });
   const [mode, setMode] = useState<EditorMode>("split");
 
   // Splice text at the textarea caret, then restore focus + selection.
@@ -116,6 +155,87 @@ export function Desk({
     insertTextAtCursor(`\n![${asset.name}](${asset.markdownPath})\n`);
     onInsertAsset?.(asset);
   }
+
+  // --- drop a file onto the textarea: upload + insert the markdown ref ------
+
+  const [fileDragOver, setFileDragOver] = useState(false);
+  const fileDragDepth = useRef(0);
+  // Latest value/onChange for the async insert — the upload can resolve many
+  // keystrokes after the drop, so the drop-time closure would be stale.
+  const editRef = useRef({ value, onChange });
+  editRef.current = { value, onChange };
+
+  function resetFileDrag() {
+    fileDragDepth.current = 0;
+    setFileDragOver(false);
+  }
+
+  // Upload through the same handler the sidebar drop zone uses; if it returns
+  // the created assets, splice their markdown refs at the drop-time caret.
+  async function uploadDroppedFiles(files: File[], caret: number) {
+    if (!onUploadAssets) return;
+    const uploaded = await onUploadAssets(files);
+    if (!uploaded || uploaded.length === 0) return;
+    const { value: current, onChange: change } = editRef.current;
+    const at = Math.min(caret, current.length);
+    const text = uploaded
+      .map((asset) => `\n![${asset.name}](${asset.markdownPath})\n`)
+      .join("");
+    change(current.slice(0, at) + text + current.slice(at));
+    const cursor = at + text.length;
+    requestAnimationFrame(() => {
+      const textarea = sync.textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  // The host's textareaProps merged with the file-drop wiring. Internal
+  // handlers run first, then the host's (same event). File drags are only
+  // intercepted when there's an upload handler; plain text drags (a sidebar
+  // row) keep the browser's native insert-at-drop-point behavior.
+  const mergedTextareaProps: EditorTextareaElementProps = {
+    ...textareaProps,
+    className: cn(
+      // drop-target affordance while files hover over the editor
+      fileDragOver && "ring-1 ring-inset ring-white/40",
+      textareaProps?.className,
+    ),
+    onDragEnter: (event) => {
+      if (onUploadAssets && isFileDrag(event)) {
+        fileDragDepth.current += 1;
+        setFileDragOver(true);
+      }
+      textareaProps?.onDragEnter?.(event);
+    },
+    onDragOver: (event) => {
+      if (onUploadAssets && isFileDrag(event)) {
+        // preventDefault marks the textarea as a valid file-drop target
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }
+      textareaProps?.onDragOver?.(event);
+    },
+    onDragLeave: (event) => {
+      if (onUploadAssets && isFileDrag(event)) {
+        fileDragDepth.current -= 1;
+        if (fileDragDepth.current <= 0) resetFileDrag();
+      }
+      textareaProps?.onDragLeave?.(event);
+    },
+    onDrop: (event) => {
+      if (onUploadAssets) {
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length > 0) {
+          event.preventDefault();
+          resetFileDrag();
+          void uploadDroppedFiles(files, event.currentTarget.selectionEnd);
+        }
+      }
+      textareaProps?.onDrop?.(event);
+    },
+  };
 
   // cmd/ctrl+s saves. The latest value/onSave live in a ref so the window
   // listener binds once instead of re-binding on every keystroke.
@@ -191,6 +311,7 @@ export function Desk({
               sync={sync}
               value={value}
               onChange={onChange}
+              textareaProps={mergedTextareaProps}
               className={cn(
                 "min-h-[24rem] border-b border-white/10 xl:h-full xl:min-h-0 xl:border-b-0",
                 mode === "split" ? "xl:border-r" : "",
@@ -200,7 +321,7 @@ export function Desk({
           {mode !== "edit" ? (
             <EditorPreview
               ref={sync.previewRef}
-              content={value}
+              content={transformed?.body ?? value}
               renderMarkdown={renderMarkdown}
               onSelectBlock={sync.onPreviewSelectBlock}
               className="min-h-[24rem] xl:h-full xl:min-h-0"

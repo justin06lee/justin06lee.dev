@@ -1,6 +1,6 @@
 # content & data display
 
-components for rendering content and data: markdown pipelines (prose, collapsible-prose, article, code-block), browsable collections (gallery, article-list), date and activity views (calendar, calendar-nav, heatmap, timeline), plus an image cropper, a credential form, and a demo frame (showcase). all are dark-only client components that install into `@/components/ui/` and share the registry's brutalist conventions: square corners, thin `white/10`–`white/20` borders, mono accents, lowercase copy. every component takes `className` on its root even where meta.ts omits it.
+components for rendering content and data: markdown pipelines (prose, collapsible-prose, article, code-block), browsable collections (gallery, article-list, file-card), date and activity views (calendar, calendar-nav, heatmap, timeline), plus an image cropper, a credential form, and a demo frame (showcase). all are dark-only client components that install at your configured components alias and share the registry's brutalist conventions: square corners, thin `white/10`–`white/20` borders, mono accents, lowercase copy. every component takes `className` on its root even where meta.ts omits it.
 
 ## article
 
@@ -34,9 +34,9 @@ reach for `article` when you want the full post page chrome around a body; use `
 
 **Role:** searchable, tag-filterable grid of article-preview cards for a blog index.
 **Install:** `bunx @justin06lee/chrome@latest add article-list`
-**Composes:** registry: `badge`; no npm dependencies
+**Composes:** registry: `badge`, `fade-in`; no npm dependencies
 
-renders a search input, a row of ghost badge tag chips (single-select toggle, with a "clear" button), and a responsive 1/2/3-column grid of cards. each card is a plain `<a href={`${basePath}/${slug}`}>` wrapping a banner, title, formatted date, two-line-clamped excerpt, and tag badges — plain `<a>`/`<img>` keep it framework-agnostic; wire it to any router by setting `basePath`. filtering matches the lowercased query against title + excerpt + tags, AND-ed with the selected tag. there is no sorting — cards render in the order given.
+renders a search input, a row of ghost badge tag chips (single-select toggle, with a "clear" button), and a responsive 1/2/3-column grid of cards. each card is a plain `<a href={`${basePath}/${slug}`}>` wrapping a banner, title, formatted date, two-line-clamped excerpt, and tag badges — plain `<a>`/`<img>` keep it framework-agnostic; wire it to any router by setting `basePath`. filtering matches the lowercased query against title + excerpt + tags, AND-ed with the selected tag. there is no sorting — cards render in the order given. cards stagger their entrance via `fade-in` (`staggerDelay` at 60ms per card, capped past index 8; honors prefers-reduced-motion) — pass `stagger={false}` to render instantly.
 
 the banner treatment is the distinctive part: each banner is fetched as a blob, its first frame frozen to a still PNG via canvas (`drawImage` + `toDataURL`), and rendered grayscale + dimmed at rest; on hover the card swaps to an object URL of the original blob in full color, so animated GIF/WebP banners stay calm until the user shows interest. stills are memoized in a module-level cache keyed by src (in-flight promises shared, failures evicted for retry), so cards remounting while typing in the search box don't refetch. a cross-origin image without CORS headers fails the canvas step and falls back to the original, possibly animated, src.
 
@@ -47,6 +47,7 @@ vs `gallery`: article-list is for dated content previews — single tag filter, 
 - `basePath: string = ''` — prefix for card hrefs, built as `${basePath}/${slug}`.
 - `defaultQuery: string = ''` — initial value of the search box.
 - `defaultTag: string` — initially selected tag filter.
+- `stagger: boolean = true` — stagger each card's entrance fade by index (60ms per card, capped; honors prefers-reduced-motion).
 - `className: string`
 
 **Example:**
@@ -65,9 +66,9 @@ vs `gallery`: article-list is for dated content previews — single tag filter, 
 
 renders a prev/next header (month name + year in mono uppercase) over a sunday-aligned 7-column grid of day buttons. all dates are plain strings — the month is `"YYYY-MM"`, days are `"YYYY-MM-DD"` — and the grid is built with `Date.UTC`, so there is no timezone drift and no Date objects cross the prop boundary. fully controlled: `month`/`onMonthChange` drive paging (the arrows are disabled when `onMonthChange` is absent), `selected`/`onSelect` drive selection. the selected day inverts to white-on-black; `today` gets an inset ring.
 
-`renderDay` lets you layer extra content under each day number — task dots, counts — without forking the component; it's called with the cell's date string inside the day button.
+`renderDay` lets you layer extra content under each day number — task dots, counts — without forking the component; it's called with the cell's date string inside the day button. `renderCell` goes further: it replaces the whole cell (day number included) with your own layout, for agenda-style month grids showing per-day events. it receives a `CalendarDay` — `{ date, day, isToday, isSelected }` — and drops the compact `size-9` picker styling: cells stay `<button>`s when `onSelect` is set, otherwise they render as plain `<div>`s so hosts can embed their own links. in full-cell mode today keeps its ring and selection tints (`bg-white/10`) instead of inverting so rich content stays readable. pair it with `cellClassName` — a string or a per-day `(day: CalendarDay) => string` function, applied in both modes — for sizing (`"min-h-28 p-2"`) or a per-day heatmap tint.
 
-vs siblings: `calendar` is the interactive month picker; `heatmap` is the read-mostly full-year density view; `calendar-nav` is only the header controls (view switcher + prev/today/next) meant to sit above any of these views.
+vs siblings: `calendar` is the interactive month picker (and, with renderCell, the agenda month grid); `heatmap` is the read-mostly full-year density view; `calendar-nav` is only the header controls (view switcher + prev/today/next) meant to sit above any of these views.
 
 **Key props:**
 - `month: string` (required) — "YYYY-MM" displayed month.
@@ -76,6 +77,8 @@ vs siblings: `calendar` is the interactive month picker; `heatmap` is the read-m
 - `onSelect: (date: string) => void`
 - `today: string` — "YYYY-MM-DD" to ring.
 - `renderDay: (date: string) => ReactNode` — extra cell content.
+- `renderCell: (day: CalendarDay) => ReactNode` — replace the whole cell (day number included). day = { date, day, isToday, isSelected }.
+- `cellClassName: string | ((day: CalendarDay) => string)` — per-cell classes — heatmap tint, min-height. works in both modes.
 
 **Example:**
 ```tsx
@@ -164,6 +167,38 @@ vs `prose`: use collapsible-prose for long-form documents where sections should 
 </CollapsibleProse>
 ```
 
+## file-card
+
+**Role:** stacked-paper download card — papers fan out on hover, renders as a link or button.
+**Install:** `bunx @justin06lee/chrome@latest add file-card`
+**Composes:** registry: `stack`; no npm dependencies
+
+a `stack` dressed as a file: the front paper holds three faint ruled lines, an optional mono uppercase `meta` kicker ("pdf · 1.2 mb"), and the file `name`; the papers behind fan out with stack's css spring on hover (and sit still under prefers-reduced-motion — stack handles that). the root is `h-44 w-40` like stack; resize via `className`, and forward extra sheets with `layers`.
+
+the render element follows the props: with `href` it's an anchor (through `linkComponent` — pass your router's Link; `download` sets the anchor's download attribute, `true` or a save-as filename, and `onClick` still runs alongside navigation); with only `onClick` it's a `<button>`; with neither it's a plain block. focus gets a visible ring.
+
+use file-card for a downloadable/openable file affordance; `file-grid` (in `references/editor.md`) wraps a collection of these with a drag-to-trash delete flow. for article previews use `article-list`; for a bare hover-fan container use `stack` directly.
+
+**Key props:**
+- `name: string` (required) — file name shown on the front paper.
+- `meta: string` — small uppercase kicker line above the name, e.g. 'pdf · 1.2 mb'.
+- `href: string` — link target; renders the card as an anchor.
+- `onClick: () => void` — click handler; without href the card renders as a `<button>`.
+- `download: boolean | string` — sets the anchor's download attribute (true, or a filename to save as).
+- `linkComponent: React.ElementType = 'a'` — anchor element/component — pass your router's Link.
+- `layers: number = 1` — paper layers behind the front card, forwarded to stack.
+- `className: string` — overrides on the root element.
+
+**Example:**
+```tsx
+<FileCard
+  name="quarterly-report.pdf"
+  meta="pdf · 1.2 mb"
+  href="/files/quarterly-report.pdf"
+  download
+/>
+```
+
 ## gallery
 
 **Role:** searchable, filterable, sortable project card grid with pinned chrome-foil highlights.
@@ -206,7 +241,9 @@ lays out 12 sunday-aligned mini month grids (2/3/4 columns responsive), each squ
 
 `values` is a flat `Record<"YYYY-MM-DD", number>` — days absent from the record count as 0, so you can pass sparse data. cells are `<div>`s by default; passing `onSelectDay` upgrades every cell to a `<button>` with an aria-label. tooltips default to `"date — value"` and are overridable via `title`. everything is UTC-computed strings, matching `calendar`'s conventions, so the two can share the same keyed data.
 
-use heatmap for the at-a-glance year view; drill into a `calendar` month (with `renderDay` dots) or a `timeline` day when the user selects a cell, with `calendar-nav` switching between them.
+`monthHref` makes each month label a link: it's called with a `HeatmapMonth` — `{ index (0-based, 0 = jan), year, label }` — and the returned href renders through `linkComponent` (pass your router's Link for client-side navigation; defaults to a plain `"a"`). months whose callback you skip (or when the prop is absent) stay plain `<span>`s.
+
+use heatmap for the at-a-glance year view; drill into a `calendar` month (with `renderDay` dots, or via `monthHref` links to per-month pages) or a `timeline` day when the user selects a cell, with `calendar-nav` switching between them.
 
 **Key props:**
 - `values: Record<string, number>` (required) — value per "YYYY-MM-DD".
@@ -216,10 +253,17 @@ use heatmap for the at-a-glance year view; drill into a `calendar` month (with `
 - `today: string` — "YYYY-MM-DD" to ring.
 - `onSelectDay: (date: string) => void` — makes cells clickable.
 - `title: (date: string, value: number) => string` — cell tooltip formatter.
+- `monthHref: (month: HeatmapMonth) => string` — when set, month labels link to the returned href. HeatmapMonth is { index (0 = jan), year, label }.
+- `linkComponent: React.ElementType = 'a'` — anchor element/component for month links — pass your router's Link.
 
 **Example:**
 ```tsx
-<Heatmap values={{ "2026-05-24": 75, "2026-05-25": 25 }} year={2026} today="2026-05-24" />
+<Heatmap
+  values={{ "2026-05-24": 75, "2026-05-25": 25 }}
+  year={2026}
+  today="2026-05-24"
+  monthHref={({ year, index }) => `/calendar/${year}-${String(index + 1).padStart(2, "0")}`}
+/>
 ```
 
 ## image-cropper
@@ -285,7 +329,9 @@ for multi-field logins pass `fields` (e.g. email + password); each entry sets na
 **Install:** `bunx @justin06lee/chrome@latest add prose`
 **Composes:** npm: `react-markdown`, `remark-gfm`, `remark-math`, `rehype-katex`, `rehype-slug`, `katex`; registry: `code-block`
 
-renders a markdown string (the single string child) through `react-markdown` with `remarkGfm` + `remarkMath` on the remark side and `rehypeKatex` + `rehypeSlug` on the rehype side, `skipHtml` enabled (raw HTML in the markdown is dropped, not rendered). every element gets the dark prose styling via a memoized component map: slugged headings with `scroll-margin-top: var(--sticky-header-offset, 80px)` for anchor links under a sticky header, bordered tables in an overflow wrapper, bordered inline code, lazy images. it imports `katex/dist/katex.min.css` directly. fenced code blocks are intercepted at the `pre` renderer — raw text and `language-*` class are pulled off the hast node and handed to `code-block` for prism highlighting; inline code is detected by the absence of a language class and single-line position. relative image srcs can be resolved against `imageBaseUrl` (e.g. a GitHub raw base).
+renders a markdown string (the single string child) through `react-markdown` with `remarkGfm` + `remarkMath` on the remark side and `rehypeKatex` + `rehypeSlug` on the rehype side, `skipHtml` enabled (raw HTML in the markdown is dropped, not rendered). every element gets the dark prose styling via a memoized component map: slugged headings with `scroll-margin-top: var(--sticky-header-offset, 80px)` for anchor links under a sticky header, bordered tables in an overflow wrapper, bordered inline code, lazy images. it imports `katex/dist/katex.min.css` directly. fenced code blocks are intercepted at the `pre` renderer — raw text and `language-*` class are pulled off the hast node and handed to `code-block` for prism highlighting; inline code is detected by the absence of a language class and single-line position.
+
+links split by kind: internal hrefs — anything without a protocol scheme and not protocol-relative, i.e. relative paths, `/…`, and `#…` anchors — render through `linkComponent` (pass next/link for client-side navigation; defaults to `"a"`), while external links always stay plain `<a>`s and http(s) ones open in a new tab with `rel="noopener noreferrer"`. images get a two-step resolution: relative srcs are prefixed with `imageBaseUrl` (e.g. a GitHub raw base; already-resolved `http(s):`, `data:`, and `/…` srcs are left alone), then `resolveImageSrc` maps the final src to what's actually rendered — e.g. swapping `foo-light.png` ↔ `foo-dark.png` theme variants.
 
 the line-sync feature is for split-pane editor/preview UIs: with `lineSync` on, a custom rehype plugin stamps each top-level block with `data-source-line` (its 1-based line in the markdown source) so a host can map editor lines to rendered blocks for scroll sync. `highlightLine` marks the last top-level block starting at or above that line with `data-sync-highlight`, and a scoped `<style>` (injected only when lineSync is on) paints it as a gray streak — text blocks bleed the fill horizontally, images get an outline instead. it's declarative, rendered into the markup, so a re-render can't strand the highlight. only top-level children are tagged, mapping each line to exactly one block. off by default with zero overhead.
 
@@ -296,6 +342,8 @@ vs siblings: prose is the renderer; `article` is the page layout that typically 
 - `imageBaseUrl: string` — prefix for relative image srcs.
 - `lineSync: boolean = false` — stamp each top-level block with data-source-line for editor/preview scroll/highlight sync. zero overhead when off.
 - `highlightLine: number | null = null` — 1-based source line whose block is marked with data-sync-highlight. requires lineSync.
+- `linkComponent: React.ElementType = 'a'` — anchor component for internal links (relative, /…, #…) — pass your router's link. external links always render a plain `<a>`; http(s) opens in a new tab.
+- `resolveImageSrc: (src: string) => string` — maps each image src to the src actually rendered (e.g. light/dark theme variants). runs after imageBaseUrl resolution.
 
 **Example:**
 ```tsx
@@ -335,15 +383,22 @@ one prop exists in the component but not in meta.ts: `clip: boolean = true` appl
 
 renders a min-height 960px bordered track with a faint hour grid (00:00 through 23:00 labels) and absolutely positioned event blocks. everything is placed by minutes since midnight on a 0–1440 axis: an event at `{ startMin: 480, endMin: 570 }` spans 8:00 to 9:30. blocks get a colored left border and a `color-mix` 15% tint of the same color (default white), a two-line-clamped label, and are clamped into the visible day so out-of-range events can't overflow the track. events are not collision-resolved — overlapping blocks overlap visually.
 
-`markers` draws labeled full-width horizontal rules at given minutes — thin line with a small mono uppercase label at the right edge — styled after the upstream prayer-time markers; use them for any fixed daily reference times (prayer times, market open/close, deadlines). the now-line is a red dot + rule: `showNow` computes it from the client clock and ticks every minute via setInterval, while `nowMinutes` overrides the position explicitly (and implies the line shows — useful for SSR determinism or showing another timezone). toggling `showNow` off hides the line rather than freezing it.
+blocks are display-only `<div>`s by default; `onEventClick` upgrades them to keyboard-accessible `<button>`s with a subtle hover/focus ring and an HH:MM-range aria-label. `tracks` switches to multi-track mode: N labeled columns side by side (`{ label?, events, onEventClick? }[]` — a per-track handler overrides the top-level one) sharing one hour axis, grid, markers, and now-line — plan vs actuals, people, rooms; `events` is ignored when `tracks` is set. `onEventChange` opts blocks into editing: drag to move, or drag the bottom edge to resize, snapped to `snapMinutes` (default 5); it fires once on drop with `(event, { startMin, endMin })` and you commit by updating your data — the component holds only the in-flight drag preview. editing is pointer-driven (no keyboard path), and a drag that moved suppresses the click that follows so it doesn't also fire onEventClick.
+
+`markers` draws labeled full-width horizontal rules at given minutes — thin line with a small mono uppercase label at the right edge — styled after the upstream prayer-time markers; use them for any fixed daily reference times (prayer times, market open/close, deadlines). `markersSlot` is a ReactNode rendered into the same marker layer, so marker data can stream in — e.g. a `<Suspense>`-wrapped server component rendering the exported `TimelineMarker` primitive (`{ minutes, label, color? }`), whose `top` percentages resolve against the full 24h track. the now-line is a red dot + rule: `showNow` computes it from the client clock and ticks every minute via setInterval, while `nowMinutes` overrides the position explicitly (and implies the line shows — useful for SSR determinism or showing another timezone). toggling `showNow` off hides the line rather than freezing it.
 
 the track is tall by design; wrap it in a fixed-height `overflow-y-auto` container (as the demo does) for a scrollable day view. pair with `calendar-nav` for day paging.
 
 **Key props:**
-- `events: TimelineEvent[]` (required) — { startMin, endMin, label?, color? }[]
+- `events: TimelineEvent[]` — { startMin, endMin, label?, color? }[] — single-track events. ignored when tracks is set.
+- `tracks: TimelineTrack[]` — { label?, events, onEventClick? }[] — labeled columns sharing one axis; per-track onEventClick overrides the top-level one.
 - `showNow: boolean` — live red now-line, ticks each minute.
 - `nowMinutes: number` — override now-line position (minutes of day).
 - `markers: Array<{ minutes: number; label: string; color?: string }>` — labeled full-width marker lines at minutes-of-day (e.g. prayer times), label at the right edge.
+- `markersSlot: ReactNode` — slot in the marker layer for streamed markers — render the exported `TimelineMarker` inside it.
+- `onEventClick: (event: TimelineEvent) => void` — blocks become keyboard-accessible buttons; display-only when absent.
+- `onEventChange: (event, next: { startMin; endMin }) => void` — opt-in drag-to-move + bottom-edge resize; called once on drop.
+- `snapMinutes: number = 5` — snap increment for drag editing.
 
 **Example:**
 ```tsx
@@ -351,7 +406,13 @@ the track is tall by design; wrap it in a fixed-height `overflow-y-auto` contain
   <Timeline
     showNow
     markers={[{ minutes: 5 * 60 + 12, label: "fajr" }]}
-    events={[{ startMin: 480, endMin: 570, label: "deep work", color: "#6ee7b7" }]}
+    tracks={[
+      { label: "plan", events: planned },
+      { label: "actual", events: logged },
+    ]}
+    onEventClick={(e) => openEvent(e)}
+    onEventChange={(e, next) => updateEvent(e, next)}
+    snapMinutes={15}
   />
 </div>
 ```

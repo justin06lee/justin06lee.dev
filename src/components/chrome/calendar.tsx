@@ -27,6 +27,16 @@ function shiftMonth(yyyymm: string, delta: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+/** Context handed to renderCell / cellClassName for one day. */
+export type CalendarDay = {
+  /** "YYYY-MM-DD". */
+  date: string;
+  /** Day of month, 1–31. */
+  day: number;
+  isToday: boolean;
+  isSelected: boolean;
+};
+
 export type CalendarProps = {
   /** Displayed month, "YYYY-MM". Controlled when paired with onMonthChange. */
   month: string;
@@ -38,13 +48,24 @@ export type CalendarProps = {
   today?: string;
   /** Render extra content under a day number (dots, counts). */
   renderDay?: (date: string) => React.ReactNode;
+  /**
+   * Replace the entire cell content — day number included — for rich month
+   * grids (agendas, per-day heatmaps). Drops the compact picker styling;
+   * pair with cellClassName for sizing (e.g. "min-h-28 p-2"). Days stay
+   * <button>s when onSelect is set; otherwise they render as plain <div>s so
+   * hosts can embed their own links.
+   */
+  renderCell?: (day: CalendarDay) => React.ReactNode;
+  /** Per-cell classes — heatmap tint, min-height. Works in both modes. */
+  cellClassName?: string | ((day: CalendarDay) => string);
   className?: string;
 };
 
 /**
  * Month date grid — selectable days, today ring, prev/next header. Sunday-
  * aligned. Generalized from the justin06lee.dev calendar month view; pass
- * `renderDay` to layer task dots or counts onto cells.
+ * `renderDay` to layer task dots or counts onto cells, or `renderCell` +
+ * `cellClassName` to take over cells entirely for agenda-style month views.
  */
 export function Calendar({
   month,
@@ -53,6 +74,8 @@ export function Calendar({
   onSelect,
   today,
   renderDay,
+  renderCell,
+  cellClassName,
   className,
 }: CalendarProps) {
   const [y, m] = month.split("-").map(Number) as [number, number];
@@ -91,10 +114,41 @@ export function Calendar({
           </div>
         ))}
         {cells.map((date, i) => {
-          if (!date) return <div key={i} className="size-9" />;
+          if (!date) return <div key={i} className={renderCell ? undefined : "size-9"} />;
           const day = Number(date.split("-")[2]);
           const isToday = date === today;
           const isSelected = date === selected;
+          const ctx: CalendarDay = { date, day, isToday, isSelected };
+          const cellCls =
+            typeof cellClassName === "function" ? cellClassName(ctx) : cellClassName;
+
+          if (renderCell) {
+            // Full-cell mode: host owns the layout (day number included).
+            // Today keeps its ring; selection tints instead of inverting so
+            // rich content stays readable.
+            const full = cn(
+              "flex min-w-0 flex-col text-left transition-colors",
+              isSelected && "bg-white/10",
+              isToday && "ring-1 ring-inset ring-white/80",
+              cellCls,
+            );
+            return onSelect ? (
+              <button
+                key={date}
+                type="button"
+                onClick={() => onSelect(date)}
+                aria-pressed={isSelected}
+                className={full}
+              >
+                {renderCell(ctx)}
+              </button>
+            ) : (
+              <div key={date} className={full}>
+                {renderCell(ctx)}
+              </div>
+            );
+          }
+
           return (
             <button
               key={date}
@@ -107,6 +161,7 @@ export function Calendar({
                   ? "bg-white text-black"
                   : "text-white/80 hover:bg-white/10",
                 isToday && !isSelected && "ring-1 ring-inset ring-white/80",
+                cellCls,
               )}
             >
               {day}

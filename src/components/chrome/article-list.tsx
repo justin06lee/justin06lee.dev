@@ -9,6 +9,7 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/chrome/badge";
+import { FadeIn, staggerDelay } from "@/components/chrome/fade-in";
 
 export type ArticlePreview = {
   slug: string;
@@ -212,13 +213,17 @@ export type ArticleListProps = {
   defaultQuery?: string;
   /** Initially selected tag filter, if any. */
   defaultTag?: string;
+  /** Stagger each card's entrance fade by index (capped). Default true. */
+  stagger?: boolean;
   className?: string;
 };
 
 /**
  * Searchable, tag-filterable grid of article cards. Each card defers its
  * (possibly animated) GIF banner — showing a frozen, grayscale first frame
- * until hover, then swapping to the animated original in full color.
+ * until hover, then swapping to the animated original in full color. Cards
+ * stagger their entrance fade by index (via FadeIn, which honors
+ * prefers-reduced-motion); pass `stagger={false}` to render instantly.
  * Dark-only. Uses plain <a> / <img> so it stays framework-agnostic.
  */
 export function ArticleList({
@@ -226,6 +231,7 @@ export function ArticleList({
   basePath = "",
   defaultQuery = "",
   defaultTag,
+  stagger = true,
   className,
 }: ArticleListProps) {
   const [query, setQuery] = useState(defaultQuery);
@@ -289,13 +295,22 @@ export function ArticleList({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((article) => (
-            <ArticleCard
-              key={article.slug}
-              article={article}
-              basePath={basePath}
-            />
-          ))}
+          {filtered.map((article, i) =>
+            stagger ? (
+              // Delay grows 60ms per card but caps after 8 so a long list
+              // doesn't keep late rows invisible. Keys are slugs, so cards
+              // surviving a filter change keep their DOM and don't re-animate.
+              <FadeIn key={article.slug} delay={staggerDelay(Math.min(i, 8), 0.06)}>
+                <ArticleCard article={article} basePath={basePath} />
+              </FadeIn>
+            ) : (
+              <ArticleCard
+                key={article.slug}
+                article={article}
+                basePath={basePath}
+              />
+            ),
+          )}
         </div>
       )}
     </div>

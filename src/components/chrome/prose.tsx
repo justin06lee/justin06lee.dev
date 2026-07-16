@@ -27,6 +27,19 @@ export type ProseProps = {
    * applies when `lineSync` is true.
    */
   highlightLine?: number | null;
+  /**
+   * Anchor element/component for internal links (relative, `/…`, `#…`) — pass
+   * your router's Link for client-side navigation. External links (`http(s)://`,
+   * `mailto:`, …) always render a plain `<a>` (http(s) opens in a new tab).
+   * Default "a".
+   */
+  linkComponent?: React.ElementType;
+  /**
+   * Maps each image src to the src actually rendered (e.g. swap
+   * `foo-light.png` ↔ `foo-dark.png` theme variants). Runs after
+   * `imageBaseUrl` resolution, so it receives the final src.
+   */
+  resolveImageSrc?: (src: string) => string;
   className?: string;
 };
 
@@ -63,6 +76,13 @@ function isExternal(href: string): boolean {
   return href.startsWith("http://") || href.startsWith("https://");
 }
 
+// Internal = no protocol scheme (mailto:, http:, …) and not protocol-relative —
+// i.e. relative paths, `/…`, and `#…` anchors. These render through
+// `linkComponent`; everything else stays a plain `<a>`.
+function isInternal(href: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith("//");
+}
+
 function isResolved(src: string): boolean {
   return /^(https?:|data:|\/)/.test(src);
 }
@@ -87,11 +107,13 @@ export function Prose({
   imageBaseUrl,
   lineSync = false,
   highlightLine = null,
+  linkComponent: LinkComponent = "a",
+  resolveImageSrc,
   className,
 }: ProseProps) {
-  // Memoize so the component map is stable across renders (only `imageBaseUrl`
-  // affects it via the `img` renderer); otherwise ReactMarkdown re-renders the
-  // whole tree every render.
+  // Memoize so the component map is stable across renders (only `imageBaseUrl`,
+  // `linkComponent`, and `resolveImageSrc` affect it via the `a`/`img`
+  // renderers); otherwise ReactMarkdown re-renders the whole tree every render.
   const components: Components = useMemo(() => ({
     h1: ({ children, node, ...p }) => (
       <h1 className="mb-4 mt-10 text-3xl font-semibold tracking-tight text-white first:mt-0" style={HEADING_SCROLL} {...p}>{children}</h1>
@@ -115,6 +137,13 @@ export function Prose({
     a: ({ children, href }) => {
       const value = typeof href === "string" ? href : "";
       const cls = "text-white underline decoration-white/40 underline-offset-4 transition-colors hover:decoration-white";
+      if (value && isInternal(value)) {
+        return (
+          <LinkComponent href={value} className={cls}>
+            {children}
+          </LinkComponent>
+        );
+      }
       return (
         <a
           href={value || undefined}
@@ -179,11 +208,12 @@ export function Prose({
     hr: ({ node, ...p }) => <hr className="my-10 border-white/10" {...p} />,
     img: ({ src, alt, node, ...p }) => {
       const s = typeof src === "string" ? src : "";
-      const resolved = s && imageBaseUrl && !isResolved(s) ? `${imageBaseUrl}/${s.replace(/^\.\//, "")}` : s;
+      const based = s && imageBaseUrl && !isResolved(s) ? `${imageBaseUrl}/${s.replace(/^\.\//, "")}` : s;
+      const resolved = based && resolveImageSrc ? resolveImageSrc(based) : based;
       // eslint-disable-next-line @next/next/no-img-element
       return <img src={resolved} alt={alt || ""} loading="lazy" className="my-5 max-w-full border border-white/10" {...p} />;
     },
-  }), [imageBaseUrl]);
+  }), [imageBaseUrl, LinkComponent, resolveImageSrc]);
 
   return (
     <div className={className}>

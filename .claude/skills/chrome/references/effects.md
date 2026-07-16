@@ -292,9 +292,11 @@ scrambling substitutes only lowercase a-z regardless of the source characters, a
 
 **Role:** scrub through a sprite-sheet grid by dragging — pointer x maps to a frame index.
 **Install:** `bunx @justin06lee/chrome@latest add sprite-scrubber`
-**Composes:** nothing beyond utils
+**Composes:** nothing beyond utils (installs two files: sprite-scrubber.tsx and the pure scrub.ts mapping helpers)
 
-renders a bordered black container with the sprite sheet as a css `background-image` sized to `cols*100% x rows*100%`; showing frame N is just setting `background-position` percentages, so scrubbing never swaps images or touches the DOM tree. pointer x within the container maps linearly to a frame index between the `edgeLeft`/`edgeRight` dead zones (defaults 0.22/0.78 — positions outside them clamp to the first/last frame, which makes the ends easy to hit). `reverse` defaults to true, meaning moving left plays forward, matching the original justin06lee.dev artifact; pass `reverse={false}` and `edgeLeft={0}`/`edgeRight={1}` for a conventional full-width scrubber, as the demo does.
+renders a bordered black container with the sprite sheet as a css `background-image` sized to `cols*100% x rows*100%`; showing frame N is just setting `background-position` percentages, so scrubbing never swaps images or touches the DOM tree. pointer x within the container maps linearly to a frame index across the FULL width — `edgeLeft`/`edgeRight` never clamp the mapping; they only bound `onEdge` sweep detection (see below). `reverse` defaults to true, meaning moving left plays forward, matching the original justin06lee.dev artifact; pass `reverse={false}` for a conventional scrubber. the mapping and edge logic live in the shipped `scrub.ts` as pure functions (`relXToFrame`, `stepEdge`, `seedEdge`), separately testable.
+
+`onEdge` fires when the pointer reaches one edge zone (x ≤ edgeLeft or x ≥ edgeRight, defaults 0.22/0.78) after last visiting the opposite one — exactly once per full sweep, never on re-entering the same zone. the tracker is seeded by which half the pointer entered on, so a sweep completed outside the container doesn't fire on re-entry, and touch drags re-arm on pointer-up. use it for "swept the whole animation" triggers. the sheet is also preloaded: a built-in "loading..." overlay covers the container until the image loads (replace it with `renderLoading` — return null to disable), and `onLoad` fires once on successful load; a failed load clears the overlay and leaves the bordered black box.
 
 it is tuned to avoid per-move jank: the container rect is measured once per pointer session (on enter/down) instead of on every pointermove, and frame updates are coalesced through a single requestAnimationFrame so a burst of moves paints at most once per vsync. `onFrameChange` fires only when the displayed frame actually changes. pointer capture on pointerdown keeps a drag alive outside the bounds; mouse users scrub on plain hover-move, while touch/pen require pressing (moves with `buttons === 0` are ignored on non-mouse pointers).
 
@@ -305,12 +307,15 @@ one sharp gotcha the source calls out: the css `url()` is quoted because svg dat
 - `frames: number (required) — total number of frames in the sheet.`
 - `cols: number (required) — number of columns in the grid.`
 - `rows: number (required) — number of rows in the grid.`
-- `edgeLeft: number = 0.22 — left dead zone as a fraction in [0,1].`
-- `edgeRight: number = 0.78 — right dead zone as a fraction in [0,1].`
+- `edgeLeft: number = 0.22 — left edge zone as a fraction in [0,1]. bounds onEdge sweep detection only — frames always map across the full width.`
+- `edgeRight: number = 0.78 — right edge zone, same rules.`
 - `reverse: boolean = true — moving left plays forward.`
 - `aspectRatio: string — css aspect-ratio for the root (e.g. "1 / 1").`
 - `mode: "pointer" = "pointer" — interaction mode.`
 - `onFrameChange: (frame: number) => void — fired when the displayed frame changes.`
+- `onEdge: (edge: "left" | "right") => void — fired once per full sweep, when the pointer reaches one edge zone after last visiting the opposite one.`
+- `onLoad: () => void — fired once the sprite sheet image has loaded.`
+- `renderLoading: () => ReactNode — custom node while the sheet loads; defaults to a "loading..." overlay, return null to disable.`
 - `className: string`
 
 **Example:**
@@ -320,12 +325,11 @@ one sharp gotcha the source calls out: the css `url()` is quoted because svg dat
   frames={12}
   cols={4}
   rows={3}
-  edgeLeft={0}
-  edgeRight={1}
   reverse={false}
   aspectRatio="1 / 1"
   className="w-64"
   aria-label="product spin"
+  onEdge={(edge) => console.log(`swept to ${edge}`)}
 />
 ```
 
@@ -335,11 +339,11 @@ one sharp gotcha the source calls out: the css `url()` is quoted because svg dat
 **Install:** `bunx @justin06lee/chrome@latest add stack`
 **Composes:** nothing beyond utils
 
-a pile of bordered black cards: `layers` empty paper sheets sit behind one front card that holds your `children`. at rest the sheets are slightly rotated (each deeper layer a bit more) so the stack reads as paper; on hover every layer springs to a fanned-out rotation and offset — back sheets swing left and down, the front card tips right and up. the "spring" is plain css: a 500ms transform transition with an overshoot bezier, cubic-bezier(0.34, 1.56, 0.64, 1), so there is no animation library and no javascript beyond a hover state flag.
+a pile of bordered black cards: `layers` empty paper sheets sit behind one front card that holds your `children`. at rest the sheets are slightly rotated (each deeper layer a bit more) so the stack reads as paper; on hover every layer springs to a fanned-out rotation and offset — back sheets swing left and down, the front card tips right and up. the "spring" is plain css: a 500ms transform transition with an overshoot bezier, cubic-bezier(0.34, 1.56, 0.64, 1), so there is no animation library and no javascript beyond a hover state flag. the fan-out respects `prefers-reduced-motion` — reduced-motion users get a stack that sits still on hover.
 
 each layer carries its own box-shadow (heavier on the front card) for depth, and the back sheets are `aria-hidden` since they're purely decorative. the root defaults to `h-44 w-40` (`relative`); override the size with `className` — children fill the front card absolutely, so give them their own padding and layout (the demo uses a flex column with `p-4`).
 
-hover-only interaction, mouse events specifically (`onMouseEnter`/`onMouseLeave`), so it stays folded on touch devices. good for article cards, portfolio pieces, or anything that benefits from a physical "pick me up" affordance. more layers cost almost nothing — they're empty divs — but 1-2 reads best.
+hover-only interaction, mouse events specifically (`onMouseEnter`/`onMouseLeave`), so it stays folded on touch devices. good for article cards, portfolio pieces, or anything that benefits from a physical "pick me up" affordance. more layers cost almost nothing — they're empty divs — but 1-2 reads best. `file-card` (in `references/content-data.md`) is the registry's own composition of it: a download card dressed as a stacked file.
 
 **Key props:**
 - `layers: number = 1 — paper layers behind the front card`

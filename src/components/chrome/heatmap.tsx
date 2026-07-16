@@ -31,6 +31,14 @@ function bucket(value: number, max: number, levels: number): number {
   return Math.min(levels - 1, Math.max(1, Math.ceil((value / max) * (levels - 1))));
 }
 
+export type HeatmapMonth = {
+  /** 0-based month index (0 = jan). */
+  index: number;
+  year: number;
+  /** Label as rendered, e.g. "Jan". */
+  label: string;
+};
+
 export type HeatmapProps = {
   /** Value per day, keyed by "YYYY-MM-DD". */
   values: Record<string, number>;
@@ -43,12 +51,17 @@ export type HeatmapProps = {
   onSelectDay?: (date: string) => void;
   /** Tooltip text per day; defaults to "date — value". */
   title?: (date: string, value: number) => string;
+  /** When set, each month label renders as a link to the returned href. */
+  monthHref?: (month: HeatmapMonth) => string;
+  /** Anchor element/component for month links — pass your router's Link. Default "a". */
+  linkComponent?: React.ElementType;
   className?: string;
 };
 
 /**
  * Year activity grid — 12 mini month grids of day cells, tinted by value
- * (contribution-graph style). Generalized from the justin06lee.dev year view.
+ * (contribution-graph style). Month labels can link to a per-month view via
+ * `monthHref`. Generalized from the justin06lee.dev year view.
  */
 export function Heatmap({
   values,
@@ -58,6 +71,8 @@ export function Heatmap({
   today,
   onSelectDay,
   title,
+  monthHref,
+  linkComponent: LinkComponent = "a",
   className,
 }: HeatmapProps) {
   const ceiling = max ?? Object.values(values).reduce((m, v) => (v > m ? v : m), 1);
@@ -87,21 +102,33 @@ export function Heatmap({
   return (
     <div className={cn("flex flex-col gap-6", className)}>
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
-        {MONTH_NAMES_SHORT.map((name, idx) => (
-          <div key={idx} className="flex flex-col gap-1.5">
-            <span className="self-start font-mono text-[11px] uppercase tracking-widest text-white/70">
-              {name}
-            </span>
-            <div className="grid grid-cols-7 gap-[3px] font-mono text-[9px] text-white/30">
-              {WEEKDAY_LETTERS.map((w, i) => (
-                <div key={i} className="flex h-3 items-center justify-center">{w}</div>
-              ))}
+        {MONTH_NAMES_SHORT.map((name, idx) => {
+          const href = monthHref?.({ index: idx, year, label: name });
+          return (
+            <div key={idx} className="flex flex-col gap-1.5">
+              {href ? (
+                <LinkComponent
+                  href={href}
+                  className="self-start font-mono text-[11px] uppercase tracking-widest text-white/70 transition-colors hover:text-white"
+                >
+                  {name}
+                </LinkComponent>
+              ) : (
+                <span className="self-start font-mono text-[11px] uppercase tracking-widest text-white/70">
+                  {name}
+                </span>
+              )}
+              <div className="grid grid-cols-7 gap-[3px] font-mono text-[9px] text-white/30">
+                {WEEKDAY_LETTERS.map((w, i) => (
+                  <div key={i} className="flex h-3 items-center justify-center">{w}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-[3px]">
+                {buildMonthGrid(year, idx + 1).map(cell)}
+              </div>
             </div>
-            <div className="grid grid-cols-7 gap-[3px]">
-              {buildMonthGrid(year, idx + 1).map(cell)}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/40">

@@ -7,12 +7,12 @@ description: Use when building UI with the chrome component library (chrome.just
 
 chrome is a dark-only, brutalist, own-the-code react component registry —
 shadcn-style. components are not an npm dependency: the cli copies their
-source into the project (`components/ui/…`), and from then on the project
-owns and edits that code. the canonical docs live at
+source into the project (default `components/chrome/…`), and from then on
+the project owns and edits that code. the canonical docs live at
 https://chrome.justin06lee.dev and every component page there has live
 demos, copyable usage examples, and a props table.
 
-there are ~59 components, from primitives (button, input, kbd) through
+there are ~61 components, from primitives (button, input, kbd) through
 overlays (dialog, command-palette, sheet) and effects (donut, chrome foil,
 scramble) up to a full markdown editor suite (desk). per-component
 reference — role, internals, every prop, gotchas, canonical example — is
@@ -23,8 +23,8 @@ split across the files in `references/`:
 | `references/primitives.md` | badge, button, card, checkbox, color-swatch, copy-button, input, kbd, range, segmented, tag-input, textarea |
 | `references/overlays-nav.md` | accordion, breadcrumb, combobox, command-palette, dialog, menu, navbar, select, sheet, sidebar, tabs, toc, tooltip |
 | `references/effects.md` | ascii, chrome, count-up, donut, fade-in, intro, not-found, pfp, rainbow, scramble, sprite-scrubber, stack |
-| `references/content-data.md` | article, article-list, calendar, calendar-nav, code-block, collapsible-prose, gallery, heatmap, image-cropper, login-form, prose, showcase, timeline |
-| `references/editor.md` | asset-sidebar, desk, drawing-window, editor, editor-toolbar, inline-edit, manager-table, now-playing-bar, socials |
+| `references/content-data.md` | article, article-list, calendar, calendar-nav, code-block, collapsible-prose, file-card, gallery, heatmap, image-cropper, login-form, prose, showcase, timeline |
+| `references/editor.md` | asset-sidebar, desk, drawing-window, editor, editor-toolbar, file-grid, inline-edit, manager-table, now-playing-bar, socials |
 
 read the relevant reference file before using a component from that group.
 do not guess props — the reference lists every prop with its type and
@@ -54,9 +54,16 @@ behavior you can rely on:
   whole editor suite. never hand-install a component's dependencies.
 - npm `dependencies` (motion, lucide-react, …) are unioned and installed in
   a single pass with the project's package manager.
-- files land under the project's alias base: `components/ui/<name>.tsx`,
-  `hooks/…`, `lib/utils.ts`. src-layouts (`src/…` with `@/*` mapped in
-  tsconfig) are detected automatically.
+- files land at the aliases configured in `chrome.json` (defaults:
+  `components/chrome/<name>.tsx`, `hooks/…`, `lib/utils.ts`). src-layouts
+  (`src/…` with `@/*` mapped in tsconfig) are detected once at `init` and
+  recorded as `aliasBase` in chrome.json, so every later `add` writes to the
+  same place.
+- imports inside installed files are rewritten at install time: registry
+  sources use canonical `@/components/ui/<name>` / `@/hooks/<x>` /
+  `@/lib/utils` specifiers, and the cli maps them to your chrome.json
+  aliases (`diff` applies the same rewrite, so alias differences never show
+  as drift).
 - page-type files install relative to the app dir: `not-found` drops
   `app/not-found.tsx` (or `src/app/not-found.tsx`) so the 404 page works
   with zero wiring.
@@ -94,8 +101,10 @@ too, or the seams show:
 - `className` merges via tailwind-merge — later classes win, so sizing and
   spacing overrides (`className="h-96 w-full"`) are the intended
   customization path.
-- cross-component imports use `@/components/ui/<name>`, `@/hooks/<x>`,
-  `@/lib/utils` — the aliases `init` configures.
+- cross-component imports in the registry sources use the canonical
+  `@/components/ui/<name>`, `@/hooks/<x>`, `@/lib/utils` — the cli rewrites
+  them to your chrome.json aliases on install (default components alias is
+  `@/components/chrome`).
 - css that a component needs travels inside it: keyframes ship as hoisted
   `<style precedence="default" href="…">` tags (deduped by react), not
   separate stylesheets. don't move them out.
@@ -110,7 +119,8 @@ too, or the seams show:
 
 ## picking components (fast map)
 
-- text/markdown rendering: `prose` (plain), `article` (page chrome around
+- text/markdown rendering: `prose` (plain; pass `linkComponent` — e.g.
+  next/link — for client-side internal links), `article` (page chrome around
   prose), `collapsible-prose` (details/summary), `code-block` (highlighted
   code; prose already routes fenced blocks through it).
 - pickers: `select` (small enum), `combobox` (searchable + creatable),
@@ -122,7 +132,13 @@ too, or the seams show:
   `container`), `tabs` / `segmented` (in-page switching).
 - showing collections: `gallery` (searchable card grid with pinned chrome
   foil), `article-list` (article previews), `manager-table` (admin rows),
-  `stack` (layered cards).
+  `file-card` (stacked-paper download card), `file-grid` (file browser with
+  drag-to-trash delete), `stack` (layered cards).
+- dates & activity: `calendar` (month picker; `renderCell` + `cellClassName`
+  turn it into an agenda month grid), `heatmap` (year density view; month
+  labels link out via `monthHref`), `timeline` (day schedule; clickable
+  blocks via `onEventClick`, multi-track via `tracks`, drag-to-edit via
+  `onEventChange`), `calendar-nav` (the header controls above any of them).
 - flair: `chrome` (foil text effect — wraps anything), `donut` (spinning
   ascii torus), `scramble` (hover text scramble), `rainbow`, `count-up`,
   `fade-in`, `intro` (full-screen splash), `ascii` (exact-grid ascii art),
@@ -130,7 +146,8 @@ too, or the seams show:
   with cartoon glint).
 - editor: `desk` is the full markdown workstation (toolbar + assets +
   split panes + save); `editor`, `editor-toolbar`, `asset-sidebar` are its
-  parts and compose independently.
+  parts and compose independently; `file-grid` is the standalone asset
+  browser to pair with it.
 
 ## workflow for an agent using chrome
 

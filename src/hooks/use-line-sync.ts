@@ -22,6 +22,25 @@ export function offsetToLine(text: string, offset: number): number {
   return text.slice(0, clamp(offset, 0, text.length)).split("\n").length;
 }
 
+/**
+ * Map a 1-based editor (full-source) line to its preview (body) line when the
+ * preview hides the first `bodyLineOffset` source lines (a stripped
+ * front-matter region). Lines inside the hidden region clamp to line 1 — the
+ * first preview block. A zero (or negative) offset is the identity.
+ */
+export function editorLineToPreviewLine(line: number, bodyLineOffset: number): number {
+  return Math.max(1, line - Math.max(0, bodyLineOffset));
+}
+
+/**
+ * Map a 1-based preview (body) line back to the editor (full-source) line it
+ * came from: the inverse of `editorLineToPreviewLine` for lines past the
+ * hidden region. A zero (or negative) offset is the identity.
+ */
+export function previewLineToEditorLine(line: number, bodyLineOffset: number): number {
+  return line + Math.max(0, bodyLineOffset);
+}
+
 /** Char offset where 1-based `line` begins (clamps past the end to text length). */
 export function lineStartOffset(text: string, line: number): number {
   if (line <= 1) return 0;
@@ -156,6 +175,14 @@ function measureSelectionRect(
 export interface UseLineSyncOptions {
   /** The markdown source being edited. */
   value: string;
+  /**
+   * Number of leading source lines the preview does NOT render (a stripped
+   * front-matter region). Editor line N then maps to preview block line
+   * N − bodyLineOffset (selections inside the hidden region clamp to the first
+   * block), and a preview block at line N maps back to editor line
+   * N + bodyLineOffset. Defaults to 0: editor and preview share line numbers 1:1.
+   */
+  bodyLineOffset?: number;
 }
 
 export interface UseLineSyncReturn {
@@ -186,7 +213,7 @@ export interface UseLineSyncReturn {
  * pixel measurement, the overlay scroll-follow, and the two-way coordination.
  * Pair it with a `<textarea>` and a `<EditorPreview>` (see editor.tsx).
  */
-export function useLineSync({ value }: UseLineSyncOptions): UseLineSyncReturn {
+export function useLineSync({ value, bodyLineOffset = 0 }: UseLineSyncOptions): UseLineSyncReturn {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<EditorPreviewHandle>(null);
   const overlayLayerRef = useRef<HTMLDivElement>(null);
@@ -252,15 +279,16 @@ export function useLineSync({ value }: UseLineSyncOptions): UseLineSyncReturn {
     const rect = selectionRect ?? measureSelectionRect(textarea, selection.start, selection.end);
     if (!rect) return;
     const screenY = textarea.getBoundingClientRect().top + rect.top - textarea.scrollTop;
-    // The editor text *is* the rendered source, so the editor line is the
-    // content line directly (no title/metadata header offset to subtract).
-    const line = offsetToLine(value, selection.start);
+    // The preview may hide a leading front-matter region (bodyLineOffset lines),
+    // so shift the editor line into preview/body space; selections inside the
+    // hidden region clamp to the first preview block.
+    const line = editorLineToPreviewLine(offsetToLine(value, selection.start), bodyLineOffset);
     previewRef.current?.alignLineToScreenY(line, screenY);
     setSyncedRange({ start: selection.start, end: selection.end });
     // swap the native selection for our gray streak; keep focus + caret
     textarea.setSelectionRange(selection.start, selection.start);
     setSelection(null);
-  }, [selection, selectionRect, value]);
+  }, [selection, selectionRect, value, bodyLineOffset]);
 
   // preview -> editor: scroll the editor so the matching text lands level with
   // the clicked block, and lay a gray streak over the block's lines.
@@ -268,7 +296,13 @@ export function useLineSync({ value }: UseLineSyncOptions): UseLineSyncReturn {
     ({ startLine, endLine, screenY, screenHeight }: PreviewBlockSelection) => {
       const textarea = textareaRef.current;
       if (!textarea) return;
-      const { start, end } = trimStreakRange(value, startLine, endLine);
+      // Preview block lines are body-space; shift them back into full-source
+      // space when a front-matter region is hidden from the preview.
+      const { start, end } = trimStreakRange(
+        value,
+        previewLineToEditorLine(startLine, bodyLineOffset),
+        endLine == null ? null : previewLineToEditorLine(endLine, bodyLineOffset),
+      );
       setSyncedRange({ start, end });
       const rect = measureSelectionRect(textarea, start, end);
       if (!rect) return;
@@ -285,7 +319,7 @@ export function useLineSync({ value }: UseLineSyncOptions): UseLineSyncReturn {
       const target = Math.min(Math.max(aligned, endAtBottom), rect.top);
       textarea.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
     },
-    [value],
+    [value, bodyLineOffset],
   );
 
   return {

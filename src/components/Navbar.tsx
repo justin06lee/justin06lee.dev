@@ -8,9 +8,7 @@ import { Rainbow } from "@/components/chrome/rainbow";
 import type { Pfp } from "@/lib/site-config";
 
 function RainbowCat() {
-    return (
-        <Rainbow className="font-mono tracking-tight">^cat^</Rainbow>
-    );
+    return <Rainbow className="font-mono tracking-tight">^cat^</Rainbow>;
 }
 
 function NavPfp({ pfp }: { pfp: Pfp }) {
@@ -53,12 +51,12 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
         router.push("/?intro=1", { scroll: false });
     };
 
-    const linkClass =
-        "text-sm text-white underline-offset-4 hover:underline whitespace-nowrap";
-
     const brand = (
         <>
-            <Link href="/" className={`${linkClass} hidden lg:inline-flex`}>
+            <Link
+                href="/"
+                className="text-sm text-white underline-offset-4 hover:underline whitespace-nowrap hidden lg:inline-flex"
+            >
                 justin06lee.dev
             </Link>
             {fetchedPfp?.url && (
@@ -66,35 +64,21 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                     <NavPfp pfp={fetchedPfp} />
                 </span>
             )}
-            <button onClick={playIntro} className={`${linkClass} hidden lg:inline-flex`}>
-                intro
-            </button>
-            <Link href="/cat" className="text-sm underline-offset-4 hover:underline inline-flex whitespace-nowrap">
-                <RainbowCat />
-            </Link>
-        </>
-    );
-
-    const mobilePanelExtras = (
-        <>
-            <button onClick={playIntro} className={`${linkClass} py-1`}>
-                intro
-            </button>
-            <Link href="/cat" className="text-sm underline-offset-4 hover:underline py-1">
-                <RainbowCat />
-            </Link>
         </>
     );
 
     return (
         <ChromeNavbar
             brand={brand}
+            leftLinks={[
+                { label: "intro", onClick: playIntro, id: "intro" },
+                { label: <RainbowCat />, href: "/cat", id: "cat" },
+            ]}
             links={[
                 { label: "calendar", href: "/calendar" },
                 { label: "articles", href: "/articles" },
                 { label: "gallery", href: "/gallery" },
             ]}
-            mobilePanelExtras={mobilePanelExtras}
             menuLabel="Menu"
         />
     );

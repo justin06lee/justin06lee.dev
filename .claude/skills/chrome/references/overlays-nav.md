@@ -182,7 +182,7 @@ pick menu when items are actions or a small fixed choice set behind an icon/butt
 **Install:** `bunx @justin06lee/chrome@latest add navbar`
 **Composes:** lucide-react, motion (npm); nothing beyond utils from the registry (also installs its own use-navbar.ts hook)
 
-renders a `fixed inset-x-0 top-0 z-40` nav with brand on the left and, at `md` and up, inline links plus your `actions` node on the right. below `md` it swaps to a hamburger that opens a right-side slide-in panel (motion tween, `AnimatePresence` exit animation) over a dimmed backdrop; the panel repeats the links vertically and closes when one is tapped. links are `{ label, href }` plain `<a>` elements — framework-agnostic, no router integration and no linkComponent prop.
+renders a `fixed inset-x-0 top-0 z-40` nav with a left cluster (brand plus the optional `leftLinks` group beside it) and, at `md` and up, a right cluster of `links` plus your `actions` node. below `md` it swaps to a hamburger that opens a right-side slide-in panel (motion tween, `AnimatePresence` exit animation) over a dimmed backdrop; the panel lists the union of leftLinks and links vertically (left first) and closes when one is tapped. a `NavLink` is `{ label: ReactNode, href?, onClick?, id? }`: with `href` it renders a plain `<a>` (framework-agnostic, no router integration and no linkComponent prop); omit `href` and give `onClick` for a `<button>` item (theme toggles, palette openers); with both, onClick runs alongside navigation. keys fold in the index, so placeholder hrefs (`"#"`) can repeat — pass `id` for stability across reorders.
 
 behavior comes from the shipped headless `useNavbar` hook: open state for the mobile panel, outside-click and Escape close (attached to `panelRef`), and a body scroll lock while the panel is open. z-index layering inside: the nav bar is z-40, the mobile backdrop z-50, the panel z-[80] — so sheet and navbar panels share a layer and dialog (z-[100]) / command-palette (z-[110]) sit above them.
 
@@ -190,7 +190,8 @@ because it is `position: fixed`, embedding it in a bounded demo/frame requires o
 
 **Key props:**
 - `brand: ReactNode` — left-side logo / name.
-- `links: NavLink[]` — { label, href }[] — plain anchors.
+- `leftLinks: NavLink[]` — items next to the brand on desktop; listed before links in the mobile panel.
+- `links: NavLink[]` — right-side items — { label: ReactNode, href?, onClick?, id? }[]; omit href (with onClick) for a `<button>` item.
 - `actions: ReactNode` — right-side desktop extras.
 - `menuLabel: string = 'menu'` — heading atop the mobile panel.
 
@@ -198,9 +199,10 @@ because it is `position: fixed`, embedding it in a bounded demo/frame requires o
 ```tsx
 <Navbar
   brand={<span className="text-sm text-white">justin06lee.dev</span>}
+  leftLinks={[{ label: "docs", href: "/docs" }]}
   links={[
     { label: "calendar", href: "/calendar" },
-    { label: "articles", href: "/articles" },
+    { label: "search", onClick: () => setPaletteOpen(true), id: "search" },
   ]}
 />
 ```
@@ -310,7 +312,7 @@ use sidebar for site-level hierarchical nav (docs sections); use toc for within-
 **Install:** `bunx @justin06lee/chrome@latest add tabs`
 **Composes:** nothing beyond utils (also installs its own use-tabs.ts hook)
 
-renders only the row of bordered pill tab buttons — it does not manage panels. you own `value`/`onValueChange` and render the matching panel yourself (switch on `value`; the hook's `getPanelId` gives you the id to wire `aria-controls` against if you want full aria). the active tab gets a solid white border; disabled items render at reduced opacity and are skipped by keyboard nav.
+renders only the row of tab buttons — it does not manage panels. you own `value`/`onValueChange` and render the matching panel yourself (switch on `value`; the hook's `getPanelId` gives you the id to wire `aria-controls` against if you want full aria). two visual styles via `variant`: `pill` (default — bordered buttons, active gets a solid white border) and `underline` (a transparent bar with a bottom border where the active tab gets a 2px white underline, overlapped onto the bar's 1px border with `-mb-px`). disabled items render at reduced opacity and are skipped by keyboard nav.
 
 behavior lives in the shipped headless `useTabs` hook: roving tabindex (only the active tab is in the tab order), and arrow keys that both move focus and change selection — ArrowRight/ArrowDown forward, ArrowLeft/ArrowUp back, Home/End to the first/last enabled tab, wrapping past the ends unless `loop={false}`. if the controlled value points at a disabled or unknown tab, the first arrow press lands on a sane enabled tab from the edge rather than jumping off the end. proper `role="tablist"`/`tab`/`aria-selected` wiring throughout.
 
@@ -320,6 +322,7 @@ tabs is for peer views inside one page region. use breadcrumb for hierarchy, sid
 - `value: T` — required
 - `onValueChange: (value: T) => void` — required
 - `items: TabItem<T>[]` — required — { value, label, disabled? }[]
+- `variant: 'pill' | 'underline' = 'pill'` — bordered pill buttons, or a bottom-border bar with a 2px white underline on the active tab.
 - `loop: boolean = true` — loop arrow-key focus past the ends.
 
 **Example:**

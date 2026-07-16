@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EditorPreview } from "@/components/chrome/editor-preview";
@@ -27,6 +27,16 @@ export function editorSizeClass(size: EditorSize): string | undefined {
   return size === "auto" ? undefined : EDITOR_SIZE_CLASS[size];
 }
 
+/**
+ * Props forwardable to the underlying `<textarea>` via `textareaProps`.
+ * `value`/`defaultValue` are excluded — the source stays controlled through
+ * `value`/`onChange`.
+ */
+export type EditorTextareaElementProps = Omit<
+  ComponentPropsWithoutRef<"textarea">,
+  "value" | "defaultValue"
+>;
+
 export interface EditorTextareaProps {
   /** A `useLineSync(...)` return value, shared with the paired `<EditorPreview>`. */
   sync: UseLineSyncReturn;
@@ -40,6 +50,15 @@ export interface EditorTextareaProps {
    * keymap (e.g. a vim mode) over the plain editor without forking it.
    */
   onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  /**
+   * Extra props spread onto the underlying `<textarea>` — the general escape
+   * hatch (keymaps, drop handlers, aria attributes, …). Event handlers COMPOSE
+   * with the built-in ones instead of replacing them: the internal handler runs
+   * first, then yours with the same event, so the sync/selection glue survives.
+   * `className` is merged after the built-in classes; `value`/`onChange`
+   * stay owned by the component.
+   */
+  textareaProps?: EditorTextareaElementProps;
   /** Sizing/extra classes (give it a height). */
   className?: string;
 }
@@ -56,8 +75,23 @@ export function EditorTextarea({
   onChange,
   placeholder,
   onKeyDown,
+  textareaProps,
   className,
 }: EditorTextareaProps) {
+  // Split the escape-hatch props so the handlers/className below can compose
+  // with the built-in wiring; everything else spreads through untouched.
+  const {
+    className: textareaClassName,
+    onChange: onChangeProp,
+    onMouseUp: onMouseUpProp,
+    onSelect: onSelectProp,
+    onBlur: onBlurProp,
+    onKeyDown: onKeyDownProp,
+    onScroll: onScrollProp,
+    placeholder: placeholderProp,
+    spellCheck: spellCheckProp = false,
+    ...restTextareaProps
+  } = textareaProps ?? {};
   const {
     textareaRef,
     overlayLayerRef,
@@ -115,17 +149,40 @@ export function EditorTextarea({
           ) : null}
         </div>
         <textarea
+          {...restTextareaProps}
           ref={textareaRef}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onMouseUp={refreshSelection}
-          onSelect={refreshSelection}
-          onBlur={clearSelection}
-          onKeyDown={onKeyDown}
-          onScroll={(event) => handleScroll(event.currentTarget.scrollTop)}
-          spellCheck={false}
-          placeholder={placeholder}
-          className="h-full w-full resize-none bg-black px-4 py-6 font-mono text-[13px] leading-6 text-white/90 outline-none placeholder:text-white/30 lg:px-8"
+          // internal handler first, then the textareaProps one (same event)
+          onChange={(event) => {
+            onChange(event.target.value);
+            onChangeProp?.(event);
+          }}
+          onMouseUp={(event) => {
+            refreshSelection();
+            onMouseUpProp?.(event);
+          }}
+          onSelect={(event) => {
+            refreshSelection();
+            onSelectProp?.(event);
+          }}
+          onBlur={(event) => {
+            clearSelection();
+            onBlurProp?.(event);
+          }}
+          onKeyDown={(event) => {
+            onKeyDown?.(event);
+            onKeyDownProp?.(event);
+          }}
+          onScroll={(event) => {
+            handleScroll(event.currentTarget.scrollTop);
+            onScrollProp?.(event);
+          }}
+          spellCheck={spellCheckProp}
+          placeholder={placeholder ?? placeholderProp}
+          className={cn(
+            "h-full w-full resize-none bg-black px-4 py-6 font-mono text-[13px] leading-6 text-white/90 outline-none placeholder:text-white/30 lg:px-8",
+            textareaClassName,
+          )}
         />
       </div>
     </div>
@@ -149,6 +206,21 @@ export interface EditorProps {
   label?: ReactNode;
   /** Editor textarea placeholder. */
   placeholder?: string;
+  /**
+   * Extra props for the underlying `<textarea>` (e.g. `onKeyDown` to layer a
+   * vim keymap). Handlers compose with the internal ones — internal first,
+   * then yours; `className` is merged. See `EditorTextarea`'s `textareaProps`.
+   */
+  textareaProps?: EditorTextareaElementProps;
+  /**
+   * Derive the preview's markdown from the editor value — e.g. strip a leading
+   * front-matter region (`# title`, `cover:`, `tags:`, …) — and report how many
+   * source lines were removed so the two-way line-sync stays aligned: editor
+   * line N maps to preview block line N − `lineOffset`, and selections inside
+   * the stripped region clamp to the first preview block. Keep the reference
+   * stable (define it outside the render). Omit for 1:1 sync on the raw value.
+   */
+  transformSource?: (source: string) => { body: string; lineOffset: number };
   /** Size preset (height + width); defaults to the container-filling `screen`. */
   size?: EditorSize;
   /** Extra classes for the root; `h-*` / `w-*` classes here override `size`. */
@@ -168,10 +240,18 @@ export function Editor({
   renderMarkdown,
   label = "live preview",
   placeholder,
+  textareaProps,
+  transformSource,
   size = "screen",
   className,
 }: EditorProps) {
-  const sync = useLineSync({ value });
+  // When a transform strips a leading front-matter region, the preview renders
+  // the body and the sync engine shifts line numbers by the reported offset.
+  const transformed = useMemo(
+    () => (transformSource ? transformSource(value) : null),
+    [transformSource, value],
+  );
+  const sync = useLineSync({ value, bodyLineOffset: transformed?.lineOffset ?? 0 });
 
   return (
     <div className={cn("flex min-h-0 flex-col md:flex-row", editorSizeClass(size), className)}>
@@ -180,11 +260,12 @@ export function Editor({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        textareaProps={textareaProps}
         className="flex-1 border-b border-white/10 md:border-b-0 md:border-r"
       />
       <EditorPreview
         ref={sync.previewRef}
-        content={value}
+        content={transformed?.body ?? value}
         renderMarkdown={renderMarkdown}
         onSelectBlock={sync.onPreviewSelectBlock}
         label={label}

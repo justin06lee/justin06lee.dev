@@ -17,7 +17,7 @@
     "geist": "^1.7.2",
     "isomorphic-dompurify": "^3.8.0",
     "katex": "^0.17.0",
-    "lucide-react": "^0.540.0",
+    "lucide-react": "^1.24.0",
     "marked": "^17.0.4",
     "motion": "^12.42.2",
     "next": "15.5.9",
