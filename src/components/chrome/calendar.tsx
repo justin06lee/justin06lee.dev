@@ -61,6 +61,14 @@ export type CalendarProps = {
   cellClassName?: string | ((day: CalendarDay) => string);
   /** Show the built-in prev/next month header. Set false when an external nav (e.g. calendar-nav) already pages the month. */
   showHeader?: boolean;
+  /**
+   * Stretch the day rows to fill the component's height, all rows equal
+   * (`auto-rows-fr`). Give the root a height via className (e.g.
+   * `className="h-[70vh]"`) and each week grows to fill it — for a full-page
+   * agenda month grid rather than the compact picker. Best paired with
+   * renderCell. Off by default (rows size to content).
+   */
+  fillHeight?: boolean;
   className?: string;
 };
 
@@ -80,13 +88,14 @@ export function Calendar({
   renderCell,
   cellClassName,
   showHeader = true,
+  fillHeight = false,
   className,
 }: CalendarProps) {
   const [y, m] = month.split("-").map(Number) as [number, number];
   const cells = buildMonthGrid(month);
 
   return (
-    <div className={cn("w-fit select-none", className)}>
+    <div className={cn(fillHeight ? "flex h-full w-full flex-col" : "w-fit", "select-none", className)}>
       {showHeader && (
         <div className="mb-3 flex items-center justify-between gap-4">
           <button
@@ -113,12 +122,21 @@ export function Calendar({
         </div>
       )}
 
+      {/* Weekday header — kept in its own fixed-height grid so it never
+          stretches when fillHeight makes the day rows grow. */}
       <div className="grid grid-cols-7 gap-[3px]">
         {WEEKDAY_LETTERS.map((w, i) => (
           <div key={i} className="flex h-6 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-white/40">
             {w}
           </div>
         ))}
+      </div>
+      <div
+        className={cn(
+          "mt-[3px] grid grid-cols-7 gap-[3px]",
+          fillHeight && "min-h-0 flex-1 auto-rows-fr",
+        )}
+      >
         {cells.map((date, i) => {
           if (!date) return <div key={i} className={renderCell ? undefined : "size-9"} />;
           const day = Number(date.split("-")[2]);
