@@ -67,6 +67,11 @@ behavior you can rely on:
 - page-type files install relative to the app dir: `not-found` drops
   `app/not-found.tsx` (or `src/app/not-found.tsx`) so the 404 page works
   with zero wiring.
+- the three bullets above (aliasBase, import rewriting, page files) need cli
+  **0.2.0+**. always run via `bunx @justin06lee/chrome@latest` — an older
+  cached/global install writes to the repo root with unrewritten
+  `@/components/ui/…` imports. if that happens, suspect the cli version
+  first.
 - existing files that differ produce a conflict and a nonzero exit instead
   of a silent overwrite; `--overwrite` opts in explicitly.
 - components already in the project are owned code — edit them in place;

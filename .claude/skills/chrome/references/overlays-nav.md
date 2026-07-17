@@ -37,7 +37,7 @@ reach for accordion for FAQ-style disclosure inline in a page. it is not an over
 **Install:** `bunx @justin06lee/chrome@latest add breadcrumb`
 **Composes:** lucide-react (npm); nothing beyond utils from the registry
 
-renders a `<nav aria-label="breadcrumb">` with an `<ol>` of crumbs, root first. links are plain `<a href>` — framework-agnostic, no router integration and no `linkComponent` prop (unlike sidebar). the last item always renders as the current page: muted, not a link, with `aria-current="page"`, even if you gave it an `href`. items without an `href` also render as plain text. it is a server component with no state.
+renders a `<nav aria-label="breadcrumb">` with an `<ol>` of crumbs, root first. links render as plain `<a href>` by default; pass `linkComponent` (your router's Link) for client-side navigation — same pattern as sidebar and prose. the last item always renders as the current page: muted, not a link, with `aria-current="page"`, even if you gave it an `href`. items without an `href` also render as plain text. it is a server component with no state.
 
 the file also exports `crumbsFromPath(pathname, { labels?, basePath? })`, a helper that splits a pathname into a `Crumb[]`: each segment is percent-decoded (falling back to the raw segment on invalid escapes), dashes become spaces, and each crumb's href is the cumulative path. pass a `labels` callback to override individual segment labels.
 
@@ -47,6 +47,7 @@ use breadcrumb for "you are here" context on deep pages; use tabs or sidebar whe
 - `items: Crumb[]` — required — { label, href? }[], root first. last is the current page.
 - `separator: ReactNode = <ChevronRight />` — node placed between crumbs.
 - `homeHref: string` — optional leading 'home' link prepended before items.
+- `linkComponent: ElementType = "a"` — anchor component for crumb links; pass your router's Link.
 - `className: string`
 
 **Example:**

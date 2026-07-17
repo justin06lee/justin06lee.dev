@@ -62,13 +62,13 @@ vs `gallery`: article-list is for dated content previews — single tag filter, 
 
 **Role:** interactive single-month date grid with selectable days and a today ring.
 **Install:** `bunx @justin06lee/chrome@latest add calendar`
-**Composes:** nothing beyond utils
+**Composes:** npm: `lucide-react` (header chevrons); nothing beyond utils from the registry
 
-renders a prev/next header (month name + year in mono uppercase) over a sunday-aligned 7-column grid of day buttons. all dates are plain strings — the month is `"YYYY-MM"`, days are `"YYYY-MM-DD"` — and the grid is built with `Date.UTC`, so there is no timezone drift and no Date objects cross the prop boundary. fully controlled: `month`/`onMonthChange` drive paging (the arrows are disabled when `onMonthChange` is absent), `selected`/`onSelect` drive selection. the selected day inverts to white-on-black; `today` gets an inset ring.
+renders a prev/next header (month name + year in mono uppercase, lucide chevron arrows) over a sunday-aligned 7-column grid of day buttons. `showHeader={false}` drops the built-in header — use it when an external nav (calendar-nav) already pages the month, so the two don't double up. all dates are plain strings — the month is `"YYYY-MM"`, days are `"YYYY-MM-DD"` — and the grid is built with `Date.UTC`, so there is no timezone drift and no Date objects cross the prop boundary. fully controlled: `month`/`onMonthChange` drive paging (the arrows are disabled when `onMonthChange` is absent), `selected`/`onSelect` drive selection. the selected day inverts to white-on-black; `today` gets an inset ring.
 
 `renderDay` lets you layer extra content under each day number — task dots, counts — without forking the component; it's called with the cell's date string inside the day button. `renderCell` goes further: it replaces the whole cell (day number included) with your own layout, for agenda-style month grids showing per-day events. it receives a `CalendarDay` — `{ date, day, isToday, isSelected }` — and drops the compact `size-9` picker styling: cells stay `<button>`s when `onSelect` is set, otherwise they render as plain `<div>`s so hosts can embed their own links. in full-cell mode today keeps its ring and selection tints (`bg-white/10`) instead of inverting so rich content stays readable. pair it with `cellClassName` — a string or a per-day `(day: CalendarDay) => string` function, applied in both modes — for sizing (`"min-h-28 p-2"`) or a per-day heatmap tint.
 
-vs siblings: `calendar` is the interactive month picker (and, with renderCell, the agenda month grid); `heatmap` is the read-mostly full-year density view; `calendar-nav` is only the header controls (view switcher + prev/today/next) meant to sit above any of these views.
+vs siblings: `calendar` is the interactive month picker (and, with renderCell, the agenda month grid); `heatmap` is the read-mostly full-year density view; `calendar-nav` is only the header controls (view switcher + prev/today/next) meant to sit above any of these views — pair it with calendar's `showHeader={false}`.
 
 **Key props:**
 - `month: string` (required) — "YYYY-MM" displayed month.
@@ -76,6 +76,7 @@ vs siblings: `calendar` is the interactive month picker (and, with renderCell, t
 - `selected: string | null` — "YYYY-MM-DD".
 - `onSelect: (date: string) => void`
 - `today: string` — "YYYY-MM-DD" to ring.
+- `showHeader: boolean = true` — set false when an external nav (e.g. calendar-nav) already pages the month.
 - `renderDay: (date: string) => ReactNode` — extra cell content.
 - `renderCell: (day: CalendarDay) => ReactNode` — replace the whole cell (day number included). day = { date, day, isToday, isSelected }.
 - `cellClassName: string | ((day: CalendarDay) => string)` — per-cell classes — heatmap tint, min-height. works in both modes.

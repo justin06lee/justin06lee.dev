@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,17 +14,21 @@ export type BreadcrumbProps = {
   separator?: ReactNode;
   /** Optional leading "home" link prepended before `items`. */
   homeHref?: string;
+  /** Anchor element/component for crumb links — pass your router's Link. Default "a". */
+  linkComponent?: ElementType;
   className?: string;
 };
 
 /**
- * Presentational breadcrumb trail. Framework-agnostic — links are plain <a href>.
+ * Presentational breadcrumb trail. Framework-agnostic — links render as plain
+ * <a href> by default; pass `linkComponent` to use your router's Link instead.
  * The last item is always rendered as the current page: muted and not a link.
  */
 export function Breadcrumb({
   items,
   separator,
   homeHref,
+  linkComponent: LinkComponent = "a",
   className,
 }: BreadcrumbProps) {
   const sep = separator ?? (
@@ -57,12 +61,12 @@ export function Breadcrumb({
                   {crumb.label}
                 </span>
               ) : (
-                <a
+                <LinkComponent
                   href={crumb.href}
                   className="truncate text-white/60 underline-offset-4 hover:text-white hover:underline"
                 >
                   {crumb.label}
-                </a>
+                </LinkComponent>
               )}
             </li>
           );

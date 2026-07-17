@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Breadcrumb, crumbsFromPath } from "@/components/chrome/breadcrumb";
@@ -35,7 +36,7 @@ export function OperatorHeader() {
     <div className="pt-16 px-4 sm:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3 mb-6">
-          <Breadcrumb items={items} />
+          <Breadcrumb items={items} linkComponent={Link} />
 
           <div className="flex items-center gap-2 text-sm">
             <Button

@@ -32,7 +32,11 @@ Each former gap and the new prop/component that closed it:
 | stacked-paper download card | new `file-card` component | available (bespoke `article/file-card.tsx` deleted) |
 | breadcrumb for the desk header | `breadcrumb` (+ `crumbsFromPath`) | `src/app/desk/OperatorHeader.tsx` |
 | sprite-scrubber: edge dead-zones froze frames; no load state | full-width mapping + `onEdge` (per-sweep) + `onLoad` + `renderLoading` | `src/app/cat/page.tsx` |
-| calendar: built-in header duplicated the external nav | added `showHeader` prop **(patched installed copy)** | `src/components/chrome/calendar.tsx` + MonthView `showHeader={false}` |
+| calendar: built-in header duplicated the external nav | `calendar` now ships a native `showHeader` prop (upstreamed; also switched to lucide chevrons, fixing the ascii-arrow deviation) | MonthView `showHeader={false}` |
+| breadcrumb: no client-side routing (full page loads) | `breadcrumb` now has `linkComponent` | `src/app/desk/OperatorHeader.tsx` (`linkComponent={Link}`) |
+| manager-table: swatch tooltip showed hex, not friendly name | `palette` now accepts `ManagerPaletteEntry = { value, name }` | `CategoriesManager.tsx` (named `CATEGORY_PALETTE`) |
+| manager-table: recolor/archive had no inline error channel | `onRecolor`/`onArchive` now `=> void \| Promise<void>` and reject inline | `CategoriesManager.tsx` (throw on failure; dropped the top-level banner) |
+| file-grid: unescaped apostrophe broke the build lint | escape fixed upstream | pulled via `add --overwrite` |
 
 ---
 
@@ -44,38 +48,24 @@ front-matter list, fetches each referenced article's title from GitHub, and maps
 it to a route. This is domain logic (content model + GitHub coupling), not a
 reusable UI primitive, so it stays bespoke by design. No registry action needed.
 
-### CLI / toolchain issues (still reproduce)
-1. **`add` writes to the repo root, not `src/`.** Even with `aliasBase: "src"`
-   in `chrome.json`, the CLI wrote `components/chrome/…`, `hooks/…`, `lib/…` and
-   a stray `components/chrome/app/not-found.tsx` at the repo root. Worked around
-   by moving files into `src/` each run. Layout detection should be deterministic
-   and honor `aliasBase`.
-2. **Internal imports aren't rewritten to the configured alias.** Installed files
-   still import `@/components/ui/<name>` even though `chrome.json`'s components
-   alias is `@/components/chrome`. Worked around by rewriting them. The SKILL doc
-   says the CLI does this on install — it didn't here.
+### CLI / toolchain — fixed upstream, but not yet published
+The root-write + unrewritten-import behavior is **fixed in CLI 0.2.0+** (the SKILL
+now says so: aliasBase, import rewriting, and page-file placement all require
+0.2.0+, and an older cached/global install "writes to the repo root with
+unrewritten `@/components/ui/…` imports"). But the latest version **published to
+npm is 0.1.1**, so `bunx @justin06lee/chrome@latest` still resolves a pre-0.2.0
+CLI here — every `add` still lands in the repo root with `@/components/ui/…`
+imports. Workaround each run: move `components/chrome/*`→`src/components/chrome/`,
+`hooks/*`→`src/hooks/`, delete the root `components/`,`hooks/`,`lib/` strays and
+the stray `components/chrome/app/not-found.tsx`, then rewrite `@/components/ui/`
+→ `@/components/chrome/`. **Retire this workaround once chrome CLI 0.2.0 ships to
+npm** — then a plain `add`/`add --overwrite` will place files correctly.
 
-### small registry bug (patched locally)
-- `file-grid` shipped with an unescaped apostrophe ("this can't be undone") that
-  fails Next's build-time `react/no-unescaped-entities` lint. Fixed locally to
-  `can&apos;t`; upstream the escape. **(patched installed copy)**
+### `/me` — not a gap
+Gallery items (title/tech/year/repo/live/pin) don't fit `manager-table`'s
+name/color/archive row model, so the item list is `Card`+`Badge`+`Button` and the
+item "move" popover is bespoke. Correct fits, not gaps.
 
-### minor cosmetic residuals (acceptable; noted for completeness)
-- `manager-table` recolor swatch derives its tooltip from the hex string, so the
-  category color tooltip shows the hex rather than the palette color's friendly
-  name. Its `onRecolor`/`onArchive` are `void` (no error channel), so those two
-  failures still use the page's top-level banner; rename/delete surface inline.
-- `breadcrumb` has no `linkComponent`, so the desk header trail navigates with
-  full page loads. A `linkComponent` prop (like `sidebar`/`prose` have) would fix
-  it.
-- `/me`: gallery items (title/tech/year/repo/live/pin) don't fit `manager-table`'s
-  name/color/archive row model, so the item list stays `Card`+`Badge`+`Button`;
-  the item "move" popover stays bespoke. These are correct fits, not gaps.
-- `calendar` header arrows use `‹`/`›` glyphs rather than lucide chevrons — a
-  small deviation from the "no ascii arrows" design rule in the registry itself.
-
-### upstream suggestions worth filing
-- `calendar`: land a `showHeader` prop (done locally) so agenda grids under an
-  external nav don't double up.
-- `breadcrumb`: add `linkComponent`.
-- CLI: honor `aliasBase` and rewrite internal imports on `add`.
+### upstream suggestions still worth filing
+- CLI: publish 0.2.0 to npm so `aliasBase` + import rewriting actually reach
+  installs (the code is done; it's a release gap).

@@ -3,7 +3,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { InlineEdit } from "@/components/chrome/inline-edit";
-import { ColorSwatchPicker, type PaletteColor } from "@/components/chrome/color-swatch";
+import {
+  CATEGORY_PALETTE,
+  ColorSwatchPicker,
+  type PaletteColor,
+} from "@/components/chrome/color-swatch";
 import { useDialog } from "@/components/chrome/dialog";
 
 export type ManagerRow = {
@@ -18,7 +22,11 @@ export type ManagerRow = {
   locked?: boolean;
 };
 
-/** Sensible muted default palette for recoloring rows. */
+/**
+ * Sensible muted default palette for recoloring rows. Mirrors the hexes of
+ * color-swatch's CATEGORY_PALETTE (which also carries the friendly names the
+ * default picker shows).
+ */
 export const DEFAULT_MANAGER_PALETTE: readonly string[] = [
   "#5b7a8a",
   "#7a6b5b",
@@ -30,25 +38,37 @@ export const DEFAULT_MANAGER_PALETTE: readonly string[] = [
   "#5b5b8a",
 ] as const;
 
-// Stable default for the `palette` prop — a fresh array literal in the
-// parameter default would defeat the palette-keyed useMemo every render.
-const DEFAULT_PALETTE: string[] = [...DEFAULT_MANAGER_PALETTE];
+/**
+ * A palette entry: a bare hex string, or { value, name } — the optional name
+ * shows in the swatch tooltip/aria-label instead of the raw hex.
+ */
+export type ManagerPaletteEntry = string | { value: string; name?: string };
 
 export type ManagerTableProps = {
   /** Rows to render — the source of truth, owned by the caller. */
   rows: ManagerRow[];
-  /** Hex colors offered by the recolor swatch picker. */
-  palette?: string[];
+  /**
+   * Colors offered by the recolor swatch picker — hex strings or
+   * { value, name } entries. Defaults to the muted CATEGORY_PALETTE with its
+   * friendly names.
+   */
+  palette?: ManagerPaletteEntry[];
   /**
    * Commit a renamed row. May be async: the draft name shows optimistically
    * while it runs; reject (or throw) to roll the name back and surface the
    * error under the row.
    */
   onRename?: (id: string, name: string) => void | Promise<void>;
-  /** Commit a recolored row. */
-  onRecolor?: (id: string, color: string) => void;
-  /** Toggle a row's archived flag. */
-  onArchive?: (id: string, archived: boolean) => void;
+  /**
+   * Commit a recolored row. May be async: while it runs the row's actions are
+   * disabled; reject (or throw) to surface the error under the row.
+   */
+  onRecolor?: (id: string, color: string) => void | Promise<void>;
+  /**
+   * Toggle a row's archived flag. May be async: while it runs the row's
+   * actions are disabled; reject (or throw) to surface the error under the row.
+   */
+  onArchive?: (id: string, archived: boolean) => void | Promise<void>;
   /**
    * Delete a row (already confirmed). May be async: reject (or throw) to
    * block the delete — the row stays and the error surfaces under it.
@@ -68,13 +88,13 @@ function toErrorMessage(err: unknown, fallback: string): string {
  * Admin table of rows you can inline-rename, recolor, archive, and delete.
  * Every mutation is a callback — bring your own state. Delete asks for a
  * confirm first via the dialog provider. Archived rows render muted. Locked
- * rows can't be renamed or deleted. Rename and delete handlers may return a
- * promise — while one runs the row's actions are disabled, and a rejection
- * surfaces inline under the row (a rejected rename also rolls the name back).
+ * rows can't be renamed or deleted. Every handler may return a promise —
+ * while one runs the row's actions are disabled, and a rejection surfaces
+ * inline under the row (a rejected rename also rolls the name back).
  */
 export function ManagerTable({
   rows,
-  palette = DEFAULT_PALETTE,
+  palette,
   onRename,
   onRecolor,
   onArchive,
@@ -82,17 +102,24 @@ export function ManagerTable({
   className,
 }: ManagerTableProps) {
   const dialog = useDialog();
-  // Rows with an in-flight rename/delete (their actions are disabled).
+  // Rows with an in-flight mutation (their actions are disabled).
   const [pendingIds, setPendingIds] = React.useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  // Per-row error from the last rejected rename/delete.
+  // Per-row error from the last rejected mutation.
   const [errors, setErrors] = React.useState<Readonly<Record<string, string>>>(
     {},
   );
 
   const paletteColors = React.useMemo<readonly PaletteColor[]>(
-    () => palette.map((hex) => ({ name: hex, hex })),
+    () =>
+      palette
+        ? palette.map((entry) =>
+            typeof entry === "string"
+              ? { name: entry, hex: entry }
+              : { name: entry.name ?? entry.value, hex: entry.value },
+          )
+        : CATEGORY_PALETTE,
     [palette],
   );
 
@@ -198,7 +225,11 @@ export function ManagerTable({
                     ariaLabel={`Color for ${row.name}`}
                     value={row.color ?? null}
                     palette={paletteColors}
-                    onChange={(hex) => onRecolor?.(row.id, hex)}
+                    onChange={(hex) =>
+                      void runRowAction(row.id, "recolor failed", () =>
+                        onRecolor?.(row.id, hex),
+                      )
+                    }
                     className={cn(pending && "pointer-events-none opacity-50")}
                   />
                 </td>
@@ -206,7 +237,13 @@ export function ManagerTable({
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => onArchive?.(row.id, !archived)}
+                    onClick={() =>
+                      void runRowAction(
+                        row.id,
+                        archived ? "unarchive failed" : "archive failed",
+                        () => onArchive?.(row.id, !archived),
+                      )
+                    }
                     className="text-xs text-white/60 hover:text-white disabled:opacity-50"
                   >
                     {archived ? "Unarchive" : "Archive"}

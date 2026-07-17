@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
@@ -87,29 +88,29 @@ export function Calendar({
   return (
     <div className={cn("w-fit select-none", className)}>
       {showHeader && (
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <button
-          type="button"
-          aria-label="previous month"
-          onClick={() => onMonthChange?.(shiftMonth(month, -1))}
-          className="text-white/50 transition-colors hover:text-white disabled:opacity-30"
-          disabled={!onMonthChange}
-        >
-          ‹
-        </button>
-        <span className="font-mono text-sm uppercase tracking-widest text-white/70">
-          {MONTH_NAMES[m - 1]} {y}
-        </span>
-        <button
-          type="button"
-          aria-label="next month"
-          onClick={() => onMonthChange?.(shiftMonth(month, 1))}
-          className="text-white/50 transition-colors hover:text-white disabled:opacity-30"
-          disabled={!onMonthChange}
-        >
-          ›
-        </button>
-      </div>
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <button
+            type="button"
+            aria-label="previous month"
+            onClick={() => onMonthChange?.(shiftMonth(month, -1))}
+            className="text-white/50 transition-colors hover:text-white disabled:opacity-30"
+            disabled={!onMonthChange}
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="font-mono text-sm uppercase tracking-widest text-white/70">
+            {MONTH_NAMES[m - 1]} {y}
+          </span>
+          <button
+            type="button"
+            aria-label="next month"
+            onClick={() => onMonthChange?.(shiftMonth(month, 1))}
+            className="text-white/50 transition-colors hover:text-white disabled:opacity-30"
+            disabled={!onMonthChange}
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
       )}
 
       <div className="grid grid-cols-7 gap-[3px]">

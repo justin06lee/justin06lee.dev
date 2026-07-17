@@ -4,20 +4,25 @@ import { useState } from "react";
 import type { CalendarCategory } from "@/lib/calendar-categories";
 import { CATEGORY_PALETTE } from "@/lib/colors";
 import CategoryCreateInline from "./CategoryCreateInline";
-import { ManagerTable, type ManagerRow } from "@/components/chrome/manager-table";
+import {
+  ManagerTable,
+  type ManagerRow,
+  type ManagerPaletteEntry,
+} from "@/components/chrome/manager-table";
 
 type Props = { initial: CalendarCategory[] };
 
-// Stable module-level array so ManagerTable's palette-keyed memo isn't defeated
-// by a fresh literal every render.
-const PALETTE_HEXES: string[] = CATEGORY_PALETTE.map((p) => p.hex);
+// Stable module-level palette so ManagerTable's palette-keyed memo isn't
+// defeated by a fresh literal every render. { value, name } lets the recolor
+// swatch show the friendly color name (e.g. "sage") in its tooltip/aria-label
+// instead of the raw hex.
+const PALETTE: ManagerPaletteEntry[] = CATEGORY_PALETTE.map((p) => ({
+  value: p.hex,
+  name: p.name,
+}));
 
 export default function CategoriesManager({ initial }: Props) {
   const [categories, setCategories] = useState<CalendarCategory[]>(initial);
-  // Top-level banner for recolor/archive failures — those callbacks are
-  // fire-and-forget in ManagerTable (no inline error channel). Rename and
-  // delete failures surface inline under the row via ManagerTable instead.
-  const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   function patchReq(id: string, body: Record<string, unknown>) {
@@ -29,8 +34,8 @@ export default function CategoriesManager({ initial }: Props) {
     });
   }
 
-  // Rename throws on failure so ManagerTable rolls the inline draft back and
-  // shows the error under the row.
+  // Every mutation throws on failure so ManagerTable surfaces the error inline
+  // under the affected row (and rolls the rename draft / recolor swatch back).
   async function rename(id: string, name: string) {
     const r = await patchReq(id, { name });
     if (!r.ok) {
@@ -42,25 +47,20 @@ export default function CategoriesManager({ initial }: Props) {
   }
 
   async function recolor(id: string, hex: string) {
-    setError(null);
     const r = await patchReq(id, { color: hex });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      // State stays put, so ManagerTable's controlled swatch snaps back.
-      setError(e.error ?? "Failed to update");
-      return;
+      throw new Error(e.error ?? "Failed to update");
     }
     const updated = (await r.json()) as CalendarCategory;
     setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
   }
 
   async function archive(id: string, archived: boolean) {
-    setError(null);
     const r = await patchReq(id, { archived });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      setError(e.error ?? "Failed to update");
-      return;
+      throw new Error(e.error ?? "Failed to update");
     }
     const updated = (await r.json()) as CalendarCategory;
     setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
@@ -95,8 +95,6 @@ export default function CategoriesManager({ initial }: Props) {
 
   return (
     <div className="space-y-4">
-      {error && <div className="text-sm text-red-400">{error}</div>}
-
       {creating ? (
         <CategoryCreateInline
           initialName=""
@@ -119,10 +117,10 @@ export default function CategoriesManager({ initial }: Props) {
 
       <ManagerTable
         rows={rows}
-        palette={PALETTE_HEXES}
+        palette={PALETTE}
         onRename={rename}
-        onRecolor={(id, hex) => void recolor(id, hex)}
-        onArchive={(id, archived) => void archive(id, archived)}
+        onRecolor={recolor}
+        onArchive={archive}
         onDelete={remove}
       />
     </div>
