@@ -86,10 +86,13 @@ export default function CalendarShell({
             views={["day", "month", "year"]}
             label={token ?? currentLabel}
             todayLabel={currentLabel}
-            // Render the controls as prefetched next/link anchors: Next prefetches
-            // the adjacent period + the view targets on hover/mount, so switching
-            // navigates from the client cache instead of a cold server round-trip.
+            // Render the controls as prefetched next/link anchors, and force a
+            // FULL prefetch (prefetch) so the adjacent period + view targets are
+            // fetched — data included — on mount. Paired with a short
+            // staleTimes.dynamic in next.config, clicking a prefetched period is
+            // instant (served from the client router cache, no server round-trip).
             linkComponent={Link}
+            prefetch
             viewHref={viewHref}
             prevHref={prevHref ?? undefined}
             nextHref={nextHref ?? undefined}

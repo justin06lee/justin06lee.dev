@@ -10,6 +10,14 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "15mb",
     },
+    // Keep prefetched dynamic routes (the force-dynamic calendar pages) in the
+    // client router cache briefly, so a full <Link prefetch> warms the data and
+    // clicking an adjacent period navigates instantly instead of refetching.
+    // Short window so the admin's own edits still surface quickly on revisit.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   serverExternalPackages: [
     "@libsql/client",
