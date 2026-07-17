@@ -21,16 +21,16 @@ export type FileGridProps<T extends FileGridFile> = {
   /** the files to render. extra fields ride along into onDelete/renderCard. */
   files: T[];
   /**
-   * Enables deleting: drag a card onto the trash zone (or use the per-card
-   * delete button), then type the exact file name in the confirm dialog.
-   * May return a promise — a rejection surfaces inline in the dialog.
+   * Enables deleting: press-and-drag a card onto the trash zone (which only
+   * appears while a card is being dragged), then type the exact file name in
+   * the confirm dialog. May return a promise — a rejection surfaces inline.
    */
   onDelete?: (file: T) => void | Promise<void>;
   /** replaces the default file-card render for each file. */
   renderCard?: (file: T) => React.ReactNode;
   /** anchor element/component forwarded to the default card. default "a". */
   linkComponent?: React.ElementType;
-  /** where the trash drop zone sits. default "corner" (inside the grid). */
+  /** where the trash drop zone sits while dragging. default "corner" (inside the grid). */
   trashPosition?: "corner" | "viewport";
   /** shown when files is empty. default "no files yet." */
   emptyLabel?: string;
@@ -52,11 +52,16 @@ const FILE_GRID_KEYFRAMES = `@keyframes chrome-file-grid-overlay {
   .chrome-file-grid-overlay, .chrome-file-grid-panel { animation: none; }
 }`;
 
+// How far the pointer must travel before a press becomes a drag (vs a click
+// that follows the card's link). Below this, the card navigates as normal.
+const DRAG_THRESHOLD = 6;
+
 /**
- * Asset-browser grid of stacked-paper file cards with a delete flow: drag a
- * card onto the trash zone — or press the per-card delete button (the
- * keyboard path) — then type the exact file name to confirm. `onDelete` may
- * be async; the dialog shows a pending state and surfaces rejections inline.
+ * Asset-browser grid of stacked-paper file cards with a delete flow: press and
+ * drag a card onto the trash zone — which only appears while dragging — then
+ * type the exact file name to confirm. Dragging is pointer-driven, so it never
+ * triggers the browser's native link-drag (a plain click still opens the
+ * card's href). `onDelete` may be async; the dialog surfaces rejections inline.
  */
 export function FileGrid<T extends FileGridFile>({
   files,
@@ -76,6 +81,11 @@ export function FileGrid<T extends FileGridFile>({
 
   const panelRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const trashRef = React.useRef<HTMLDivElement>(null);
+  const ghostRef = React.useRef<HTMLDivElement>(null);
+  // A drag that moved past the threshold suppresses the click that would
+  // otherwise follow pointerup on the card's link (so it doesn't navigate).
+  const suppressClickRef = React.useRef(false);
   // Element focused before the dialog opened, restored on close.
   const previouslyFocused = React.useRef<HTMLElement | null>(null);
 
@@ -83,17 +93,81 @@ export function FileGrid<T extends FileGridFile>({
   const open = pendingDelete !== null;
   const canConfirm = pendingDelete !== null && confirmValue.trim() === pendingDelete.name;
 
-  function openConfirm(file: T) {
+  const openConfirm = React.useCallback((file: T) => {
     setPendingDelete(file);
     setConfirmValue("");
     setDeleteError("");
-  }
+  }, []);
 
   const closeConfirm = React.useCallback(() => {
     setPendingDelete(null);
     setConfirmValue("");
     setDeleteError("");
   }, []);
+
+  const overTrash = React.useCallback((x: number, y: number) => {
+    const el = trashRef.current;
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }, []);
+
+  // Pointer-driven drag. HTML5 DnD on an <a> drags the URL (and can navigate);
+  // tracking the pointer ourselves avoids that entirely and lets a plain click
+  // still open the card. The trash zone is mounted only once a drag starts.
+  const startDrag = React.useCallback(
+    (e: React.PointerEvent, file: T) => {
+      if (!deletable || e.button !== 0) return;
+      suppressClickRef.current = false;
+      const st = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+      };
+
+      const move = (ev: PointerEvent) => {
+        if (ev.pointerId !== st.pointerId) return;
+        if (!st.moved && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) < DRAG_THRESHOLD) {
+          return;
+        }
+        if (!st.moved) {
+          st.moved = true;
+          setDragging(file); // mounts the trash zone + ghost
+        }
+        if (ghostRef.current) {
+          ghostRef.current.style.transform = `translate3d(${ev.clientX + 14}px, ${ev.clientY + 14}px, 0)`;
+        }
+        setDropActive(overTrash(ev.clientX, ev.clientY));
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", cancel);
+        setDragging(null);
+        setDropActive(false);
+      };
+
+      function finish(ev: PointerEvent) {
+        if (st.moved) {
+          // Real drag: block the imminent click and, if over the trash, delete.
+          suppressClickRef.current = true;
+          if (overTrash(ev.clientX, ev.clientY)) openConfirm(file);
+        }
+        cleanup();
+      }
+
+      function cancel() {
+        cleanup();
+      }
+
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", cancel);
+    },
+    [deletable, openConfirm, overTrash],
+  );
 
   async function confirmDelete() {
     if (!pendingDelete || !canConfirm || deleting) return;
@@ -174,56 +248,46 @@ export function FileGrid<T extends FileGridFile>({
       ) : (
         <div className="flex flex-wrap gap-8">
           {files.map((file) => (
-            <div key={file.id} className="group/file relative">
-              <div
-                draggable={deletable}
-                onDragStart={(event) => {
-                  if (!deletable) return;
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/plain", file.name);
-                  setDragging(file);
-                  setDropActive(false);
-                }}
-                onDragEnd={() => {
-                  setDragging(null);
-                  setDropActive(false);
-                }}
-                className={cn(deletable && "cursor-grab active:cursor-grabbing")}
-              >
-                {renderCard ? (
-                  renderCard(file)
-                ) : (
-                  <FileCard
-                    name={file.name}
-                    meta={file.meta}
-                    href={file.href}
-                    linkComponent={linkComponent}
-                  />
-                )}
-              </div>
-              {deletable && (
-                <button
-                  type="button"
-                  aria-label={`delete ${file.name}`}
-                  onClick={() => openConfirm(file)}
-                  className={cn(
-                    "absolute right-1 top-1 z-10 flex size-7 items-center justify-center",
-                    "border border-white/20 bg-black text-white/50 opacity-0 transition",
-                    "hover:border-red-400/60 hover:text-red-300",
-                    "group-hover/file:opacity-100 group-focus-within/file:opacity-100",
-                    "focus:outline-none focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-white/50",
-                    "motion-reduce:transition-none",
-                  )}
-                >
-                  <Trash2 size={13} aria-hidden />
-                </button>
+            <div
+              key={file.id}
+              onPointerDown={(e) => startDrag(e, file)}
+              // Cancel the browser's native drag (an <a> would otherwise drag its
+              // URL and try to navigate). Our pointer handler owns dragging.
+              onDragStart={(e) => e.preventDefault()}
+              // Swallow the click that follows a real drag so the card's link
+              // doesn't open; a plain click (no drag) passes through untouched.
+              onClickCapture={(e) => {
+                if (suppressClickRef.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  suppressClickRef.current = false;
+                }
+              }}
+              className={cn(
+                "relative",
+                deletable && "cursor-grab select-none touch-none active:cursor-grabbing",
+                dragging?.id === file.id && "opacity-40",
+              )}
+            >
+              {renderCard ? (
+                renderCard(file)
+              ) : (
+                <FileCard
+                  name={file.name}
+                  meta={file.meta}
+                  href={file.href}
+                  linkComponent={linkComponent}
+                />
               )}
             </div>
           ))}
         </div>
       )}
 
-      {deletable && (
+      {/* Trash drop zone — mounted only while a card is being dragged. Purely
+          visual (pointer-events-none); the drop is detected by hit-testing the
+          pointer against this element's rect in the drag handler. */}
+      {deletable && dragging && (
         <div
           className={cn(
             "pointer-events-none z-[60]",
@@ -231,31 +295,31 @@ export function FileGrid<T extends FileGridFile>({
           )}
         >
           <div
+            ref={trashRef}
             aria-hidden
-            onDragOver={(event) => {
-              if (!dragging) return;
-              event.preventDefault();
-              setDropActive(true);
-            }}
-            onDragLeave={() => setDropActive(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              if (!dragging) return;
-              openConfirm(dragging);
-              setDragging(null);
-              setDropActive(false);
-            }}
             className={cn(
-              "pointer-events-auto flex size-16 items-center justify-center border bg-black",
-              "transition-all motion-reduce:transition-none",
-              dragging
-                ? dropActive
-                  ? "scale-110 border-red-400/60 bg-red-400/10 text-red-300"
-                  : "border-white/30 text-white"
-                : "border-white/15 text-white/40",
+              "flex size-16 items-center justify-center border bg-black transition-all motion-reduce:transition-none",
+              dropActive
+                ? "scale-110 border-red-400/60 bg-red-400/10 text-red-300"
+                : "border-white/30 text-white",
             )}
           >
             <Trash2 size={20} />
+          </div>
+        </div>
+      )}
+
+      {/* Drag ghost following the pointer. Starts off-screen so it never flashes
+          at the origin before the first pointermove positions it. */}
+      {deletable && dragging && (
+        <div
+          ref={ghostRef}
+          aria-hidden
+          className="pointer-events-none fixed left-0 top-0 z-[70]"
+          style={{ transform: "translate3d(-9999px, -9999px, 0)" }}
+        >
+          <div className="border border-white/30 bg-black px-3 py-2 text-xs text-white/80 shadow-lg">
+            {dragging.name}
           </div>
         </div>
       )}
