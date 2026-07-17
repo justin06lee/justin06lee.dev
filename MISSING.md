@@ -48,18 +48,20 @@ front-matter list, fetches each referenced article's title from GitHub, and maps
 it to a route. This is domain logic (content model + GitHub coupling), not a
 reusable UI primitive, so it stays bespoke by design. No registry action needed.
 
-### CLI / toolchain — fixed upstream, but not yet published
-The root-write + unrewritten-import behavior is **fixed in CLI 0.2.0+** (the SKILL
-now says so: aliasBase, import rewriting, and page-file placement all require
-0.2.0+, and an older cached/global install "writes to the repo root with
-unrewritten `@/components/ui/…` imports"). But the latest version **published to
-npm is 0.1.1**, so `bunx @justin06lee/chrome@latest` still resolves a pre-0.2.0
-CLI here — every `add` still lands in the repo root with `@/components/ui/…`
-imports. Workaround each run: move `components/chrome/*`→`src/components/chrome/`,
-`hooks/*`→`src/hooks/`, delete the root `components/`,`hooks/`,`lib/` strays and
-the stray `components/chrome/app/not-found.tsx`, then rewrite `@/components/ui/`
-→ `@/components/chrome/`. **Retire this workaround once chrome CLI 0.2.0 ships to
-npm** — then a plain `add`/`add --overwrite` will place files correctly.
+### CLI / toolchain — ✅ RESOLVED (verified on CLI 0.2.0)
+`bunx @justin06lee/chrome@latest` now resolves **0.2.0**, which honors
+`aliasBase: "src"` in chrome.json: files land in `src/components/chrome/`,
+`src/hooks/`, `src/lib/`, and internal imports are rewritten to
+`@/components/chrome/…` at install time. Verified with a full
+`add --overwrite` of the whole set — **71 of 72 components skipped as
+byte-identical** to the local copies (no drift), no repo-root strays, zero
+`@/components/ui/…` imports. The relocate + import-rewrite workaround is no
+longer needed.
+
+One caution (expected behavior, not a bug): re-pulling `not-found` reinstalls
+its **page file** to `app/not-found.tsx`, overwriting a customized 404 (ours
+adds the Navbar + site copy). Skip `not-found` in bulk `--overwrite`s, or
+restore the page after.
 
 ### `/me` — not a gap
 Gallery items (title/tech/year/repo/live/pin) don't fit `manager-table`'s
