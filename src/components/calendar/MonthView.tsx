@@ -43,10 +43,7 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
   return (
     <motion.div {...fadeIn} transition={{ duration: 0.4 }}>
       <Calendar
-        // Fill the viewport below the nav so each week is a tall row (like the
-        // year heatmap fills the screen) instead of a short picker cell.
-        className="w-full h-[calc(100dvh-12rem)]"
-        fillHeight
+        className="w-full"
         // CalendarShell already renders the period nav (prev/today/next +
         // switcher) above this grid, so hide Calendar's built-in header to
         // avoid a duplicate month nav.
@@ -63,9 +60,10 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
         // selection tint are applied by Calendar itself.
         cellClassName={(day) => {
           const overlapRatio = heatmap?.[day.date] ?? 0;
-          // min-h is just a floor for short viewports; fillHeight stretches each
-          // week to an equal share of the remaining height on normal screens.
-          return `min-h-24 gap-1 p-2 hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapRatio, "month")}`;
+          // Square cells: height tracks the column width (container / 7), so days
+          // read as squares, not tall rectangles. Content clips inside (the task
+          // list is already capped + overflow-hidden).
+          return `aspect-square overflow-hidden gap-1 p-2 hover:ring-1 hover:ring-white/30 ${overlapIntensityClass(overlapRatio, "month")}`;
         }}
         renderCell={({ date, day, isToday }) => {
           // The corner ratio shows done/total tasks — a different axis from the
