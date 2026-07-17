@@ -17,6 +17,14 @@ export type ButtonProps = {
   label?: string;
   /** Renders as <a>; external URLs (http(s)://) get target="_blank" auto-applied. */
   href?: string;
+  /**
+   * Anchor component for internal `href`s — pass your router's Link (e.g.
+   * next/link) for client-side navigation + prefetch. External http(s) hrefs
+   * always use a plain <a>. Defaults to a plain <a>.
+   */
+  linkComponent?: React.ElementType;
+  /** Forwarded to `linkComponent` (e.g. next/link's prefetch) when set. */
+  prefetch?: boolean;
   onClick?: () => void;
   className?: string;
   children?: React.ReactNode;
@@ -54,6 +62,8 @@ export function Button({
   tooltip,
   label,
   href,
+  linkComponent,
+  prefetch,
   onClick,
   className,
   children,
@@ -135,6 +145,24 @@ export function Button({
   // intentionally not rendered. Don't combine `copy` with `href`.
   if (href && !copy && !disabled) {
     const external = /^https?:\/\//.test(href);
+    // Internal hrefs route through linkComponent (next/link, …) when provided,
+    // so the host gets client-side navigation + prefetch. External links stay
+    // plain <a> (a router Link can't own another origin).
+    if (linkComponent && !external) {
+      const LinkComp = linkComponent;
+      return (
+        <LinkComp
+          ref={ref}
+          href={href}
+          aria-label={ariaLabel}
+          className={cls}
+          style={{ background }}
+          {...(prefetch !== undefined ? { prefetch } : {})}
+        >
+          {content}
+        </LinkComp>
+      );
+    }
     return (
       <a
         ref={ref as React.Ref<HTMLAnchorElement>}

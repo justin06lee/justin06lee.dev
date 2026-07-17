@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { addDays } from "@/lib/calendar-dates";
 import { CalendarNav, type CalendarView } from "@/components/chrome/calendar-nav";
 
@@ -52,7 +52,6 @@ export default function CalendarShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const onCategories = pathname === "/calendar/categories";
   const { view, token } = parsePath(pathname);
 
@@ -72,9 +71,6 @@ export default function CalendarShell({
     view === "year" && next ? yearHref(next) : null;
   const todayHref = view === "month" ? monthHref(todayMonth) : view === "year" ? yearHref(todayYear) : dayHref(today);
   const currentLabel = view === "month" ? "this month" : view === "year" ? "this year" : "today";
-  // CalendarNav is controlled: it owns no routing, so wire every control back
-  // through the router to preserve the shell's existing per-view navigation.
-  const go = (href: string) => router.push(href);
   const viewHref = (v: CalendarView) =>
     v === "day" ? dayHref(today) : v === "month" ? monthHref(todayMonth) : yearHref(todayYear);
 
@@ -88,12 +84,16 @@ export default function CalendarShell({
             // switcher options), so no segment highlights — matching the old shell.
             view={view as CalendarView}
             views={["day", "month", "year"]}
-            onViewChange={(v) => go(viewHref(v))}
             label={token ?? currentLabel}
             todayLabel={currentLabel}
-            onToday={() => go(todayHref)}
-            onPrev={prevHref ? () => go(prevHref) : undefined}
-            onNext={nextHref ? () => go(nextHref) : undefined}
+            // Render the controls as prefetched next/link anchors: Next prefetches
+            // the adjacent period + the view targets on hover/mount, so switching
+            // navigates from the client cache instead of a cold server round-trip.
+            linkComponent={Link}
+            viewHref={viewHref}
+            prevHref={prevHref ?? undefined}
+            nextHref={nextHref ?? undefined}
+            todayHref={todayHref}
           />
           {isAdmin && (
             <Link
