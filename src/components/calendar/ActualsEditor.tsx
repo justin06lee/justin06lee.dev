@@ -7,6 +7,10 @@ import type { CalendarCategory } from "@/lib/calendar-categories";
 import CategoryPicker from "./CategoryPicker";
 import { useDialog } from "@/components/Dialog";
 import { epochToLocalInput, localInputToEpoch } from "@/lib/calendar-dates";
+import { Input } from "@/components/chrome/input";
+import { Textarea } from "@/components/chrome/textarea";
+import { Checkbox } from "@/components/chrome/checkbox";
+import { Button } from "@/components/chrome/button";
 
 type Props = {
   actual: CalendarActual;
@@ -107,76 +111,59 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
         </div>
         <div className="space-y-1">
           <label className="text-xs text-white/60">Title</label>
-          <input
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm focus:border-white/60 outline-none"
+            className="w-full"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <label className="text-xs text-white/60">Start</label>
-            <input
+            <Input
               type="datetime-local"
               value={startInput}
               onChange={(e) => setStartInput(e.target.value)}
-              className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm focus:border-white/60 outline-none"
+              className="w-full"
             />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-white/60">End</label>
-            <input
+            <Input
               type="datetime-local"
               disabled={stillRunning}
               value={endInput}
               onChange={(e) => setEndInput(e.target.value)}
-              className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm disabled:opacity-40 focus:border-white/60 outline-none"
+              className="w-full"
             />
           </div>
         </div>
-        <label className="flex items-center gap-2 text-xs text-white/70">
-          <input
-            type="checkbox"
-            checked={stillRunning}
-            onChange={(e) => setStillRunning(e.target.checked)}
-          />
-          Still running
-        </label>
+        <Checkbox
+          checked={stillRunning}
+          onChange={(e) => setStillRunning(e.target.checked)}
+          wrapperClassName="text-xs text-white/70"
+          label="Still running"
+        />
         <div className="space-y-1">
           <label className="text-xs text-white/60">Notes</label>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full bg-transparent border border-white/20 px-2 py-1 text-sm focus:border-white/60 outline-none"
           />
         </div>
         {error && <div className="text-xs text-red-400">{error}</div>}
         <div className="flex justify-between pt-1">
-          <button
-            type="button"
-            onClick={remove}
-            disabled={submitting}
-            className="text-xs text-red-400 hover:text-red-300 px-2 py-1 disabled:opacity-40"
-          >
+          <Button variant="link" size="sm" onClick={remove} disabled={submitting} className="text-red-400 hover:text-red-300">
             Delete
-          </button>
+          </Button>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-xs text-white/60 hover:text-white px-2 py-1"
-            >
+            <Button variant="link" size="sm" onClick={onClose} className="text-white/60 hover:text-white">
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={submitting}
-              className="text-xs border border-white/30 hover:bg-white/10 disabled:opacity-40 px-2 py-1"
-            >
+            </Button>
+            <Button variant="outline" size="sm" onClick={save} disabled={submitting}>
               {submitting ? "Saving..." : "Save"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

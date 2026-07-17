@@ -7,6 +7,10 @@ import type { CalendarCategory } from "@/lib/calendar-categories";
 import { isValidHhmm } from "@/lib/calendar-dates";
 import CategoryPicker from "./CategoryPicker";
 import { useDialog } from "@/components/Dialog";
+import { Input } from "@/components/chrome/input";
+import { Textarea } from "@/components/chrome/textarea";
+import { Checkbox } from "@/components/chrome/checkbox";
+import { Button } from "@/components/chrome/button";
 
 type Props = {
   date: string;
@@ -178,40 +182,39 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-white/60 text-xs">title</span>
-          <input
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
+            className="w-full"
           />
         </label>
         <div className="flex gap-3">
           <label className="flex flex-col gap-1 flex-1 min-w-0">
             <span className="text-white/60 text-xs">start</span>
-            <input
+            <Input
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
+              className="w-full min-w-0"
             />
           </label>
           <label className="flex flex-col gap-1 flex-1 min-w-0">
             <span className="text-white/60 text-xs">end</span>
-            <input
+            <Input
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
+              className="w-full min-w-0"
             />
           </label>
         </div>
         <label className="flex flex-col gap-1">
           <span className="text-white/60 text-xs">notes</span>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="bg-transparent border border-white/20 px-2 py-1 text-white outline-none focus:border-white/60"
           />
         </label>
         <AlternativesSection
@@ -224,13 +227,13 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
         {error && <div className="text-red-400 text-xs">{error}</div>}
         <div className="flex items-center justify-between pt-2">
           {task ? (
-            <button type="button" onClick={remove} disabled={submitting} className="text-red-400 hover:text-red-300 text-xs underline-offset-4 hover:underline">
+            <Button variant="link" size="sm" onClick={remove} disabled={submitting} className="text-red-400 hover:text-red-300">
               delete
-            </button>
+            </Button>
           ) : <span />}
-          <button type="submit" disabled={submitting} className="border border-white/40 px-3 py-1 hover:bg-white hover:text-black transition">
+          <Button type="submit" variant="outline" size="sm" disabled={submitting} className="hover:bg-white hover:text-black">
             {submitting ? "saving…" : "save"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
@@ -270,20 +273,19 @@ function AlternativesSection({
 
   return (
     <div className="flex flex-col gap-2 border border-white/10 px-3 py-2">
-      <label className="flex items-start gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={isUncertain}
-          onChange={(e) => onUncertainChange(e.target.checked)}
-          className="mt-[3px] accent-white"
-        />
-        <span className="flex flex-col gap-0.5">
-          <span className="text-white/80 text-xs">uncertain</span>
-          <span className="text-white/40 text-[10px] leading-snug">
-            doing the plan above — or any alternative below — counts toward this slot
+      <Checkbox
+        checked={isUncertain}
+        onChange={(e) => onUncertainChange(e.target.checked)}
+        wrapperClassName="items-start"
+        label={
+          <span className="flex flex-col gap-0.5">
+            <span className="text-white/80 text-xs">uncertain</span>
+            <span className="text-white/40 text-[10px] leading-snug">
+              doing the plan above — or any alternative below — counts toward this slot
+            </span>
           </span>
-        </span>
-      </label>
+        }
+      />
       {isUncertain && (
         <div className="flex flex-col gap-3 pl-6">
           {alternatives.length === 0 && (
@@ -312,43 +314,39 @@ function AlternativesSection({
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-white/60 text-[10px]">title</span>
-                <input
+                <Input
                   value={alt.title}
                   onChange={(e) => update(i, { title: e.target.value })}
                   placeholder="what you'd do instead"
-                  className="w-full bg-transparent border border-white/20 px-2 py-1 text-white text-xs outline-none focus:border-white/60"
+                  className="w-full text-xs"
                 />
               </label>
               <div className="flex gap-2">
                 <label className="flex flex-col gap-1 flex-1 min-w-0">
                   <span className="text-white/60 text-[10px]">start</span>
-                  <input
+                  <Input
                     type="time"
                     value={alt.startTime}
                     onChange={(e) => update(i, { startTime: e.target.value })}
-                    className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white text-xs outline-none focus:border-white/60"
+                    className="w-full min-w-0 text-xs"
                   />
                 </label>
                 <label className="flex flex-col gap-1 flex-1 min-w-0">
                   <span className="text-white/60 text-[10px]">end</span>
-                  <input
+                  <Input
                     type="time"
                     value={alt.endTime}
                     onChange={(e) => update(i, { endTime: e.target.value })}
-                    className="w-full min-w-0 bg-transparent border border-white/20 px-2 py-1 text-white text-xs outline-none focus:border-white/60"
+                    className="w-full min-w-0 text-xs"
                   />
                 </label>
               </div>
             </div>
           ))}
           <div>
-            <button
-              type="button"
-              onClick={addAlternative}
-              className="text-[11px] text-white/60 hover:text-white border border-white/20 hover:border-white/40 px-2 py-0.5"
-            >
+            <Button type="button" variant="outline" size="sm" onClick={addAlternative} className="px-2 py-0.5 text-[11px] text-white/60 hover:text-white">
               + alternative
-            </button>
+            </Button>
           </div>
         </div>
       )}

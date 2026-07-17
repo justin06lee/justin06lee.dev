@@ -380,3 +380,92 @@ textarea:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0px 1000px black inset;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* @chrome:theme */
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-400-normal.woff2")
+    format("woff2");
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --font-sans: "Poppins", sans-serif;
+}
+
+:root,
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --surface: #0a0a0a;
+  --surface-alt: #141414;
+  --border: rgba(255, 255, 255, 0.12);
+  --muted: rgba(255, 255, 255, 0.6);
+  --accent: #ffffff;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+/* @chrome:end */
+
+/* @chrome:css:range */
+/* Thin minimal range slider. Native track + custom thumb; the pseudo-elements
+   can't be expressed with utility classes, so they ship as plain CSS. */
+.chrome-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  cursor: pointer;
+}
+.chrome-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.chrome-range::-moz-range-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+}
+.chrome-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.chrome-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.chrome-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+.chrome-range::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+.chrome-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* @chrome:end */

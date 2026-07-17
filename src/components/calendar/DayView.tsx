@@ -11,6 +11,7 @@ import ActualBlock from "./ActualBlock";
 import ActualsEditor from "./ActualsEditor";
 import PlannedTodaySheet from "./PlannedTodaySheet";
 import NowPlayingBar from "./NowPlayingBar";
+import { Timeline } from "@/components/chrome/timeline";
 
 type Props = {
   date: string;
@@ -34,37 +35,6 @@ function useNowMinutes(enabled: boolean, timezone: string) {
     return () => clearInterval(id);
   }, [enabled, timezone]);
   return minutes;
-}
-
-function HourGrid() {
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-  return (
-    <>
-      {hours.map((h) => (
-        <div
-          key={h}
-          className="absolute left-0 right-0 border-t border-white/5 flex items-start pl-2"
-          style={{ top: `${(h / 24) * 100}%`, height: `${100 / 24}%` }}
-        >
-          <span className="font-mono text-[10px] text-white/40 mt-[-6px]">
-            {String(h).padStart(2, "0")}:00
-          </span>
-        </div>
-      ))}
-    </>
-  );
-}
-
-function NowLine({ nowMinutes }: { nowMinutes: number }) {
-  return (
-    <div
-      className="absolute left-0 right-0 z-10 pointer-events-none flex items-center"
-      style={{ top: `${(nowMinutes / 1440) * 100}%` }}
-    >
-      <div className="size-2 rounded-full bg-red-500 -ml-1 shrink-0" />
-      <div className="h-px flex-1 bg-red-500" />
-    </div>
-  );
 }
 
 export default function DayView({
@@ -103,13 +73,20 @@ export default function DayView({
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="relative border border-white/10 bg-white/[0.02] min-h-[960px]"
+          className="relative min-h-[960px]"
         >
+          {/* chrome Timeline draws the static track: border, hour grid, the
+              live now-line, and the streamed prayer markers (via markersSlot).
+              Interactive plan/actual blocks overlay it below — Timeline blocks
+              aren't clickable, so they stay bespoke. nowMinutes is driven by
+              our tz-aware clock (not Timeline's browser-local one). */}
+          <Timeline
+            events={[]}
+            nowMinutes={nowMinutes ?? undefined}
+            markersSlot={prayersSlot}
+            className="absolute inset-0"
+          />
           <div className="absolute inset-0">
-            <HourGrid />
-            {prayersSlot}
-            {nowMinutes != null && <NowLine nowMinutes={nowMinutes} />}
-
             {/* Header / +add task — z-20 so it sits above the now-line (z-10) */}
             {isAdmin && (
               <button
@@ -161,11 +138,10 @@ export default function DayView({
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.05 }}
-          className="hidden md:block relative border border-white/10 bg-white/[0.02] min-h-[960px]"
+          className="hidden md:block relative min-h-[960px]"
         >
+          <Timeline events={[]} nowMinutes={nowMinutes ?? undefined} className="absolute inset-0" />
           <div className="absolute inset-0">
-            <HourGrid />
-            {nowMinutes != null && <NowLine nowMinutes={nowMinutes} />}
             {renderActuals.map(({ actual, startMin, endMin }) => (
               <ActualBlock
                 key={actual.id}

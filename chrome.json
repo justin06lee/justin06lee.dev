@@ -1,0 +1,16 @@
+{
+  "$schema": "https://chrome.justin06lee.dev/schema.json",
+  "registry": "https://chrome.justin06lee.dev/r",
+  "style": "default",
+  "tsx": true,
+  "aliasBase": "src",
+  "tailwind": {
+    "css": "src/app/globals.css",
+    "baseColor": "black"
+  },
+  "aliases": {
+    "components": "@/components/chrome",
+    "utils": "@/lib/utils",
+    "hooks": "@/hooks"
+  }
+}
