@@ -5,6 +5,8 @@ export interface ParsedArticleDraft {
   prerequisites: string[];
   tags: string[];
   title: string;
+  /** Front-matter `hidden: true` — the article is excluded from the public site. */
+  hidden: boolean;
 }
 
 export function normalizePrerequisitePath(filepath: string): string {
@@ -57,6 +59,7 @@ export function parseArticleDraft(
   let title = fallbackTitle;
   let cover: string | null = null;
   let excerpt: string | null = null;
+  let hidden = false;
   const tags: string[] = [];
   const prerequisites: string[] = [];
   const seenPrereqs = new Set<string>();
@@ -96,6 +99,13 @@ export function parseArticleDraft(
       continue;
     }
 
+    const hiddenMatch = line.match(/^hidden:\s*(.+)$/i);
+    if (hiddenMatch) {
+      hidden = /^(true|yes|1|hidden)$/i.test(hiddenMatch[1].trim());
+      cursor += 1;
+      continue;
+    }
+
     const tagsMatch = line.match(/^tags:\s*(.+)$/i);
     if (tagsMatch) {
       for (const tag of tagsMatch[1].split(",")) {
@@ -128,7 +138,43 @@ export function parseArticleDraft(
     prerequisites,
     tags,
     title,
+    hidden,
   };
+}
+
+/**
+ * Surgically add/remove the `hidden: true` front-matter line without touching
+ * the rest of the article (title, other metadata, body, spacing all preserved).
+ * Used by the visibility toggle so flipping a checkbox doesn't reformat the file.
+ */
+export function setDraftHidden(raw: string, hidden: boolean): string {
+  const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+  const lines = raw.split(/\r?\n/);
+
+  let i = 0;
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i += 1;
+  // Skip the title line if present — `hidden` sits with the metadata below it.
+  if (lines[i] && /^#\s+/.test(lines[i] ?? "")) i += 1;
+
+  // The front-matter region runs from here through blank + known metadata lines,
+  // up to the first body line.
+  const META_RE = /^(cover|excerpt|tags|prerequisites|hidden)\s*:/i;
+  let end = i;
+  while (end < lines.length) {
+    const t = (lines[end] ?? "").trim();
+    if (t === "" || META_RE.test(t)) {
+      end += 1;
+      continue;
+    }
+    break;
+  }
+
+  const region = lines
+    .slice(i, end)
+    .filter((l) => !/^hidden\s*:/i.test(l.trim()));
+  if (hidden) region.unshift("hidden: true");
+
+  return [...lines.slice(0, i), ...region, ...lines.slice(end)].join(eol);
 }
 
 export function buildArticleDraft({
@@ -138,6 +184,7 @@ export function buildArticleDraft({
   prerequisites = [],
   tags = [],
   title,
+  hidden = false,
 }: {
   content?: string;
   cover?: string | null;
@@ -145,12 +192,17 @@ export function buildArticleDraft({
   prerequisites?: string[];
   tags?: string[];
   title: string;
+  hidden?: boolean;
 }): string {
   const normalizedPrerequisites = prerequisites
     .map((item) => normalizePrerequisitePath(item.trim()))
     .filter(Boolean);
 
   const sections = [`# ${title.trim() || "Untitled"}`];
+
+  if (hidden) {
+    sections.push("hidden: true");
+  }
 
   if (cover) {
     sections.push(`cover: ${cover}`);

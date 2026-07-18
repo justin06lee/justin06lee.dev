@@ -11,6 +11,7 @@ import {
   deleteOperatorArticleByPath,
   deleteOperatorImageAssetByPath,
   saveOperatorArticleByPath,
+  setOperatorArticleVisibilityByPath,
 } from "@/lib/operator-content";
 
 export type OperatorFormState =
@@ -129,6 +130,18 @@ export async function saveDrawingAction(input: {
   revalidatePath(routeForPath(input.articlePath));
   revalidatePath("/articles");
   return result;
+}
+
+export async function setArticleVisibilityAction(input: {
+  pathSegments: string[];
+  hidden: boolean;
+}) {
+  await requireAdminServer();
+  await setOperatorArticleVisibilityByPath(input);
+  // Reflect the change on the public index/article and in the desk immediately.
+  revalidatePath("/articles");
+  revalidatePath(routeForPath(input.pathSegments));
+  revalidatePath("/desk");
 }
 
 export async function deleteImageAction(input: {

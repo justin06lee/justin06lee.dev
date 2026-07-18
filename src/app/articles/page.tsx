@@ -4,7 +4,8 @@ import { ArticleList } from "@/components/chrome/article-list";
 import { listArticleSummaries } from "@/lib/github";
 
 export default async function ArticlesPage() {
-  const articles = await listArticleSummaries();
+  // Hidden articles are excluded from the public index (still shown in /desk).
+  const articles = (await listArticleSummaries()).filter((a) => !a.hidden);
 
   return (
     <div className="min-h-screen bg-black text-white">

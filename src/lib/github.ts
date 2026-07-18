@@ -44,6 +44,7 @@ export interface Article {
   rawPath: string;
   tags: string[];
   title: string;
+  hidden: boolean;
 }
 
 export interface ArticleSummary {
@@ -54,6 +55,8 @@ export interface ArticleSummary {
   tags: string[];
   pathSegments: string[];
   href: string;
+  /** Front-matter `hidden: true` — hidden from the public site (still listed in the desk). */
+  hidden: boolean;
 }
 
 function safeDecode(value: string): string {
@@ -174,6 +177,7 @@ export async function getArticleByPath(
     rawPath: rawUrl(...pathSegments),
     tags: parsed.tags,
     title: parsed.title,
+    hidden: parsed.hidden,
   };
 }
 
@@ -238,6 +242,7 @@ export async function listArticleSummaries(
         tags: article.tags,
         pathSegments: [entry.name],
         href: routeForPath([entry.name]),
+        hidden: article.hidden,
       } satisfies ArticleSummary;
     })
   );

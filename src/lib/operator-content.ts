@@ -1,6 +1,6 @@
 import "server-only";
 
-import { buildArticleDraft, parseArticleDraft } from "./article-draft";
+import { buildArticleDraft, parseArticleDraft, setDraftHidden } from "./article-draft";
 import { requireAdminServer } from "./auth-server";
 import { assertSafeSegment, contentsUrl, rawUrl } from "./github-paths";
 import {
@@ -492,6 +492,46 @@ export async function saveOperatorArticleByPath({
     sha: result.sha,
     title: parsed.title,
   };
+}
+
+export async function setOperatorArticleVisibilityByPath({
+  pathSegments,
+  hidden,
+}: {
+  pathSegments: string[];
+  hidden: boolean;
+}) {
+  await requireAdminServer();
+  const normalizedPath = pathSegments.map((segment) => segment.trim()).filter(Boolean);
+
+  if (normalizedPath.length === 0) {
+    throw new Error("Article path is required.");
+  }
+
+  for (const segment of normalizedPath) {
+    assertSafeSegment(segment);
+  }
+
+  const draft = await getOperatorArticleDraftByPath(normalizedPath);
+  if (!draft) {
+    throw new Error("Article not found.");
+  }
+  // Toggle only the front-matter `hidden` line — the rest of the file (title,
+  // metadata, body) is preserved exactly. Optimistic-concurrency via the sha.
+  const nextRaw = setDraftHidden(draft.raw, hidden).replace(/\r\n/g, "\n");
+  const title = draft.parsed.title || normalizedPath[normalizedPath.length - 1];
+
+  await putContent({
+    encodedContent: Buffer.from(
+      nextRaw.endsWith("\n") ? nextRaw : `${nextRaw}\n`,
+      "utf8"
+    ).toString("base64"),
+    message: `${hidden ? "Hide" : "Show"} article ${title}`,
+    pathSegments: [...normalizedPath, "notes.md"],
+    sha: draft.sha,
+  });
+
+  return { hidden };
 }
 
 export async function deleteOperatorArticleByPath(pathSegments: string[]) {
