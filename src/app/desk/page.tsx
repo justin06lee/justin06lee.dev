@@ -29,6 +29,7 @@ export default async function DeskHome() {
               article.pathSegments[article.pathSegments.length - 1] ??
               article.slug,
             pathSegments: article.pathSegments,
+            hidden: article.hidden,
           }))}
         />
       ) : (

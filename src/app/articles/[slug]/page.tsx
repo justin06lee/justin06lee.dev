@@ -10,7 +10,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!actualName) return {};
 
   const article = await getArticleByPath([actualName]);
-  if (!article) return {};
+  // Hidden articles are not public — no metadata (the page itself 404s).
+  if (!article || article.hidden) return {};
 
   const description = article.excerpt ?? undefined;
   const coverUrl = article.cover
@@ -45,7 +46,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   if (!actualName) notFound();
 
   const article = await getArticleByPath([actualName]);
-  if (!article) notFound();
+  // Hidden articles 404 on the public route (view/preview them via /desk).
+  if (!article || article.hidden) notFound();
 
   const coverUrl = article.cover
     ? `${article.rawPath}/${article.cover.replace(/^\.?\/+/, "")}`
