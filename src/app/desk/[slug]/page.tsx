@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isAdminServer } from "@/lib/auth-server";
 import { getArticleByPath, resolveArticleSegment, routeForPath, pathSegmentSlug } from "@/lib/github";
 import { ArticleContent } from "@/components/article/article-content";
 import { PrerequisitesSidebar } from "@/components/article/prerequisites-sidebar";
@@ -11,6 +12,9 @@ interface Props {
 }
 
 export default async function DeskArticlePage({ params }: Props) {
+  // Gate the fetch so unauthenticated requests can't pull a draft article's
+  // content into their RSC payload via this desk preview route.
+  if (!(await isAdminServer())) return null;
   const { slug } = await params;
   const actualName = await resolveArticleSegment(slug, OP);
   if (!actualName) notFound();

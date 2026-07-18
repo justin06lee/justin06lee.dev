@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { isAdminServer } from "@/lib/auth-server";
 import { buildArticleDraft } from "@/lib/article-draft";
 import { resolveArticleSegment } from "@/lib/github";
 import {
@@ -13,6 +14,9 @@ interface Props {
 }
 
 export default async function DeskEditPage({ params }: Props) {
+  // Gate the fetch so a private article draft never lands in an unauthenticated
+  // request's RSC payload (the layout gate alone doesn't stop this page).
+  if (!(await isAdminServer())) return null;
   const { slug } = await params;
   const actualName = await resolveArticleSegment(slug, { noCache: true });
   if (!actualName) notFound();
