@@ -35,13 +35,45 @@ export type ProseProps = {
    */
   linkComponent?: React.ElementType;
   /**
-   * Maps each image src to the src actually rendered (e.g. swap
-   * `foo-light.png` ↔ `foo-dark.png` theme variants). Runs after
-   * `imageBaseUrl` resolution, so it receives the final src.
+   * Which variant to render for images that ship a light/dark pair — files
+   * named `<name>-light.<ext>` and `<name>-dark.<ext>`. An image src carrying a
+   * `-light`/`-dark` suffix is resolved to this theme's variant; images without
+   * that suffix are left untouched. **Defaults to `"light"`** so light-authored
+   * drawings/diagrams stay light in a light context; a dark-themed site (e.g.
+   * one forcing dark mode) passes `imageTheme="dark"` to use the dark variants.
+   * Applied after `imageBaseUrl`, before `resolveImageSrc`.
+   */
+  imageTheme?: "light" | "dark";
+  /**
+   * Maps each image src to the src actually rendered — an escape hatch for
+   * custom variant logic. Runs after `imageBaseUrl` and `imageTheme` resolution,
+   * so it receives the already-theme-resolved src.
    */
   resolveImageSrc?: (src: string) => string;
   className?: string;
 };
+
+// A `-light`/`-dark` variant suffix directly before the file extension, with an
+// optional `?query`/`#hash` tail preserved (GitHub raw urls carry a ?token).
+const IMAGE_VARIANT_RE = /^(.*)-(light|dark)(\.[a-z0-9]+)([?#].*)?$/i;
+
+/**
+ * Resolve a light/dark image-variant src to the requested theme. An src whose
+ * filename ends in `-light`/`-dark` (before the extension) is rewritten to the
+ * matching variant; anything else is returned unchanged. Authoring convention:
+ * save/reference paired files `<name>-light.<ext>` and `<name>-dark.<ext>`.
+ */
+export function resolveThemeImageSrc(src: string, theme: "light" | "dark"): string {
+  const m = IMAGE_VARIANT_RE.exec(src);
+  if (!m) return src;
+  const base = m[1];
+  const variant = m[2];
+  const ext = m[3];
+  const tail = m[4] ?? "";
+  if (base === undefined || variant === undefined || ext === undefined) return src;
+  if (variant.toLowerCase() === theme) return src;
+  return `${base}-${theme}${ext}${tail}`;
+}
 
 // Copies each top-level block's source line (1-based, relative to the markdown)
 // onto a `data-source-line` attribute, and marks the highlighted block with
@@ -108,6 +140,7 @@ export function Prose({
   lineSync = false,
   highlightLine = null,
   linkComponent: LinkComponent = "a",
+  imageTheme = "light",
   resolveImageSrc,
   className,
 }: ProseProps) {
@@ -209,11 +242,14 @@ export function Prose({
     img: ({ src, alt, node, ...p }) => {
       const s = typeof src === "string" ? src : "";
       const based = s && imageBaseUrl && !isResolved(s) ? `${imageBaseUrl}/${s.replace(/^\.\//, "")}` : s;
-      const resolved = based && resolveImageSrc ? resolveImageSrc(based) : based;
+      // Pick the light/dark variant (default light — no-op for unsuffixed srcs),
+      // then let resolveImageSrc override if provided.
+      const themed = based ? resolveThemeImageSrc(based, imageTheme) : based;
+      const resolved = themed && resolveImageSrc ? resolveImageSrc(themed) : themed;
       // eslint-disable-next-line @next/next/no-img-element
       return <img src={resolved} alt={alt || ""} loading="lazy" className="my-5 max-w-full border border-white/10" {...p} />;
     },
-  }), [imageBaseUrl, LinkComponent, resolveImageSrc]);
+  }), [imageBaseUrl, LinkComponent, imageTheme, resolveImageSrc]);
 
   return (
     <div className={className}>

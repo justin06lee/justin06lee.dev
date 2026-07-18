@@ -257,7 +257,14 @@ export function OperatorArticleEditor({
           </>
         }
         renderMarkdown={(md, { highlightLine }) => (
-          <Prose imageBaseUrl={previewBaseUrl} lineSync highlightLine={highlightLine}>
+          <Prose
+            imageBaseUrl={previewBaseUrl}
+            lineSync
+            highlightLine={highlightLine}
+            // Match the published (forced-dark) rendering: show the dark variant
+            // of light/dark image pairs in the editor preview too.
+            imageTheme="dark"
+          >
             {md}
           </Prose>
         )}

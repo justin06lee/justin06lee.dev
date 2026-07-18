@@ -1,9 +1,15 @@
+import { isAdminServer } from "@/lib/auth-server";
 import { listArticleSummaries } from "@/lib/github";
 import { OperatorFileGrid } from "./OperatorFileGrid";
 
 const OP = { noCache: true as const };
 
 export default async function DeskHome() {
+  // Auth close to the data. The layout gate shows the login form, but it does
+  // NOT stop this page from executing — its output (the private article list)
+  // would otherwise ride along in the RSC payload of an unauthenticated
+  // request. Gate the fetch itself so nothing sensitive is fetched or rendered.
+  if (!(await isAdminServer())) return null;
   const articles = await listArticleSummaries(OP);
 
   return (
