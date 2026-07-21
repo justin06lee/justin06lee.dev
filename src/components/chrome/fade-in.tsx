@@ -10,7 +10,7 @@ export interface FadeInProps extends React.HTMLAttributes<HTMLElement> {
   y?: number;
   /** starting horizontal offset in px (animates to 0). default 0. */
   x?: number;
-  /** animation duration in seconds. default 0.4. */
+  /** animation duration in seconds. default 0.8. */
   duration?: number;
   className?: string;
   children?: React.ReactNode;
@@ -20,6 +20,11 @@ export interface FadeInProps extends React.HTMLAttributes<HTMLElement> {
  * Fade + translate a node in on mount. Pure CSS (no motion dependency):
  * a keyframe drives opacity 0 -> 1 and translate(x, y) -> 0, with the offsets
  * passed as CSS custom properties. Honors prefers-reduced-motion.
+ *
+ * Timing mirrors a motion/framer `initial={{opacity:0, y:-10}}` /
+ * `animate={{opacity:1, y:0}}` / `transition={{duration: 0.8}}` on-mount fade:
+ * motion's default tween ease is `easeInOut` === cubic-bezier(0.42, 0, 0.58, 1),
+ * so the CSS keyframe uses exactly that curve and duration to match 1:1.
  *
  * The keyframes ship inline via a hoisted <style> tag (deduped by href), so
  * the component is self-contained — no css file to wire up.
@@ -32,7 +37,7 @@ export function FadeIn({
   delay = 0,
   y = -10,
   x = 0,
-  duration = 0.4,
+  duration = 0.8,
   className,
   style,
   children,
@@ -70,9 +75,11 @@ export function FadeIn({
         }
         .chrome-fade-in {
           animation-name: chrome-fade-in;
-          animation-duration: 0.4s;
+          /* Match motion's default on-mount tween: 0.8s, easeInOut. Inline
+             style props (animation-duration/-delay) override these per instance. */
+          animation-duration: 0.8s;
           animation-delay: 0s;
-          animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+          animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
           animation-fill-mode: both;
           animation-iteration-count: 1;
         }
@@ -88,6 +95,6 @@ export function FadeIn({
 }
 
 /** Stagger helper mirroring upstream: delay = base + i * step (seconds). */
-export function staggerDelay(index: number, step = 0.08, base = 0): number {
+export function staggerDelay(index: number, step = 0.1, base = 0): number {
   return base + index * step;
 }
