@@ -3,7 +3,7 @@
 ## Project Overview
 Personal site for justin06lee.dev. Three surfaces share one Next.js app:
 1. **Public portfolio** — animated home, ASCII donut, scramble text, gallery, articles, a pet-the-cat page.
-2. **Personal calendar / time tracker** — day/month/year views, plans + "actuals" with a single-running invariant, plan/actual overlap heatmap, prayer-time markers.
+2. **Personal calendar / time tracker** — day/month/year views, plans + "actuals" with a one-running-per-track invariant (parallel activity lanes), plan/actual overlap heatmap, prayer-time markers.
 3. **Two admin surfaces** — `/me` (item CRUD + site config) and `/desk/*` (article CMS that writes back to a GitHub repo).
 
 Dark-only theme, minimal black/white aesthetic, motion-driven, ASCII flourishes. Lowercase voice everywhere.
@@ -101,12 +101,13 @@ public/
 ## Calendar
 Most substantial piece of recent work. Three primitives:
 - **Plans** (`calendar_tasks`) — what was planned. Optionally timed, optionally "uncertain" with up to 16 `PlanFallback` alternatives (each with its own `categoryId`, `title`, `startTime`, `endTime`).
-- **Actuals** (`calendar_actuals`) — what happened. Closed (start+end) or running (`end_at IS NULL`).
+- **Actuals** (`calendar_actuals`) — what happened. Closed (start+end) or running (`end_at IS NULL`). Each sits on a `track` (lane): 0 is primary, 1..7 are activities running in parallel with it.
 - **Categories** (`calendar_categories`) — palette-restricted (8 fixed hexes in `colors.ts`), with a built-in "Sleep" system row.
 
 Invariants worth knowing before changing this code:
-- **At most one running actual.** Enforced by partial UNIQUE index `idx_calendar_actuals_running ON calendar_actuals(end_at) WHERE end_at IS NULL`. App code does an optimistic check, then catches `SQLITE_CONSTRAINT_UNIQUE` to surface `concurrent-start` / `would-overlap-running` errors.
-- **`startActual` is atomic** — stop-prior + insert-new in a single `db.batch`.
+- **At most one running actual _per track_.** Enforced by partial UNIQUE index `idx_calendar_actuals_running_track ON calendar_actuals(track) WHERE end_at IS NULL`. App code does an optimistic check, then catches `SQLITE_CONSTRAINT_UNIQUE` to surface `concurrent-start` / `would-overlap-running` errors. Overlapping rows on *different* tracks are legal and expected — that is what parallel tracks are for — so any overlap check must be scoped to one lane (see `updateActual`).
+- **`startActual` is atomic and lane-local** — stop-prior-on-this-track + insert-new in a single `db.batch`. It never touches other lanes; use `stopAllActuals` to end everything. An omitted `track` means lane 0, never "all lanes".
+- **`getRunningActual` is a lossy view** now that lanes exist — it returns the lowest occupied lane for callers that can only render one timer. Use `getRunningActuals` anywhere that can show more than one, and `GET /api/calendar/actuals/running?all=1` for the array shape (the default response stays a bare `CalendarActual` for pre-parallel clients).
 - **No FK enforcement at DB level** (libsql doesn't enable `PRAGMA foreign_keys`). `SET NULL` semantics are simulated in app code. Always validate `categoryId` / `planId` via `categoryExists` / `planExists` before insert/update.
 - **Cross-midnight actuals** are anchored to their start date but clamped per visible day with `clampActualToDay`. Day queries fetch yesterday too so a block that crosses midnight still renders.
 - **Heatmap match rule is asymmetric**: parent plan matches actuals by `category_id` only; each alternative matches by `(category_id, lowercased trimmed title)`. Fulfilled sub-intervals are unioned to avoid double-counting overlapping candidates.

@@ -3,6 +3,7 @@ import { requireAdminWithMutationRate } from "@/lib/auth";
 import { startActual } from "@/lib/calendar";
 import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
 import { MAX_TITLE_LEN, isStringWithin } from "@/lib/calendar-validate";
+import { MAX_TRACK, PRIMARY_TRACK, isValidTrack } from "@/lib/calendar-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +31,21 @@ export async function POST(req: NextRequest) {
   const title =
     body.title === null ? null : isStringWithin(body.title, MAX_TITLE_LEN) ? body.title : undefined;
 
+  // Omitted track means the primary lane, preserving the single-timer
+  // behaviour for clients that predate parallel tracks. An out-of-range track
+  // is rejected outright rather than clamped, so a client bug surfaces instead
+  // of quietly filing time under the wrong lane.
+  if (body.track !== undefined && !isValidTrack(body.track)) {
+    return NextResponse.json(
+      { error: `track must be an integer between ${PRIMARY_TRACK} and ${MAX_TRACK}` },
+      { status: 400 },
+    );
+  }
+  const track = body.track === undefined ? PRIMARY_TRACK : (body.track as number);
+
   const config = await getSiteConfig();
   const tz = resolveTimezone(config);
-  const result = await startActual({ planId, categoryId, title, timezone: tz });
+  const result = await startActual({ planId, categoryId, title, timezone: tz, track });
   if (!result.ok) {
     if (result.reason === "concurrent-start") {
       return NextResponse.json({ error: result.reason }, { status: 409 });

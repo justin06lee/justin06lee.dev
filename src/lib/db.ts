@@ -111,6 +111,7 @@ async function doInit(): Promise<void> {
       title TEXT,
       start_at INTEGER NOT NULL,
       end_at INTEGER,
+      track INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
@@ -118,11 +119,10 @@ async function doInit(): Promise<void> {
       FOREIGN KEY (category_id) REFERENCES calendar_categories(id) ON DELETE SET NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_calendar_actuals_date ON calendar_actuals(date)`,
-    // Partial UNIQUE index enforces the single-active invariant at the DB
-    // level: at most one row may have end_at IS NULL at a time. App-level
-    // auto-stop in startActual still does the right thing on the happy path;
-    // this index ensures concurrent starts can't slip a duplicate through.
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_actuals_running ON calendar_actuals(end_at) WHERE end_at IS NULL`,
+    // NOTE: the partial UNIQUE index guarding the running-row invariant is
+    // created below, after ensureColumn guarantees `track` exists. It cannot
+    // live in this batch because older installations reach here without the
+    // column the index is built on.
     `CREATE TABLE IF NOT EXISTS prayer_times_cache (
       cache_key TEXT PRIMARY KEY,
       year INTEGER NOT NULL,
@@ -142,6 +142,28 @@ async function doInit(): Promise<void> {
   await ensureColumn("calendar_tasks", "is_uncertain", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn("calendar_tasks", "fallbacks", "TEXT");
   await ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
+
+  // Parallel tracks. `track` lanes concurrent activity — working out while a
+  // build runs, studying while socialising — so two things happening at once
+  // are two rows, not a lie about one of them. Pre-existing rows default to
+  // lane 0, which is exactly where the old single-timer behaviour lived, so
+  // this is a pure widening: nothing that worked before changes meaning.
+  await ensureColumn("calendar_actuals", "track", "INTEGER NOT NULL DEFAULT 0");
+
+  // The running-row invariant is now per-lane: at most one open row PER track
+  // rather than one globally. The old global index has to be dropped first —
+  // it forbids exactly the second concurrent lane the new one exists to
+  // allow. Both statements are idempotent, and both must run after the
+  // ensureColumn above so the indexed column is guaranteed to exist.
+  await db.execute({
+    sql: `DROP INDEX IF EXISTS idx_calendar_actuals_running`,
+    args: [],
+  });
+  await db.execute({
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_actuals_running_track
+          ON calendar_actuals(track) WHERE end_at IS NULL`,
+    args: [],
+  });
 
   // One-time cleanup of pre-2026-05 fallback rows. The old shape was
   // `[{"type":"category"|"title", ...}]`; the new shape has no `"type"` key.
@@ -241,6 +263,8 @@ export type DbCalendarActual = {
   title: string | null;
   start_at: number;
   end_at: number | null;
+  /** Concurrency lane. 0 is the primary lane; >0 are parallel activities. */
+  track: number;
   notes: string | null;
   created_at: number;
   updated_at: number;
