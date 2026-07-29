@@ -25,8 +25,16 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const runningActual = actuals.find((a) => a.endAt === null) ?? null;
-  const isSleeping = runningActual?.categoryId === SLEEP_CATEGORY_ID;
+  // Lanes mean several actuals can be open at once. The lowest lane is the
+  // primary one this sheet's summary and stop button act on; sleep is matched
+  // across every lane so it's still detected when it isn't the primary.
+  const runningActuals = actuals
+    .filter((a) => a.endAt === null)
+    .sort((a, b) => a.track - b.track);
+  const runningActual = runningActuals[0] ?? null;
+  const sleepingActual =
+    runningActuals.find((a) => a.categoryId === SLEEP_CATEGORY_ID) ?? null;
+  const isSleeping = sleepingActual !== null;
 
   // Only timed plans for the day; dedupe by category+title to keep the list clean.
   const timed = tasks.filter((t) => t.date === date && t.startTime);
@@ -71,7 +79,14 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
   async function stop() {
     setBusy(true);
     try {
-      const r = await fetch("/api/calendar/actuals/stop", { method: "POST", credentials: "include" });
+      // Stop by id so this closes the entry the sheet is actually showing,
+      // rather than whichever lane the server would pick as primary.
+      const r = await fetch("/api/calendar/actuals/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(runningActual ? { id: runningActual.id } : {}),
+      });
       if (!r.ok) {
         await reportFailure("Failed to stop", r);
         return;
@@ -85,8 +100,14 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
   async function toggleSleep() {
     setBusy(true);
     try {
+      // Sleep may not be the primary lane, so wake the sleep row by id.
       const r = isSleeping
-        ? await fetch("/api/calendar/actuals/stop", { method: "POST", credentials: "include" })
+        ? await fetch("/api/calendar/actuals/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(sleepingActual ? { id: sleepingActual.id } : {}),
+          })
         : await fetch("/api/calendar/actuals/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

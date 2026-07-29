@@ -303,6 +303,12 @@ export type CalendarActual = {
   title: string | null;
   startAt: number;
   endAt: number | null;
+  /**
+   * Concurrency lane. 0 is the primary lane; higher lanes are activities
+   * running in parallel with it. Overlapping rows on DIFFERENT tracks are
+   * legal and expected; overlapping rows on the SAME track are not.
+   */
+  track: number;
   notes: string | null;
 };
 
@@ -331,6 +337,10 @@ function rowToActual(row: DbCalendarActualJoined): CalendarActual {
     title: row.title,
     startAt: row.start_at,
     endAt: row.end_at,
+    // Coalesced because rows written before the track migration predate the
+    // column entirely; libsql hands them back as null rather than the
+    // declared default.
+    track: Number(row.track ?? 0),
     notes: row.notes,
   };
 }
@@ -357,20 +367,63 @@ export async function getActualsInRange(from: string, to: string): Promise<Calen
   return (result.rows as unknown as DbCalendarActualJoined[]).map(rowToActual);
 }
 
+/**
+ * The single "primary" running actual, for callers that can only render one:
+ * the lowest occupied lane, so a solo timer on lane 3 still surfaces.
+ *
+ * Since parallel tracks landed this is a lossy view — use
+ * {@link getRunningActuals} anywhere that can show more than one. Kept with
+ * its original signature so existing single-timer callers keep working.
+ */
 export async function getRunningActual(): Promise<CalendarActual | null> {
   await initDb();
-  // ORDER BY is defensive: the partial UNIQUE index on `end_at IS NULL`
-  // already guarantees at most one row matches, but if that index is ever
-  // dropped we still want deterministic results.
+  // Lowest track wins, then newest, so the answer is stable when several
+  // lanes run at once.
   const result = await db.execute({
     sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
           FROM calendar_actuals a
           LEFT JOIN calendar_categories c ON c.id = a.category_id
           LEFT JOIN calendar_tasks p ON p.id = a.plan_id
           WHERE a.end_at IS NULL
-          ORDER BY a.start_at DESC
+          ORDER BY a.track ASC, a.start_at DESC
           LIMIT 1`,
     args: [],
+  });
+  const row = result.rows[0] as unknown as DbCalendarActualJoined | undefined;
+  return row ? rowToActual(row) : null;
+}
+
+/**
+ * Every currently-running actual, one per occupied lane, ordered by track.
+ * The partial UNIQUE index guarantees no two rows share a track here.
+ */
+export async function getRunningActuals(): Promise<CalendarActual[]> {
+  await initDb();
+  const result = await db.execute({
+    sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+          FROM calendar_actuals a
+          LEFT JOIN calendar_categories c ON c.id = a.category_id
+          LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+          WHERE a.end_at IS NULL
+          ORDER BY a.track ASC`,
+    args: [],
+  });
+  return (result.rows as unknown as DbCalendarActualJoined[]).map(rowToActual);
+}
+
+/** The running actual occupying a specific lane, if any. */
+export async function getRunningActualOnTrack(
+  track: number,
+): Promise<CalendarActual | null> {
+  await initDb();
+  const result = await db.execute({
+    sql: `SELECT a.*, c.id AS cat_id, c.name AS cat_name, c.color AS cat_color, p.title AS plan_title
+          FROM calendar_actuals a
+          LEFT JOIN calendar_categories c ON c.id = a.category_id
+          LEFT JOIN calendar_tasks p ON p.id = a.plan_id
+          WHERE a.end_at IS NULL AND a.track = ?
+          LIMIT 1`,
+    args: [track],
   });
   const row = result.rows[0] as unknown as DbCalendarActualJoined | undefined;
   return row ? rowToActual(row) : null;
@@ -396,14 +449,22 @@ export type StartActualInput = {
   title?: string | null;
   timezone: string; // for computing the actuals row's `date` field
   nowMs?: number; // overrideable for tests; defaults to Date.now()
+  /**
+   * Lane to start on. Defaults to 0 (the primary lane), which reproduces the
+   * pre-parallel behaviour exactly. Starting on a lane only ever displaces
+   * what was already running on THAT lane — other lanes keep running.
+   */
+  track?: number;
 };
 
 export type StartActualResult =
   | { ok: true; started: CalendarActual; autoStopped: CalendarActual | null }
   | { ok: false; reason: "concurrent-start" | "invalid-category" | "invalid-plan" };
 
-/** Detect a violation of the partial UNIQUE index on `end_at IS NULL`.
- *  libsql surfaces the SQLITE_CONSTRAINT_UNIQUE code on its error objects. */
+/** Detect a violation of the partial UNIQUE index guarding one running row
+ *  per track. libsql surfaces the SQLITE_CONSTRAINT_UNIQUE code on its error
+ *  objects. The name check still matches the pre-parallel index name as a
+ *  prefix, so it covers databases migrated in either direction. */
 function isRunningUniqueViolation(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const err = e as { code?: string; message?: string };
@@ -441,10 +502,13 @@ export async function startActual(input: StartActualInput): Promise<StartActualR
     }
   }
 
-  // Snapshot the running row, then atomically stop+insert in one transaction.
-  // The partial UNIQUE index on `end_at IS NULL` catches concurrent starts
-  // that race past the snapshot — surfaced as `concurrent-start`.
-  const running = await getRunningActual();
+  // Snapshot the row running ON THIS LANE, then atomically stop+insert in one
+  // transaction. Other lanes are deliberately untouched — that is the whole
+  // point of tracks. The partial UNIQUE index on (track) WHERE end_at IS NULL
+  // catches concurrent starts on the same lane that race past the snapshot,
+  // surfaced as `concurrent-start`.
+  const track = input.track ?? 0;
+  const running = await getRunningActualOnTrack(track);
   const id = randomUUID();
   const date = epochToDateInTz(now, input.timezone);
 
@@ -457,9 +521,9 @@ export async function startActual(input: StartActualInput): Promise<StartActualR
   }
   ops.push({
     sql: `INSERT INTO calendar_actuals
-          (id, date, plan_id, category_id, title, start_at, end_at, notes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
-    args: [id, date, input.planId ?? null, categoryId, title, now, now, now],
+          (id, date, plan_id, category_id, title, start_at, end_at, track, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+    args: [id, date, input.planId ?? null, categoryId, title, now, track, now, now],
   });
 
   try {
@@ -481,20 +545,65 @@ export type StopActualResult = {
   stopped: CalendarActual | null; // null if nothing was running (idempotent)
 };
 
-export async function stopActual(nowMs: number = Date.now()): Promise<StopActualResult> {
+/**
+ * Stops one running actual. With `track`, stops that lane; without, stops the
+ * primary lane as {@link getRunningActual} defines it, preserving the original
+ * single-timer call signature.
+ *
+ * To stop everything at once use {@link stopAllActuals} — an omitted track
+ * deliberately does NOT mean "all", so a caller that forgets the argument
+ * can't silently wipe out the user's other lanes.
+ */
+export async function stopActual(
+  nowMs: number = Date.now(),
+  track?: number,
+): Promise<StopActualResult> {
   await initDb();
-  const running = await getRunningActual();
+  const running =
+    track === undefined
+      ? await getRunningActual()
+      : await getRunningActualOnTrack(track);
   if (!running) return { stopped: null };
+  return stopActualById(running.id, nowMs);
+}
+
+/**
+ * Stops a specific actual by id. This is the lane-safe entry point for UIs
+ * that address running rows directly rather than by lane number.
+ */
+export async function stopActualById(
+  id: string,
+  nowMs: number = Date.now(),
+): Promise<StopActualResult> {
+  await initDb();
   // `WHERE end_at IS NULL` makes this a no-op if a concurrent stop already
   // closed the row; rowsAffected===0 means we lost the race and the row was
   // already stopped by someone else. Either way we return the current state.
   const result = await db.execute({
     sql: `UPDATE calendar_actuals SET end_at=?, updated_at=? WHERE id=? AND end_at IS NULL`,
-    args: [nowMs, nowMs, running.id],
+    args: [nowMs, nowMs, id],
   });
   if ((result.rowsAffected ?? 0) === 0) return { stopped: null };
-  const stopped = await getActualById(running.id);
+  const stopped = await getActualById(id);
   return { stopped };
+}
+
+/**
+ * Stops every running lane at once — the "I'm done for now" action, and the
+ * correct way to end a parallel session without leaving orphan lanes ticking.
+ */
+export async function stopAllActuals(
+  nowMs: number = Date.now(),
+): Promise<{ stopped: CalendarActual[] }> {
+  await initDb();
+  const running = await getRunningActuals();
+  if (running.length === 0) return { stopped: [] };
+  await db.execute({
+    sql: `UPDATE calendar_actuals SET end_at=?, updated_at=? WHERE end_at IS NULL`,
+    args: [nowMs, nowMs],
+  });
+  const stopped = await Promise.all(running.map((r) => getActualById(r.id)));
+  return { stopped: stopped.filter((a): a is CalendarActual => a !== null) };
 }
 
 export type ActualPatch = Partial<{
@@ -529,19 +638,19 @@ export async function updateActual(id: string, patch: ActualPatch): Promise<Upda
     return { ok: false, reason: "start-after-end" };
   }
 
-  // Single-active invariant: if this row is becoming/staying running (endAt=null),
-  // there must be no OTHER running row.
+  // Single-active invariant, scoped to this row's own lane. Overlapping a
+  // running row on a DIFFERENT track is the entire point of parallel tracks
+  // (coding while a workout is timed), so only same-lane collisions are
+  // rejected here.
+  const running = await getRunningActualOnTrack(existing.track);
   if (merged.endAt === null) {
-    const running = await getRunningActual();
+    // Becoming/staying running: no OTHER row may hold this lane.
     if (running && running.id !== id) {
       return { ok: false, reason: "would-overlap-running" };
     }
-  } else {
-    // If this row is now stopped, ensure it doesn't span the running row's start.
-    const running = await getRunningActual();
-    if (running && running.id !== id && merged.endAt > running.startAt) {
-      return { ok: false, reason: "would-overlap-running" };
-    }
+  } else if (running && running.id !== id && merged.endAt > running.startAt) {
+    // Now stopped: must not span the start of this lane's running row.
+    return { ok: false, reason: "would-overlap-running" };
   }
 
   // Catch the partial UNIQUE violation as a fallback for the TOCTOU window
@@ -582,6 +691,8 @@ export type CreateActualInput = {
   planId?: string | null;
   notes?: string | null;
   timezone: string;
+  /** Lane to file this entry under. Defaults to 0 (the primary lane). */
+  track?: number;
 };
 
 export type CreateActualResult =
@@ -606,8 +717,8 @@ export async function createActual(input: CreateActualInput): Promise<CreateActu
   const date = epochToDateInTz(input.startAt, input.timezone);
   await db.execute({
     sql: `INSERT INTO calendar_actuals
-          (id, date, plan_id, category_id, title, start_at, end_at, notes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, date, plan_id, category_id, title, start_at, end_at, track, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       date,
@@ -616,6 +727,7 @@ export async function createActual(input: CreateActualInput): Promise<CreateActu
       input.title ?? null,
       input.startAt,
       input.endAt,
+      input.track ?? 0,
       input.notes ?? null,
       now,
       now,
