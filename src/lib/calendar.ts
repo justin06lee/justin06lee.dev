@@ -797,10 +797,17 @@ export async function getOverlapHeatmapForRange(
 
   const FULL_DAY: [number, number][] = [[0, 1440]];
   // Heatmap fills relative to the day's own plan, not an absolute clock: a fully
-  // followed light day should light up as much as a fully followed heavy one.
-  // Denominator = min(8h, total planned minutes); 8h caps the "full" threshold so
-  // marathon plans don't require an unreachable amount of follow-through.
+  // followed light day should still register more than an ignored heavy one.
+  // Denominator = plannedMinutes clamped to [MIN_TARGET, FULL_TARGET]:
+  //   - FULL_TARGET (8h) caps the "full" threshold so marathon plans don't
+  //     require an unreachable amount of follow-through.
+  //   - MIN_TARGET (4h) floors it so a trivially small plan (say 30 min) that's
+  //     fully followed can't paint the whole day at max intensity. Without the
+  //     floor the map saturates — most days hit 1.0 and everything reads white.
+  //     With it, a cell only approaches white after a meaningful chunk of the
+  //     day was actually spent on-plan.
   const FULL_TARGET_MIN = 8 * 60;
+  const MIN_TARGET_MIN = 4 * 60;
   const out: Record<string, number> = {};
   for (const [date, plans] of plansByDate) {
     const dayActuals = actualsByDate.get(date);
@@ -846,7 +853,7 @@ export async function getOverlapHeatmapForRange(
       total += intervalIntersectionMinutes(fulfilled, FULL_DAY);
     }
     if (total > 0 && plannedMinutes > 0) {
-      const denom = Math.min(FULL_TARGET_MIN, plannedMinutes);
+      const denom = Math.min(FULL_TARGET_MIN, Math.max(MIN_TARGET_MIN, plannedMinutes));
       out[date] = Math.min(1, total / denom);
     }
   }

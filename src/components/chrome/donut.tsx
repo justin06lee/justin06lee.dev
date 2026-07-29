@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { DonutConfig } from "./donut-frames";
-import { acquireBake, releaseBake, frameString } from "./donut-cache";
+import { acquireBake, releaseBake } from "./donut-cache";
 
 export interface DonutProps {
   width?: number;
@@ -133,9 +133,21 @@ export function Donut({
         rafId = requestAnimationFrame(frame);
         return;
       }
+
+      // Play ONLY precomputed frames. Never compute a frame live on the main
+      // thread during playback — that's what makes the spin stutter while the
+      // bake is still landing (or if the worker fails to load). If the next
+      // frame isn't baked yet, hold on the current one until it arrives. Once
+      // baked, steady-state is a pure array read (`frames[fi]`) with zero math,
+      // so the browser just flips through the strings as fast as vsync allows.
+      const s = handle.frames[fi];
+      if (s === undefined) {
+        rafId = requestAnimationFrame(frame);
+        return;
+      }
       lastFrameTime = now;
 
-      if (!terminated && pre) pre.textContent = frameString(handle, fi);
+      if (!terminated && pre) pre.textContent = s;
       fi = (fi + 1) % N;
 
       rafId = requestAnimationFrame(frame);
