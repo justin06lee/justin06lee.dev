@@ -64,6 +64,13 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                     <NavPfp pfp={fetchedPfp} />
                 </span>
             )}
+            {/* Cat lives in `brand`, not `leftLinks`, so it stays inline at every
+                width — chrome's navbar only shows leftLinks on desktop and folds
+                them into the mobile hamburger. Here it sits next to the pfp on
+                mobile and next to the name on desktop, and never hides in the menu. */}
+            <Link href="/cat" aria-label="cat" className="inline-flex items-center">
+                <RainbowCat />
+            </Link>
         </>
     );
 
@@ -72,7 +79,6 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
             brand={brand}
             leftLinks={[
                 { label: "intro", onClick: playIntro, id: "intro" },
-                { label: <RainbowCat />, href: "/cat", id: "cat" },
             ]}
             links={[
                 { label: "calendar", href: "/calendar" },
