@@ -1,6 +1,8 @@
 # content & data display
 
-components for rendering content and data: markdown pipelines (prose, collapsible-prose, article, code-block), browsable collections (gallery, article-list, file-card), date and activity views (calendar, calendar-nav, heatmap, timeline), plus an image cropper, a credential form, and a demo frame (showcase). all are dark-only client components that install at your configured components alias and share the registry's brutalist conventions: square corners, thin `white/10`–`white/20` borders, mono accents, lowercase copy. every component takes `className` on its root even where meta.ts omits it.
+components for rendering content and data: markdown pipelines (prose, collapsible-prose, article, code-block), browsable collections (gallery, article-list, file-card), documents (docket), quantitative display (stat-tile, sparkline, bar-list, streak, detail-list), plus an image cropper, a credential form, and a demo frame (showcase). all share the registry's brutalist conventions: square corners, thin `white/10`–`white/20` borders, mono accents, lowercase copy. every component takes `className` on its root even where meta.ts omits it.
+
+the quantitative set divides by what it can show, and picking wrong is the usual mistake: `stat-tile` is one headline figure (with a delta and a slot a `sparkline` drops into), `sparkline` is one series over time, `bar-list` ranks a handful of labeled quantities, `streak` is an unbroken run plus its recent history, and `detail-list` is unrelated label/value facts about one thing. for a year of density go to `heatmap`, and for a day of scheduled blocks `timeline` — both in `references/time-scheduling.md`.
 
 ## article
 
@@ -58,66 +60,50 @@ vs `gallery`: article-list is for dated content previews — single tag filter, 
 />
 ```
 
-## calendar
+## bar-list
 
-**Role:** interactive single-month date grid with selectable days and a today ring.
-**Install:** `bunx @justin06lee/chrome@latest add calendar`
-**Composes:** npm: `lucide-react` (header chevrons); nothing beyond utils from the registry
+**Role:** ranked horizontal bar list — the bar is the row's own background.
+**Install:** `bunx @justin06lee/chrome@latest add bar-list`
+**Composes:** nothing beyond utils
 
-renders a prev/next header (month name + year in mono uppercase, lucide chevron arrows) over a sunday-aligned 7-column grid of day buttons. `showHeader={false}` drops the built-in header — use it when an external nav (calendar-nav) already pages the month, so the two don't double up. all dates are plain strings — the month is `"YYYY-MM"`, days are `"YYYY-MM-DD"` — and the grid is built with `Date.UTC`, so there is no timezone drift and no Date objects cross the prop boundary. fully controlled: `month`/`onMonthChange` drive paging (the arrows are disabled when `onMonthChange` is absent), `selected`/`onSelect` drive selection. the selected day inverts to white-on-black; `today` gets an inset ring.
+rows of `{ id?, label, value, color?, href? }` where each row's proportional bar
+**is the row's background**, not a separate track beside it — so a long list
+reads as a block of text with weight behind it rather than a chart with rows
+bolted on. label sits left, value right-aligned.
 
-`renderDay` lets you layer extra content under each day number — task dots, counts — without forking the component; it's called with the cell's date string inside the day button. `renderCell` goes further: it replaces the whole cell (day number included) with your own layout, for agenda-style month grids showing per-day events. it receives a `CalendarDay` — `{ date, day, isToday, isSelected }` — and drops the compact `size-9` picker styling: cells stay `<button>`s when `onSelect` is set, otherwise they render as plain `<div>`s so hosts can embed their own links. in full-cell mode today keeps its ring and selection tints (`bg-white/10`) instead of inverting so rich content stays readable. pair it with `cellClassName` — a string or a per-day `(day: CalendarDay) => string` function, applied in both modes — for sizing (`"min-h-28 p-2"`) or a per-day heatmap tint.
+`items` render in the order given: **sort before passing.** `limit` keeps the
+first N, not the largest N — so an unsorted list with a limit silently shows an
+arbitrary subset. `max` sets the bar scale ceiling, defaulting to the largest
+value present; pass it explicitly when several bar-lists on a page should share
+one scale, or the eye compares bars that aren't comparable.
 
-vs siblings: `calendar` is the interactive month picker (and, with renderCell, the agenda month grid); `heatmap` is the read-mostly full-year density view; `calendar-nav` is only the header controls (view switcher + prev/today/next) meant to sit above any of these views — pair it with calendar's `showHeader={false}`.
+per-item `color` is rendered at low opacity so the label stays legible — the bar
+is a background, not a swatch. rows with `href` render through `linkComponent`;
+`onItemClick` makes the rest buttons and is ignored on rows that carry an href.
+`showValue={false}` hides the value column visually but keeps it available to
+screen readers. an all-zero list renders empty bars rather than NaN widths.
 
-**Key props:**
-- `month: string` (required) — "YYYY-MM" displayed month.
-- `onMonthChange: (month: string) => void` — enables prev/next.
-- `selected: string | null` — "YYYY-MM-DD".
-- `onSelect: (date: string) => void`
-- `today: string` — "YYYY-MM-DD" to ring.
-- `showHeader: boolean = true` — set false when an external nav (e.g. calendar-nav) already pages the month.
-- `renderDay: (date: string) => ReactNode` — extra cell content.
-- `renderCell: (day: CalendarDay) => ReactNode` — replace the whole cell (day number included). day = { date, day, isToday, isSelected }.
-- `cellClassName: string | ((day: CalendarDay) => string)` — per-cell classes — heatmap tint, min-height. works in both modes.
-
-**Example:**
-```tsx
-const [month, setMonth] = useState("2026-05");
-const [selected, setSelected] = useState<string | null>(null);
-<Calendar month={month} onMonthChange={setMonth} selected={selected} onSelect={setSelected} today="2026-05-24" />
-```
-
-## calendar-nav
-
-**Role:** period-navigation header — view switcher plus prev / today / next controls.
-**Install:** `bunx @justin06lee/chrome@latest add calendar-nav`
-**Composes:** npm: `lucide-react`; registry: `segmented`, `button`
-
-a header bar with a `segmented` day/month/year switcher on the left and chevron prev/next buttons flanking the period label and a "today" jump link on the right, above a bottom border. it renders no calendar itself — it is fully controlled and router-free: you own the current date, compute the `label` (e.g. "June 2026"), and step it in `onPrev`/`onNext` by the active view's unit. the switcher hides when `views` has fewer than 2 entries.
-
-pair it with `calendar` (month view), `heatmap` (year view), or `timeline` (day view) and swap the body when `onViewChange` fires. because both `label` and `todayLabel` are ReactNode, you can put richer content than a string in either.
+vs siblings: `bar-list` ranks a handful of labeled quantities; `sparkline` shows
+one series over time; `stat-tile` is a single headline figure; `heatmap` is
+density across a year.
 
 **Key props:**
-- `label: ReactNode` (required) — the current period label, e.g. "June 2026".
-- `view: 'day' | 'month' | 'year'` — controlled active view.
-- `views: CalendarView[] = ['day', 'month', 'year']` — switcher hidden when fewer than 2.
-- `onViewChange: (view: CalendarView) => void`
-- `onPrev: () => void`
-- `onNext: () => void`
-- `onToday: () => void`
-- `todayLabel: ReactNode = 'today'`
+- `items: BarListItem[]` — required — rows in render order. BarListItem is { id?, label, value, color?, href? }. sort before passing — limit keeps the first N, not the largest N.
+- `max: number` — bar scale ceiling; defaults to the largest value present.
+- `formatValue: (value: number) => string = String` — value formatter for the right column.
+- `showValue: boolean = true` — show the value column; when false it stays available to screen readers.
+- `limit: number` — render at most this many rows.
+- `onItemClick: (item: BarListItem) => void` — makes rows buttons; ignored on rows that carry an href.
+- `linkComponent: React.ElementType = 'a'` — anchor element/component for rows with an href — pass your router's Link.
 - `className: string`
 
 **Example:**
 ```tsx
-<CalendarNav
-  label="June 2026"
-  view={view}
-  onViewChange={setView}
-  onPrev={() => step(-1)}
-  onNext={() => step(1)}
-  onToday={() => setDate(TODAY)}
+<BarList
+  items={[...pages].sort((a, b) => b.views - a.views)}
+  limit={8}
+  formatValue={(n) => n.toLocaleString()}
+  linkComponent={Link}
 />
 ```
 
@@ -166,6 +152,86 @@ vs `prose`: use collapsible-prose for long-form documents where sections should 
 <CollapsibleProse renderMarkdown={(md) => <Prose>{md}</Prose>}>
   {markdown}
 </CollapsibleProse>
+```
+
+## detail-list
+
+**Role:** label/value metadata as a real `<dl>`, in row, grid or stacked layouts.
+**Install:** `bunx @justin06lee/chrome@latest add detail-list`
+**Composes:** nothing beyond utils
+
+`items` of `{ label, value, icon?, note?, wide? }` in one of three layouts:
+`rows` (label left, value right, one line each, hairline-divided), `grid` (a
+two-column card of label-over-value cells — `wide: true` spans both), or
+`stacked` (a single column of those cells). server-renderable, no client state.
+
+it exists for the confirmation-page case the library had no answer for: a
+handful of *unrelated* facts about one thing. `stat-tile` covers one big number
+and `manager-table` covers many rows of the same shape, so every call site was
+hand-building a div grid — which reads to a screen reader as an undifferentiated
+pile rather than as term/definition pairs. this renders a real `<dl>`, with
+`<dt>`/`<dd>` kept as direct children so the pairing survives (the row styling
+lives on the pair, not on a wrapper div).
+
+`divided` only means anything in the `rows` layout. `dense` tightens padding.
+reach for `docket` when the thing itself is the record (numbered, stamped,
+tearable) rather than metadata inside something else.
+
+**Key props:**
+- `items: DetailItem[]` — required — { label, value, icon?, note?, wide? }. wide spans both columns in the grid layout.
+- `layout: 'rows' | 'grid' | 'stacked' = 'rows'` — 'rows' is label left / value right on one line; 'grid' is a two-column card of label-over-value cells; 'stacked' is a single column of them.
+- `divided: boolean = true` — hairlines between rows; only meaningful for 'rows'.
+- `dense: boolean = false` — tightens the row padding.
+- `className: string`
+
+**Example:**
+```tsx
+<DetailList
+  layout="grid"
+  items={[
+    { label: "when", value: "wed 12 aug, 4:00pm" },
+    { label: "duration", value: "30 min" },
+    { label: "location", value: "meet.example.com/abc", wide: true },
+  ]}
+/>
+```
+
+## docket
+
+**Role:** work order / docket — a numbered document with label-value rows and an optional tear-off stub.
+**Install:** `bunx @justin06lee/chrome@latest add docket`
+**Composes:** nothing beyond utils
+
+`detail-list` renders the same label-value pairs, and docket uses that shape for its `rows` — but a docket is the *document* around them: it carries a reference in a mono header, it has a slot for a mark, and it tears. reach for detail-list when you want metadata inside something else, and for a docket when the thing itself is the record. rows render as a real `<dl>`.
+
+the `mark` slot sits at the top right of the body and is designed for a `stamp` — `received`, `filed`, `void`. the title gets right padding automatically when a mark is present so the two never collide.
+
+`stub` adds a perforated tear line and a section below it; omit it and no tear edge is drawn. the perforation is a hard-stop repeating gradient rather than a dashed border, so the dash length is explicit and reads the same at any width. the notches at each end are **opaque circles in the page colour**, not a mask: masking the card to cut real holes also masks the border, and a docket without its outline stops reading as a document. that means `notchColor` has to match whatever the docket sits on — it defaults to `#000`, which is right on the standard black background and wrong on a raised surface.
+
+**Key props:**
+- `reference: ReactNode — printed in the header, e.g. 'OJ-0042'. set in mono.`
+- `kind: ReactNode — small caps line opposite the reference.`
+- `mark: ReactNode — top-right slot in the body; a Stamp is the intended occupant.`
+- `title: ReactNode`
+- `rows: DocketRow[] — { label, value }[] rendered as a <dl>.`
+- `children: ReactNode — body content under the rows.`
+- `stub: ReactNode — content below the perforation.`
+- `notchColor: string = '#000000' — must match the surface behind the docket.`
+- `className: string`
+
+**Example:**
+```tsx
+<Docket
+  kind="work order"
+  reference="OJ-0042"
+  title="rebuild the intake form"
+  mark={<Stamp size="sm">received</Stamp>}
+  rows={[
+    { label: "job type", value: "build" },
+    { label: "budget", value: "1k – 5k" },
+  ]}
+  stub={<CopyButton text="OJ-0042" />}
+/>
 ```
 
 ## file-card
@@ -229,41 +295,6 @@ vs `article-list`: gallery is for portfolio/project items (year-sorted, multi-ta
   title="Things I've built"
   items={[{ id: "chrome-ui", title: "chrome-ui registry", description: "…", year: 2026, tech: ["Next.js"], pinned: true }]}
   initialSort="newest"
-/>
-```
-
-## heatmap
-
-**Role:** year activity grid — 12 mini month calendars tinted by value, contribution-graph style.
-**Install:** `bunx @justin06lee/chrome@latest add heatmap`
-**Composes:** nothing beyond utils
-
-lays out 12 sunday-aligned mini month grids (2/3/4 columns responsive), each square day cell tinted white with an alpha derived from its value: values bucket into `levels` steps against a `max` ceiling (defaulting to the largest value present), then map to alpha — level 0 is a faint 0.04, levels 1..n span 0.15 to 0.85. a less-to-more legend renders below. `today` gets a white ring; other cells ring on hover.
-
-`values` is a flat `Record<"YYYY-MM-DD", number>` — days absent from the record count as 0, so you can pass sparse data. cells are `<div>`s by default; passing `onSelectDay` upgrades every cell to a `<button>` with an aria-label. tooltips default to `"date — value"` and are overridable via `title`. everything is UTC-computed strings, matching `calendar`'s conventions, so the two can share the same keyed data.
-
-`monthHref` makes each month label a link: it's called with a `HeatmapMonth` — `{ index (0-based, 0 = jan), year, label }` — and the returned href renders through `linkComponent` (pass your router's Link for client-side navigation; defaults to a plain `"a"`). months whose callback you skip (or when the prop is absent) stay plain `<span>`s.
-
-use heatmap for the at-a-glance year view; drill into a `calendar` month (with `renderDay` dots, or via `monthHref` links to per-month pages) or a `timeline` day when the user selects a cell, with `calendar-nav` switching between them.
-
-**Key props:**
-- `values: Record<string, number>` (required) — value per "YYYY-MM-DD".
-- `year: number` (required)
-- `levels: number = 5` — intensity steps incl. empty.
-- `max: number` — bucketing cap; defaults to max value.
-- `today: string` — "YYYY-MM-DD" to ring.
-- `onSelectDay: (date: string) => void` — makes cells clickable.
-- `title: (date: string, value: number) => string` — cell tooltip formatter.
-- `monthHref: (month: HeatmapMonth) => string` — when set, month labels link to the returned href. HeatmapMonth is { index (0 = jan), year, label }.
-- `linkComponent: React.ElementType = 'a'` — anchor element/component for month links — pass your router's Link.
-
-**Example:**
-```tsx
-<Heatmap
-  values={{ "2026-05-24": 75, "2026-05-25": 25 }}
-  year={2026}
-  today="2026-05-24"
-  monthHref={({ year, index }) => `/calendar/${year}-${String(index + 1).padStart(2, "0")}`}
 />
 ```
 
@@ -332,7 +363,9 @@ for multi-field logins pass `fields` (e.g. email + password); each entry sets na
 
 renders a markdown string (the single string child) through `react-markdown` with `remarkGfm` + `remarkMath` on the remark side and `rehypeKatex` + `rehypeSlug` on the rehype side, `skipHtml` enabled (raw HTML in the markdown is dropped, not rendered). every element gets the dark prose styling via a memoized component map: slugged headings with `scroll-margin-top: var(--sticky-header-offset, 80px)` for anchor links under a sticky header, bordered tables in an overflow wrapper, bordered inline code, lazy images. it imports `katex/dist/katex.min.css` directly. fenced code blocks are intercepted at the `pre` renderer — raw text and `language-*` class are pulled off the hast node and handed to `code-block` for prism highlighting; inline code is detected by the absence of a language class and single-line position.
 
-links split by kind: internal hrefs — anything without a protocol scheme and not protocol-relative, i.e. relative paths, `/…`, and `#…` anchors — render through `linkComponent` (pass next/link for client-side navigation; defaults to `"a"`), while external links always stay plain `<a>`s and http(s) ones open in a new tab with `rel="noopener noreferrer"`. images get a two-step resolution: relative srcs are prefixed with `imageBaseUrl` (e.g. a GitHub raw base; already-resolved `http(s):`, `data:`, and `/…` srcs are left alone), then `resolveImageSrc` maps the final src to what's actually rendered — e.g. swapping `foo-light.png` ↔ `foo-dark.png` theme variants.
+links split by kind: internal hrefs — anything without a protocol scheme and not protocol-relative, i.e. relative paths, `/…`, and `#…` anchors — render through `linkComponent` (pass next/link for client-side navigation; defaults to `"a"`), while external links always stay plain `<a>`s and http(s) ones open in a new tab with `rel="noopener noreferrer"`. images get a two-step resolution: relative srcs are prefixed with `imageBaseUrl` (e.g. a GitHub raw base; already-resolved `http(s):`, `data:`, and `/…` srcs are left alone), then `imageTheme` resolves `-light`/`-dark`-suffixed pairs, and finally `resolveImageSrc` maps the result to what's actually rendered.
+
+`imageTheme` is the built-in version of that last swap: an image whose src is named `<name>-light.<ext>` or `<name>-dark.<ext>` resolves to the requested theme's file, while unsuffixed srcs pass through untouched. **it defaults to `"light"`**, which is a deliberate choice for diagrams (dark-on-light artwork stays readable when a reader saves or prints a page) — a dark site that ships dark-variant diagrams must pass `imageTheme="dark"` explicitly. the exported `resolveThemeImageSrc(src, theme)` helper does the same swap outside the component.
 
 the line-sync feature is for split-pane editor/preview UIs: with `lineSync` on, a custom rehype plugin stamps each top-level block with `data-source-line` (its 1-based line in the markdown source) so a host can map editor lines to rendered blocks for scroll sync. `highlightLine` marks the last top-level block starting at or above that line with `data-sync-highlight`, and a scoped `<style>` (injected only when lineSync is on) paints it as a gray streak — text blocks bleed the fill horizontally, images get an outline instead. it's declarative, rendered into the markup, so a re-render can't strand the highlight. only top-level children are tagged, mapping each line to exactly one block. off by default with zero overhead.
 
@@ -344,6 +377,7 @@ vs siblings: prose is the renderer; `article` is the page layout that typically 
 - `lineSync: boolean = false` — stamp each top-level block with data-source-line for editor/preview scroll/highlight sync. zero overhead when off.
 - `highlightLine: number | null = null` — 1-based source line whose block is marked with data-sync-highlight. requires lineSync.
 - `linkComponent: React.ElementType = 'a'` — anchor component for internal links (relative, /…, #…) — pass your router's link. external links always render a plain `<a>`; http(s) opens in a new tab.
+- `imageTheme: "light" | "dark" = "light"` — which variant to render for images with a light/dark pair (files named `<name>-light.<ext>` / `<name>-dark.<ext>`). a -light/-dark-suffixed src resolves to this theme; unsuffixed srcs are untouched. a dark site passes "dark". the exported `resolveThemeImageSrc(src, theme)` helper does the swap.
 - `resolveImageSrc: (src: string) => string` — maps each image src to the src actually rendered (e.g. light/dark theme variants). runs after imageBaseUrl resolution.
 
 **Example:**
@@ -376,44 +410,132 @@ one prop exists in the component but not in meta.ts: `clip: boolean = true` appl
 </Showcase>
 ```
 
-## timeline
 
-**Role:** day schedule — a 24h vertical axis with positioned event blocks, markers, and a live now-line.
-**Install:** `bunx @justin06lee/chrome@latest add timeline`
+## sparkline
+
+**Role:** tiny inline svg trend line, sized to sit in a line of text.
+**Install:** `bunx @justin06lee/chrome@latest add sparkline`
 **Composes:** nothing beyond utils
 
-renders a min-height 960px bordered track with a faint hour grid (00:00 through 23:00 labels) and absolutely positioned event blocks. everything is placed by minutes since midnight on a 0–1440 axis: an event at `{ startMin: 480, endMin: 570 }` spans 8:00 to 9:30. blocks get a colored left border and a `color-mix` 15% tint of the same color (default white), a two-line-clamped label, and are clamped into the visible day so out-of-range events can't overflow the track. events are not collision-resolved — overlapping blocks overlap visually.
+pure svg — no chart library, no dependencies. `values` is the series, oldest
+first, drawn at 80x24 by default so it sits inline with text. `curve="smooth"`
+runs a catmull-rom spline **that still passes through every sample**: the
+standard uniform form, chosen because a sparkline that misses its own data
+points lies. optional `fill` (area under the line), `showDots` (a small square
+per point) or `highlightLast` (only the final point).
 
-blocks are display-only `<div>`s by default; `onEventClick` upgrades them to keyboard-accessible `<button>`s with a subtle hover/focus ring and an HH:MM-range aria-label. `tracks` switches to multi-track mode: N labeled columns side by side (`{ label?, events, onEventClick? }[]` — a per-track handler overrides the top-level one) sharing one hour axis, grid, markers, and now-line — plan vs actuals, people, rooms; `events` is ignored when `tracks` is set. `onEventChange` opts blocks into editing: drag to move, or drag the bottom edge to resize, snapped to `snapMinutes` (default 5); it fires once on drop with `(event, { startMin, endMin })` and you commit by updating your data — the component holds only the in-flight drag preview. editing is pointer-driven (no keyboard path), and a drag that moved suppresses the click that follows so it doesn't also fire onEventClick.
+a flat series renders on the **vertical midline** rather than collapsing to the
+floor, so "no change" still reads as a line. `min`/`max` override the scale —
+pass them when several sparklines should share one scale, or the reader compares
+shapes that aren't comparable.
 
-`markers` draws labeled full-width horizontal rules at given minutes — thin line with a small mono uppercase label at the right edge — styled after the upstream prayer-time markers; use them for any fixed daily reference times (prayer times, market open/close, deadlines). `markersSlot` is a ReactNode rendered into the same marker layer, so marker data can stream in — e.g. a `<Suspense>`-wrapped server component rendering the exported `TimelineMarker` primitive (`{ minutes, label, color? }`), whose `top` percentages resolve against the full 24h track. the now-line is a red dot + rule: `showNow` computes it from the client clock and ticks every minute via setInterval, while `nowMinutes` overrides the position explicitly (and implies the line shows — useful for SSR determinism or showing another timezone). toggling `showNow` off hides the line rather than freezing it.
+sizing gotcha: the viewBox stretches to whatever box `className` gives it (the
+stroke stays 1:1 via `non-scaling-stroke`), so scaling it up is free — **but dot
+squares are drawn in viewBox units and stretch with it.** keep `width`/`height`
+near the rendered size whenever `showDots` or `highlightLast` is on.
 
-the track is tall by design; wrap it in a fixed-height `overflow-y-auto` container (as the demo does) for a scrollable day view. pair with `calendar-nav` for day paging.
+`stroke` defaults to `currentColor`, so it inherits the surrounding text. an
+accessible name is generated from the value range when `label` is omitted. drops
+neatly into `stat-tile`'s `children` slot.
 
 **Key props:**
-- `events: TimelineEvent[]` — { startMin, endMin, label?, color? }[] — single-track events. ignored when tracks is set.
-- `tracks: TimelineTrack[]` — { label?, events, onEventClick? }[] — labeled columns sharing one axis; per-track onEventClick overrides the top-level one.
-- `showNow: boolean` — live red now-line, ticks each minute.
-- `nowMinutes: number` — override now-line position (minutes of day).
-- `markers: Array<{ minutes: number; label: string; color?: string }>` — labeled full-width marker lines at minutes-of-day (e.g. prayer times), label at the right edge.
-- `markersSlot: ReactNode` — slot in the marker layer for streamed markers — render the exported `TimelineMarker` inside it.
-- `onEventClick: (event: TimelineEvent) => void` — blocks become keyboard-accessible buttons; display-only when absent.
-- `onEventChange: (event, next: { startMin; endMin }) => void` — opt-in drag-to-move + bottom-edge resize; called once on drop.
-- `snapMinutes: number = 5` — snap increment for drag editing.
+- `values: number[]` — required — the series, oldest first. one value renders a flat line.
+- `width: number = 80` — intrinsic width in px (viewBox units; the svg still stretches to its css box).
+- `height: number = 24` — intrinsic height in px.
+- `stroke: string = 'currentColor'` — line color; inherits the surrounding text by default.
+- `strokeWidth: number = 1.5` — line thickness in px, kept 1:1 under stretching.
+- `fill: string` — area fill under the line. omit for a bare line.
+- `showDots: boolean = false` — mark every point with a small square.
+- `highlightLast: boolean = false` — mark only the last point. ignored when showDots is set.
+- `min: number` — scale floor; defaults to the series minimum.
+- `max: number` — scale ceiling; defaults to the series maximum.
+- `curve: "linear" | "smooth" = 'linear'` — polyline, or a catmull-rom curve that still passes through every sample.
+- `label: string` — accessible name; a value-range summary is generated when omitted.
+- `className: string`
 
 **Example:**
 ```tsx
-<div className="h-[420px] overflow-y-auto">
-  <Timeline
-    showNow
-    markers={[{ minutes: 5 * 60 + 12, label: "fajr" }]}
-    tracks={[
-      { label: "plan", events: planned },
-      { label: "actual", events: logged },
-    ]}
-    onEventClick={(e) => openEvent(e)}
-    onEventChange={(e, next) => updateEvent(e, next)}
-    snapMinutes={15}
-  />
-</div>
+<Sparkline values={last30Days} curve="smooth" fill="rgba(255,255,255,0.08)" highlightLast />
+```
+
+## stat-tile
+
+**Role:** big-number kpi tile with label, delta chip, footnote and a sparkline slot.
+**Install:** `bunx @justin06lee/chrome@latest add stat-tile`
+**Composes:** count-up (registry); lucide-react (npm)
+
+a mono uppercase `label`, one headline `value` with an optional trailing `unit`,
+an optional signed `delta` chip, a `footnote`, a top-right `icon` slot, and
+`children` rendered between the number and the footnote — where a `sparkline`
+fits exactly.
+
+**it is server-renderable by default.** the tile is static markup and only the
+opt-in `animate` path pulls in the `CountUp` client component, so a grid of
+tiles costs nothing on the client until you ask it to move. two consequences:
+`format` is a function prop and **can't cross the server/client boundary**, so
+`format` + `animate` together requires the tile to render inside a client
+component; and a `value` passed as a string renders as-is (already formatted,
+`"—"`, etc.) rather than being tweened.
+
+the delta logic keeps two things separate that are easy to conflate: **direction
+is the sign, tone is whether that direction is welcome.** that separation is
+what lets `invertDelta` recolor the chip without flipping the direction icon —
+use it for figures where less is better (distractions, time-to-first-commit), so
+a rise turns red while the arrow still points up.
+
+**Key props:**
+- `label: ReactNode` — required — mono uppercase kicker above the number.
+- `value: number | string` — required — headline figure; strings render as-is (already formatted, "—", etc.).
+- `unit: string` — small trailing qualifier next to the number, e.g. "h".
+- `format: (n: number) => string` — formatter for numeric value and delta; overrides decimals. pairing it with animate requires the tile to render inside a client component (functions can't cross the server boundary).
+- `decimals: number = 0` — fixed decimal places for numeric value/delta.
+- `animate: boolean = false` — tween the number up from 0 when it scrolls into view, via count-up.
+- `duration: number = 1` — tween length in seconds when animate is set.
+- `delta: number` — signed change since the comparison period; the sign picks the direction icon.
+- `deltaLabel: ReactNode` — trailing context for the delta chip, e.g. "vs last month".
+- `invertDelta: boolean = false` — flip which sign is bad, for figures where less is better.
+- `footnote: ReactNode` — muted line under the tile — provenance, caveats, sample size.
+- `icon: ReactNode` — decorative slot pinned to the top-right, typically a 14px lucide icon.
+- `children: ReactNode` — rendered between the number and the footnote — a sparkline fits here.
+- `className: string`
+
+**Example:**
+```tsx
+<StatTile label="focus time" value={32.5} unit="h" decimals={1} delta={4.2} deltaLabel="vs last week">
+  <Sparkline values={weekly} />
+</StatTile>
+
+<StatTile label="interruptions" value={12} delta={3} invertDelta footnote="a rise is bad here." />
+```
+
+## streak
+
+**Role:** current unbroken run, an optional best, and a strip of recent hit/miss days.
+**Install:** `bunx @justin06lee/chrome@latest add streak`
+**Composes:** nothing beyond utils
+
+a mono kicker, the `current` run with its `unit` pluralized (a naive `+s` —
+enough for "day"/"week", so pass a pre-pluralized unit for anything irregular),
+an optional `best` rendered as a quiet comparison, and a compact strip of cells
+from `days`.
+
+**the strip is the point.** a number alone can't show that the run nearly broke
+twice last week, and that near-miss is usually the information worth acting on.
+`days` is `boolean[]` with the **most recent LAST** — the opposite of what you
+might guess, so check the ordering when a strip looks reversed.
+
+the whole component collapses to one sr-only sentence for screen readers rather
+than announcing each cell.
+
+**Key props:**
+- `current: number` — required — days (or whatever unit is) in the current unbroken run.
+- `best: number` — all-time best run, rendered as a quiet comparison.
+- `days: boolean[]` — recent history, most recent LAST — one cell per entry, true = hit.
+- `label: ReactNode = 'streak'` — mono uppercase kicker.
+- `unit: string = 'day'` — singular noun for the run; an "s" is appended when current isn't 1.
+- `className: string`
+
+**Example:**
+```tsx
+<Streak current={12} best={31} days={last14Days.map((d) => d.hit)} />
 ```

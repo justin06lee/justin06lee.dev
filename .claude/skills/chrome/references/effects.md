@@ -1,6 +1,8 @@
 # effects & flourishes
 
-these are the registry's decorative and motion components: text effects (chrome, rainbow, scramble), ascii renderers (ascii, donut, not-found), entrance animation (fade-in, intro, count-up), and interactive flourishes (pfp, sprite-scrubber, stack). all are dark-only and brutalist by default. most are dependency-free — they animate with requestAnimationFrame, WAAPI, or CSS keyframes hoisted into `<head>` via react's `<style precedence>` dedup — and only intro and not-found pull in `motion`. several are designed to compose: ascii and donut are plain-paint text so wrapping them in chrome foils every glyph.
+these are the registry's decorative and motion components: text effects (chrome, rainbow, scramble), ascii renderers (ascii, ascii-shader, donut, not-found), entrance animation (fade-in, intro, count-up), drafting surfaces and marks (blueprint, dimension, grain, hazard, pencil-rule, stamp), and interactive flourishes (marquee, pfp, sprite-scrubber, stack). all are dark-only and brutalist by default. most are dependency-free — they animate with requestAnimationFrame, WAAPI, or CSS keyframes hoisted into `<head>` via react's `<style precedence>` dedup — and only intro and not-found pull in `motion`. several are designed to compose: ascii, ascii-shader and donut are plain-paint text so wrapping them in chrome foils every glyph.
+
+the drafting group is the one place the registry expects to be recoloured: blueprint, dimension, grain, hazard, pencil-rule and stamp all take their colour through props and default to white, so a consuming site can point them at its own accent without the library itself gaining a palette.
 
 ## ascii
 
@@ -29,6 +31,88 @@ pass `label` to get `role="img"` with an aria-label; omit it and the art is `ari
 <Chrome as="div">
   <Ascii src="/ascii/cat.txt" label="chrome-foiled cat" />
 </Chrome>
+```
+
+## ascii-shader
+
+**Role:** ascii fragment shader — a character grid painted by a per-cell function of position and time.
+**Install:** `bunx @justin06lee/chrome@latest add ascii-shader`
+**Composes:** nothing beyond utils
+
+the general form of what `donut` does for one fixed torus. you supply `(x, y, t) => luminance` and the component owns the grid, the ramp and the loop. each frame is built as one string and assigned to `pre.textContent` — a single text mutation per frame, no per-cell dom, no react re-render.
+
+three things keep it cheap. the loop is capped at `fps` (24 by default) rather than running free — ascii reads fine well below 60 and the saving is real. an IntersectionObserver stops the loop entirely while the element is off-screen, so a shader below the fold costs nothing. and under `prefers-reduced-motion` it paints one frame at t=0 and never starts a loop at all.
+
+the character cell is measured on mount with a hidden probe, because the aspect correction that makes a circle round depends on the actual font rather than an assumed ratio. `x` and `y` arrive at the shader already corrected and normalised against the shorter physical side, so `x*x + y*y` describes a real circle. `col`/`row` are also passed for grid-space effects.
+
+grid size is auto-fit to the element by default. with auto rows the `<pre>` is taken out of flow (absolutely positioned), because otherwise adding a row would grow the host, which would fit another row, and the ResizeObserver would never settle — so **give the element a height** when you let rows auto-fit. pass explicit `cols`/`rows` to size the grid instead.
+
+`isolate` behaves exactly as it does on `donut`: containment isolates the per-frame repaint and is faster, but it creates its own paint context, so pass `isolate={false}` inside `<Chrome>` or the foil won't paint through. `paused` holds the clock rather than the frame, so resuming continues where it stopped instead of jumping forward.
+
+three preset shaders ship as named exports: `plasma` (interfering sine fields), `ripple` (rings travelling outward), `tunnel` (rotating spiral).
+
+**Key props:**
+- `shader: (point: ShaderPoint) => number (required) — returns luminance 0..1; point is { col, row, x, y, t, cols, rows }.`
+- `cols: number — fixed column count; omit to fill the element's width.`
+- `rows: number — fixed row count; omit to fill the element's height (which then has to be set on the element).`
+- `chars: string = ' .:-=+*#%@' — luminance ramp, dark to light.`
+- `fps: number = 24`
+- `speed: number = 1 — multiplies the time fed to the shader.`
+- `paused: boolean = false`
+- `size: number = 12 — font size in px; drives the auto-fit grid.`
+- `isolate: boolean = true — set false inside <Chrome>.`
+- `label: string — accessible name; without one the canvas is decorative and hidden.`
+- `className: string`
+
+**Example:**
+```tsx
+import { AsciiShader, ripple } from "@/components/chrome/ascii-shader";
+
+<AsciiShader shader={ripple} label="ripple field" className="h-64" />
+
+// your own shader, chrome-foiled (note isolate={false})
+<Chrome as="div">
+  <AsciiShader
+    isolate={false}
+    cols={80}
+    rows={24}
+    shader={({ x, y, t }) => (Math.sin(x * 6 + t) + Math.cos(y * 4 - t)) / 4 + 0.5}
+  />
+</Chrome>
+```
+
+## blueprint
+
+**Role:** engineering graph-paper substrate with corner marks and an optional pointer crosshair.
+**Install:** `bunx @justin06lee/chrome@latest add blueprint`
+**Composes:** nothing beyond utils
+
+wraps its children in a positioned element and paints a grid behind them at `-z-10`. the grid is four stacked `linear-gradient`s on one span rather than a tiled image: it stays crisp at any zoom, costs no request, and the major lines can be recoloured independently — major is declared first so it paints over the minor line it shares a pixel with. set `major={0}` for minor lines only.
+
+`fade` masks the grid toward the edges (`radial`, `top`, `bottom`) so it reads as a substrate rather than as a table. `ticks` adds L-shaped registration marks in the four corners.
+
+`crosshair` tracks the pointer with full-bleed rules and a mono coordinate readout. it reads `pointerType` off the event rather than using a media query, so hybrid laptops stay correct: the crosshair follows the mouse and stays away for the touchscreen. the readout defaults to grid cell coordinates; override with `formatCoordinate`.
+
+colours come in through props, so the component never hardcodes anything but white — point `color`/`majorColor` at your own accent without editing the installed copy.
+
+**Key props:**
+- `cell: number = 8 — minor grid pitch in px.`
+- `major: number = 5 — minor cells per major line; 0 draws minor only.`
+- `color: string = 'rgba(255,255,255,0.05)'`
+- `majorColor: string = 'rgba(255,255,255,0.1)'`
+- `fade: 'none' | 'radial' | 'top' | 'bottom' = 'none'`
+- `ticks: boolean = false — corner registration marks.`
+- `crosshair: boolean = false`
+- `formatCoordinate: (x: number, y: number, cell: number) => string`
+- `as: ElementType = 'div'`
+- `children: ReactNode`
+- `className: string`
+
+**Example:**
+```tsx
+<Blueprint fade="radial" ticks crosshair className="min-h-dvh px-8 py-24">
+  <h1 className="text-4xl tracking-tight">odd jobs.</h1>
+</Blueprint>
 ```
 
 ## chrome
@@ -82,6 +166,34 @@ use it for stats rows, dashboards, and hero metrics. it renders a `span` by defa
 ```tsx
 <CountUp value={1280} className="text-5xl" />
 <CountUp value={99.5} decimals={1} suffix="%" duration={1.5} />
+```
+
+## dimension
+
+**Role:** architect's dimension line — witness lines, caps, and a measurement in a break in the rule.
+**Install:** `bunx @justin06lee/chrome@latest add dimension`
+**Composes:** nothing beyond utils
+
+every part inherits `currentColor` from the root, so recolouring the whole annotation is one `color` prop rather than a prop per part. the caps are css triangles rather than an svg marker: they stay a crisp 1px-aligned shape at any DPR. `cap` picks between `arrow`, the draughtsman's 45-degree `tick`, a `dot`, or `none`.
+
+accessibility is opt-in by design. with `ariaLabel` the annotation is exposed as an image; without it the whole thing is `aria-hidden`, which is the right default whenever the measurement is already stated in nearby copy — otherwise a screen reader hears the same number twice.
+
+horizontal fills its container's width; vertical fills its height, so give the vertical form a height (or let a flex parent stretch it).
+
+**Key props:**
+- `label: ReactNode — the measurement, rendered in the break in the line.`
+- `orientation: 'horizontal' | 'vertical' = 'horizontal'`
+- `cap: 'arrow' | 'tick' | 'dot' | 'none' = 'arrow'`
+- `extension: number = 8 — half-length in px of the witness lines; 0 removes them.`
+- `color: string = 'rgba(255,255,255,0.35)'`
+- `ariaLabel: string — exposes it as an image; omit to keep it decorative.`
+- `labelClassName: string`
+- `className: string`
+
+**Example:**
+```tsx
+<Dimension label="1 200" ariaLabel="width: 1200 millimetres" />
+<Dimension label="640" orientation="vertical" cap="tick" className="h-40" />
 ```
 
 ## donut
@@ -141,7 +253,7 @@ it animates on mount only — there is no in-view trigger and no exit animation.
 - `delay: number = 0 — delay before the animation starts, in seconds.`
 - `y: number = -10 — starting vertical offset in px (animates to 0).`
 - `x: number = 0 — starting horizontal offset in px (animates to 0).`
-- `duration: number = 0.4 — animation duration in seconds.`
+- `duration: number = 0.8 — animation duration in seconds.`
 - `className: string`
 - `children: ReactNode`
 
@@ -152,6 +264,74 @@ it animates on mount only — there is no in-view trigger and no exit animation.
     {item.title}
   </FadeIn>
 ))}
+```
+
+## grain
+
+**Role:** paper / film texture overlay.
+**Install:** `bunx @justin06lee/chrome@latest add grain`
+**Composes:** nothing beyond utils
+
+the texture is an inline svg `feTurbulence` data uri rather than a bundled png: a few hundred bytes, resolution-independent, and retunable without shipping a second asset. `noise` is `fractalNoise` (even film speckle), `paper` is `turbulence` with a stretched base frequency (long fibrous streaks, like stock), and `dots` is a radial-gradient dot screen that inherits `currentColor`.
+
+`scale` means different things per variant and so has no shared default — it is the turbulence base frequency for noise/paper (0.8, higher is finer) and the dot pitch in px for dots (4). omit it and each variant resolves its own.
+
+the layer is `pointer-events-none` and `aria-hidden`, so it can sit over live ui at any z-index without swallowing clicks. `fixed` (the default) covers the viewport for a page-wide texture; `fixed={false}` covers the nearest positioned ancestor, for texturing one panel. keep `opacity` low — past about 0.12 grain reads as dirt.
+
+`animate` steps the background position through a handful of offsets rather than tweening it: smooth motion reads as a moving pattern, whereas discrete jumps read as grain. frozen under reduced motion.
+
+**Key props:**
+- `variant: 'noise' | 'paper' | 'dots' = 'noise'`
+- `opacity: number = 0.05`
+- `scale: number — base frequency (noise/paper, default 0.8) or dot pitch in px (dots, default 4).`
+- `animate: boolean = false`
+- `fixed: boolean = true — false scopes it to the nearest positioned ancestor.`
+- `blend: CSSProperties['mixBlendMode']`
+- `className: string`
+
+**Example:**
+```tsx
+// page-wide film grain
+<Grain animate opacity={0.06} />
+
+// one textured panel
+<div className="relative overflow-hidden border border-white/10">
+  <Grain variant="paper" fixed={false} opacity={0.09} />
+  <p className="relative">…</p>
+</div>
+```
+
+## hazard
+
+**Role:** diagonal caution-stripe tape — a band that reads as a boundary, plus a frame that tapes the edges of a block.
+**Install:** `bunx @justin06lee/chrome@latest add hazard`
+**Composes:** nothing beyond utils
+
+two exports. `Hazard` is the band itself — horizontal or vertical, sized by `thickness`, usable as a divider, a rule, or an edge. `HazardFrame` wraps content and tapes the sides named in `edges`; the tape is absolutely positioned so it never enters the flow, and the frame can be dropped around an existing block without re-measuring anything (give the content padding on the taped sides yourself).
+
+deliberately not a `progress` variant: progress encodes a value, this encodes a boundary. the band is `aria-hidden` with no semantics of its own.
+
+the stripes are a `repeating-linear-gradient` with hard stops, so the edges stay knife-sharp at any pitch instead of blurring like a tiled png. `animate` marches them, and the march displaces the background along the gradient's own axis — shifting by one pitch on x alone would be short by a factor of sin(angle) and the loop would visibly jump. frozen under reduced motion.
+
+**Key props:**
+- `thickness: number = 8 — band thickness in px.`
+- `pitch: number = 12 — one stripe plus one gap, in px.`
+- `angle: number = 45`
+- `color: string = 'rgba(255,255,255,0.22)'`
+- `gapColor: string = 'transparent'`
+- `orientation: 'horizontal' | 'vertical' = 'horizontal' — Hazard only.`
+- `animate: boolean = false`
+- `duration: number = 1.2 — seconds per stripe cycle.`
+- `edges: ('top' | 'right' | 'bottom' | 'left')[] = ['top', 'bottom'] — HazardFrame only.`
+- `className: string`
+
+**Example:**
+```tsx
+<Hazard animate />
+
+<HazardFrame edges={["left"]} thickness={6}>
+  <div className="border border-white/10 py-6 pl-10 pr-6">work in progress.</div>
+</HazardFrame>
 ```
 
 ## intro
@@ -186,6 +366,33 @@ body scroll is locked (`overflow: hidden`) while the overlay is visible and rest
 />
 ```
 
+## marquee
+
+**Role:** infinite scrolling ticker band.
+**Install:** `bunx @justin06lee/chrome@latest add marquee`
+**Composes:** nothing beyond utils
+
+speed is specified in px/s and the duration is *derived* from the measured content width, so a short label and a long sentence travel at the same rate — a fixed duration would make them scroll at wildly different speeds. the copy count is computed from the container width rather than hardcoded to two, because content narrower than the container needs as many repeats as it takes to cover it plus one, or the band shows a hole between loops. only the first copy is exposed to assistive tech; the rest are `aria-hidden`.
+
+`pauseOnHover` (on by default) halts the band under the pointer. `fade` masks the left and right edges so content arrives and leaves softly. under reduced motion the animation is dropped entirely and the first copy sits still — a ticker that can't be paused is a real accessibility problem, and a static label is a legitimate reading of the same content.
+
+**Key props:**
+- `children: ReactNode (required)`
+- `speed: number = 40 — px per second.`
+- `reverse: boolean = false`
+- `gap: number = 32 — px between repeats.`
+- `separator: ReactNode — rendered between repeats.`
+- `pauseOnHover: boolean = true`
+- `fade: boolean = false`
+- `className: string`
+
+**Example:**
+```tsx
+<Marquee fade separator={<span className="text-white/20">/</span>} className="border-y border-white/10 py-3">
+  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">now building</span>
+</Marquee>
+```
+
 ## not-found
 
 **Role:** drop-in 404 block — a random ascii cat above a big mono headline and links.
@@ -212,6 +419,35 @@ links are plain `<a>` anchors, framework-agnostic. `credit` toggles the small "m
 <div className="flex min-h-screen items-center justify-center bg-black text-white">
   <NotFound links={[{ label: "home", href: "/" }, { label: "docs", href: "/docs" }]} />
 </div>
+```
+
+## pencil-rule
+
+**Role:** a rule that draws itself, with a pencil riding the leading edge.
+**Install:** `bunx @justin06lee/chrome@latest add pencil-rule`
+**Composes:** nothing beyond utils
+
+the stroke is a `scaleX`-ed element rather than an animated `width`: transform composites, width doesn't, so the draw can't cause layout on any frame. the pencil rides a zero-height full-width track translated by a percentage — a percentage on the pencil itself would resolve against its own 46px — and shares the stroke's timing function, which is what keeps the nib pinned to the end of the line. mismatched curves are exactly what make a drawing effect read as fake. the pencil fades out once it lands.
+
+`trigger` is `in-view` by default (IntersectionObserver at 0.2); `mount` draws immediately. `drawn` always starts false even for `mount`, because flipping it in the same render leaves the browser no undrawn frame to transition from. set `repeat` to redraw on every re-entry. replay it manually by remounting with a changed `key`.
+
+under reduced motion the finished line renders immediately and the pencil never appears — the rule's job is to be a rule, and the drawing is decoration.
+
+**Key props:**
+- `duration: number = 1.2 — seconds to cross the full width.`
+- `delay: number = 0`
+- `trigger: 'in-view' | 'mount' = 'in-view'`
+- `repeat: boolean = false`
+- `thickness: number = 1`
+- `color: string = 'rgba(255,255,255,0.35)'`
+- `pencilColor: string = 'rgba(255,255,255,0.75)'`
+- `showPencil: boolean = true`
+- `className: string`
+
+**Example:**
+```tsx
+<h1 className="text-3xl tracking-tight">odd jobs, done properly.</h1>
+<PencilRule delay={0.2} className="mt-1" />
 ```
 
 ## pfp
@@ -358,4 +594,34 @@ hover-only interaction, mouse events specifically (`onMouseEnter`/`onMouseLeave`
     <p className="text-sm font-medium">stacked paper card</p>
   </div>
 </Stack>
+```
+
+## stamp
+
+**Role:** rubber-stamp overlay — mono uppercase in a double rule, rotated off square.
+**Install:** `bunx @justin06lee/chrome@latest add stamp`
+**Composes:** nothing beyond utils
+
+the counterpart to `badge`. a badge is a flat inline chip that participates in a row of metadata; a stamp is an assertion applied *on top of* something — it rotates, it overlaps, and it usually sits absolutely positioned over the document it marks. pair it with `docket`'s `mark` slot.
+
+the inner rule is a real inset element rather than a box-shadow, because a gapped double rule can't be drawn with `inset` shadows on a transparent background. `distress` masks the ink with a coarse turbulence, so it inherits the ink colour automatically and there is nothing to load.
+
+`ariaLabel` defaults to the text when `children` is a string; pass it explicitly for anything else, or `null` to mark the stamp decorative.
+
+**Key props:**
+- `children: ReactNode (required)`
+- `sub: ReactNode — second line: a date, a reference, an initial.`
+- `rotate: number = -12`
+- `color: string = 'rgba(255,255,255,0.55)' — ink colour.`
+- `size: 'sm' | 'md' | 'lg' = 'md'`
+- `distress: boolean = true`
+- `ariaLabel: string | null`
+- `className: string`
+
+**Example:**
+```tsx
+<div className="relative border border-white/10 p-6">
+  <p>oj-0042 — rebuild the intake form</p>
+  <Stamp size="lg" className="absolute right-6 top-6">filed</Stamp>
+</div>
 ```

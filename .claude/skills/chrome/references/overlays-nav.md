@@ -1,6 +1,6 @@
 # overlays & navigation
 
-this group covers chrome's overlay surfaces (dialog, sheet, command-palette, tooltip, menu, select, combobox) and navigation chrome (navbar, sidebar, breadcrumb, tabs, toc, accordion). everything is dark-only (black backgrounds, white/10-ish borders, square corners) and you own the code after install — components land as plain .tsx files in your project. installs pull registryDependencies transitively, so `add command-palette` also brings `kbd` and `utils` without extra steps. several components split behavior into a headless `use-*.ts` hook that installs alongside the styled component.
+this group covers chrome's overlay surfaces (dialog, sheet, command-palette, tooltip, menu, select, combobox, timezone-select) and navigation chrome (navbar, sidebar, breadcrumb, tabs, stepper, pagination, toc, accordion). everything is dark-only (black backgrounds, white/10-ish borders, square corners) and you own the code after install — components land as plain .tsx files in your project. installs pull registryDependencies transitively, so `add command-palette` also brings `kbd` and `utils` without extra steps. several components split behavior into a headless `use-*.ts` hook that installs alongside the styled component.
 
 ## accordion
 
@@ -208,6 +208,35 @@ because it is `position: fixed`, embedding it in a bounded demo/frame requires o
 />
 ```
 
+## pagination
+
+**Role:** page navigation with boundary pages, a sibling window and ellipsis gaps.
+**Install:** `bunx @justin06lee/chrome@latest add pagination`
+**Composes:** lucide-react (npm)
+
+renders as a `<nav>` wrapping a list, with the current page carrying `aria-current="page"` — a screen reader announces position instead of having to infer it from styling, which is the whole difference between this and a row of styled buttons. returns `null` at one page or fewer, so you can render it unconditionally under a list.
+
+the sibling window **shifts** at the ends rather than shrinking: clamping without shifting renders `1 2 … 20` on page 1 and `1 … 18 19 20` on page 20, so the control would change width as you page through it. and a gap that would elide exactly one page renders that page instead — `1 … 3` costs the same width as `1 2 3` and tells the reader less.
+
+`compact` drops the numbers for prev / next plus a `3 / 12` readout, which is the right form in a sidebar or on mobile.
+
+the range logic ships as its own module (`pagination-range.ts`) and is exported as `paginationRange(page, pageCount, siblings, boundaries)` returning `(number | GAP)[]` — use it directly if you need the same elision in a different shell.
+
+**Key props:**
+- `page: number (required) — 1-based.`
+- `pageCount: number (required) — 1 or fewer renders nothing.`
+- `onChange: (page: number) => void (required)`
+- `siblings: number = 1 — pages either side of the current one.`
+- `boundaries: number = 1 — pages pinned at each end.`
+- `compact: boolean = false`
+- `ariaLabel: string = 'pagination'`
+- `className: string`
+
+**Example:**
+```tsx
+<Pagination page={page} pageCount={Math.ceil(total / perPage)} onChange={setPage} />
+```
+
 ## select
 
 **Role:** styled non-searchable dropdown select bound to a controlled value
@@ -307,6 +336,54 @@ use sidebar for site-level hierarchical nav (docs sections); use toc for within-
 />
 ```
 
+## stepper
+
+**Role:** numbered progress rail for a multi-step flow
+**Install:** `bunx @justin06lee/chrome@latest add stepper`
+**Composes:** lucide-react (npm); nothing beyond utils from the registry
+
+a horizontal or vertical rail of numbered steps from `steps`
+(`{ label, description? }[]`), with `current` as the zero-based index of the step
+in progress. completed steps get a check, the active one is marked with
+`aria-current`, and upcoming ones stay muted. `compact` drops labels and
+descriptions for a bare rail.
+
+**the distinction from `tabs` is the reason it exists.** tabs switch between
+peers you can visit in any order; a stepper asserts *sequence and completion*.
+so it renders as a real ordered list, and it refuses to make un-reached steps
+clickable — `onStepClick` only activates steps *before* `current`, so a user can
+go back and change an earlier answer but can't skip ahead. rendering a future
+step as a button would tell the user it's reachable when it isn't.
+
+a detail worth keeping if you restyle it: the connector line belongs to the step
+*before* the gap, so the last step doesn't trail a line into nothing.
+
+use `stepper` for checkout/onboarding sequences, `tabs` for peer views,
+`progress` (in `references/feedback.md`) when only the fraction matters and the
+steps aren't named.
+
+**Key props:**
+- `steps: Step[]` — required — { label, description? }.
+- `current: number` — required — zero-based index of the step in progress.
+- `orientation: 'horizontal' | 'vertical' = 'horizontal'`
+- `onStepClick: (index: number) => void` — makes completed steps clickable so an earlier answer can be changed. steps ahead of current stay inert.
+- `compact: boolean = false` — drop labels and descriptions for a bare progress rail.
+- `ariaLabel: string = 'progress'`
+- `className: string`
+
+**Example:**
+```tsx
+<Stepper
+  current={step}
+  onStepClick={setStep}
+  steps={[
+    { label: "pick a time", description: "wednesday, 4:00pm" },
+    { label: "your details" },
+    { label: "confirm" },
+  ]}
+/>
+```
+
 ## tabs
 
 **Role:** controlled tab-strip for switching between sibling views
@@ -338,6 +415,54 @@ const [tab, setTab] = useState<"projects" | "hobbies">("projects");
   ]}
 />
 <div role="tabpanel">{tab === "projects" ? <Projects /> : <Hobbies />}</div>
+```
+
+## timezone-select
+
+**Role:** searchable iana timezone picker showing the current time in each zone
+**Install:** `bunx @justin06lee/chrome@latest add timezone-select`
+**Composes:** lucide-react (npm); nothing beyond utils from the registry
+
+a trigger plus a searchable dropdown of iana zones, **sorted by utc offset**,
+each row showing the zone's city/region label alongside what time it actually is
+there right now. `zones` defaults to `Intl.supportedValuesOf("timeZone")`,
+falling back to a curated ~45-zone list where the runtime lacks it.
+
+`combobox` already covers searchable single-select, so the justification for a
+separate component is specific: **a zone list is the case where the label alone
+can't answer the question being asked.** the user is really choosing "the one
+where it's 4pm right now", so the live clock and the offset are the content, not
+decoration. offsets are derived through `Intl` — no zone table ships with it.
+labels are humanized (`"America/Los_Angeles"` reads as "los angeles · america")
+and search matches against that.
+
+ssr-safety follows the group pattern: the clock starts null and fills in after
+mount, since seeding it during render would blow up hydration. `liveSeconds`
+ticks every second instead of every 30 — only worth it when the seconds are
+actually visible.
+
+one integration note: the dropdown closes on outside-click and Escape using a
+capture-phase listener with `stopImmediatePropagation`, so closing the list
+inside a dialog doesn't also close the dialog.
+
+pair it with `slot-picker`'s `footnote` to state which zone the times are shown
+in, and `clock` when you want to *display* a zone rather than choose one.
+
+**Key props:**
+- `value: string` — required — iana zone name, e.g. "America/Los_Angeles".
+- `onChange: (zone: string) => void` — required
+- `zones: string[]` — zones to offer. defaults to Intl.supportedValuesOf("timeZone"), falling back to ~45 curated zones where that's unavailable.
+- `label: ReactNode` — mono uppercase caption above the trigger.
+- `placeholder: string = 'search zones…'`
+- `liveSeconds: boolean = false` — tick the clock every second instead of every 30.
+- `disabled: boolean = false`
+- `ariaLabel: string = 'time zone'`
+- `className: string`
+
+**Example:**
+```tsx
+const [zone, setZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+<TimezoneSelect label="your time zone" value={zone} onChange={setZone} />
 ```
 
 ## toc

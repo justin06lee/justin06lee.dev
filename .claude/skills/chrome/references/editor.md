@@ -1,6 +1,6 @@
 # editor suite & site furniture
 
-this file covers the markdown-editing suite (desk, editor, editor-toolbar, asset-sidebar, drawing-window, file-grid) and a handful of standalone site-furniture components (inline-edit, manager-table, now-playing-bar, socials). the editing suite is a composition tree: `desk` is the full workbench that wires `editor-toolbar` (which owns floating `drawing-window`s), `asset-sidebar`, and the `editor` panes together over one `useLineSync` engine; `file-grid` is the standalone asset browser that pairs with it. everything is dark-only, controlled, and callback-driven — the components never own persistence; you bring your own state, markdown renderer, and backend calls. sources live in `packages/registry/<name>/`.
+this file covers the markdown-editing suite (desk, editor, editor-toolbar, asset-sidebar, drawing-window, file-grid) and a handful of standalone site-furniture components (inline-edit, manager-table, socials). the editing suite is a composition tree: `desk` is the full workbench that wires `editor-toolbar` (which owns floating `drawing-window`s), `asset-sidebar`, and the `editor` panes together over one `useLineSync` engine; `file-grid` is the standalone asset browser that pairs with it. everything is dark-only, controlled, and callback-driven — the components never own persistence; you bring your own state, markdown renderer, and backend calls. sources live in `packages/registry/<name>/`.
 
 ## asset-sidebar
 
@@ -320,40 +320,6 @@ every mutation is a callback and the rows array is the source of truth — the t
     onDelete={(id) => remove(id)}
   />
 </DialogProvider>
-```
-
-## now-playing-bar
-
-**Role:** pinned bottom "now playing" bar for a running activity, with a live elapsed timer and an action slot
-**Install:** `bunx @justin06lee/chrome@latest add now-playing-bar`
-**Composes:** nothing beyond utils
-
-a thin black bar pinned to the bottom edge (`fixed` to the viewport by default, or `sticky` inside a scroll container via `position`), matching the upstream calendar bar on the source site. the left side is a button (clickable only when `onClick` is set) stacking a tiny "NOW PLAYING" label, the title line, and an optional subtitle. when `startedAt` is set the title line shows the activity with a live elapsed timer appended (` · 1h 2m` / `2m 3s` / `4s`, tabular-nums, mirroring the upstream format); omit `startedAt` for the idle state, which renders "Nothing running" in muted text. `actions` is a right-side slot, typically a stop button.
-
-the timer ticks every second only while running and visible, and it is hydration-safe: `now` starts as null (a `Date.now()` initial state would differ between server render and hydration) and the elapsed string renders from `startedAt` itself until the clock starts client-side. `visible={false}` returns null and tears the interval down. `accent` adds a small colored dot before the running title — the source bar has no accent, so omit it for the faithful look. all data is props/callbacks; there is no built-in activity state.
-
-when using `position="fixed"` (the default), remember it overlays page content — give the page bottom padding, or use `position="sticky"` as the last child of an `overflow-hidden`/scrolling container as the demo does.
-
-**Key props:**
-- `title: ReactNode` (required)
-- `startedAt: number | Date` — when set, shows a live elapsed timer ticking every second; omit for the idle state.
-- `accent: string` — optional css color for a small dot before the running title. omit for the source-faithful look.
-- `subtitle: ReactNode`
-- `actions: ReactNode` — right-side slot, e.g. a Stop button.
-- `onClick: () => void`
-- `visible: boolean = true` — hide the bar and tear down the timer.
-- `position: 'fixed' | 'sticky' = 'fixed'`
-- `className: string`
-
-**Example:**
-```tsx
-<NowPlayingBar
-  position="sticky"
-  title="Deep work — writing"
-  subtitle="focus session"
-  startedAt={startedAt}
-  actions={<Button size="sm" variant="outline" onClick={stop}>Stop</Button>}
-/>
 ```
 
 ## socials
