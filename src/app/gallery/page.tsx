@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import { ItemGallery } from "@/components/ItemGallery";
 import { GalleryTabs, type GalleryTab } from "@/components/GalleryTabs";
@@ -5,18 +6,24 @@ import { getItemsByCategory } from "@/lib/items";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+    title: "gallery",
+    description: "projects, hobbies, and things in development.",
+    alternates: { canonical: "/gallery" },
+};
+
 const TAB_META: Record<GalleryTab, { title: string; subtitle: string }> = {
     projects: {
-        title: "Projects",
-        subtitle: "A curated list of the things I've built that are usable but still probably need updates.",
+        title: "projects",
+        subtitle: "a curated list of the things i've built that are usable but still probably need updates.",
     },
     hobbies: {
-        title: "Hobbies",
-        subtitle: "Stuff I tinker with outside of programming (mostly)",
+        title: "hobbies",
+        subtitle: "stuff i tinker with outside of programming (mostly)",
     },
     "in-development": {
-        title: "In Development",
-        subtitle: "Stuff I'm currently tinkering with.",
+        title: "in development",
+        subtitle: "stuff i'm currently tinkering with.",
     },
 };
 

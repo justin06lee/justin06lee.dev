@@ -85,7 +85,7 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                 { label: "articles", href: "/articles" },
                 { label: "gallery", href: "/gallery" },
             ]}
-            menuLabel="Menu"
+            linkComponent={Link}
         />
     );
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { NotFound as ChromeNotFound } from "@/components/chrome/not-found";
 
@@ -12,6 +13,7 @@ export default function NotFound() {
                         { label: "home", href: "/" },
                         { label: "gallery", href: "/gallery" },
                     ]}
+                    linkComponent={Link}
                     credit={false}
                 />
             </main>

@@ -33,13 +33,9 @@ function useBreakpointScale() {
             base: 0.4,
         } as const;
 
-        const MD_CAP = scaleByKey.md;
-
         const compute = () => {
             const match = mqs.find(({ mq }) => mq.matches)?.key ?? "base";
-            const raw = scaleByKey[match as keyof typeof scaleByKey] ?? scaleByKey.base;
-            const clamped = Math.max(raw, MD_CAP);
-            setS(clamped);
+            setS(scaleByKey[match as keyof typeof scaleByKey] ?? scaleByKey.base);
         };
 
         mqs.forEach(({ mq }) => mq.addEventListener("change", compute));
@@ -107,11 +103,6 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                         <AsciiSpinningDonut width={Math.round(BASE_W * s)} height={Math.round(BASE_H * s)} R={0.7 * s} r={0.5 * s} K={240 * s} D={7 * s} speed={0.5625} />
                     </div>
                 </motion.div>
-                <div className="md:hidden block self-center mt-120 absolute">
-                    <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 scale-120 cursor-pointer" onClick={handleScroll}>
-                        <ArrowDown />
-                    </button>
-                </div>
             </div>
 
             <div className="h-screen flex flex-col justify-center">

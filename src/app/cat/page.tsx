@@ -22,10 +22,13 @@ export default function CatPage() {
 
     const flush = async () => {
         if (flushingRef.current) return;
-        const delta = pendingPatsRef.current;
+        // The server caps each request at 50, so send at most that and keep the
+        // remainder queued. Zeroing the whole counter here (as before) silently
+        // dropped every pat past 50 in a burst.
+        const delta = Math.min(pendingPatsRef.current, 50);
         if (delta <= 0) return;
         flushingRef.current = true;
-        pendingPatsRef.current = 0;
+        pendingPatsRef.current -= delta;
         try {
             const res = await fetch("/api/pats", {
                 method: "POST",
@@ -37,10 +40,16 @@ export default function CatPage() {
                 if (mountedRef.current && typeof data.count === "number") {
                     setPats((p) => Math.max(p, data.count));
                 }
-            } else {
+            } else if (res.status >= 500) {
+                // Genuine server error — requeue so these pats retry next flush.
                 pendingPatsRef.current += delta;
             }
+            // 429 (rate-limited) and other 4xx: drop this batch instead of
+            // requeuing. Requeuing a rate-limited delta just retries every second
+            // in a tight loop while the limit holds; the optimistic local count
+            // already reflects the pat, so nothing visible is lost.
         } catch {
+            // Network failure — requeue for the next flush.
             pendingPatsRef.current += delta;
         } finally {
             flushingRef.current = false;
