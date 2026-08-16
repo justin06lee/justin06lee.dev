@@ -120,7 +120,9 @@ export async function updateCategory(
   return { ok: true, category: updated };
 }
 
-export async function categoryUsage(id: string): Promise<{ planCount: number; actualCount: number }> {
+export async function categoryUsage(
+  id: string,
+): Promise<{ planCount: number; actualCount: number; fallbackCount: number }> {
   await initDb();
   const planRes = await db.execute({
     sql: "SELECT COUNT(*) AS n FROM calendar_tasks WHERE category_id = ?",
@@ -130,21 +132,39 @@ export async function categoryUsage(id: string): Promise<{ planCount: number; ac
     sql: "SELECT COUNT(*) AS n FROM calendar_actuals WHERE category_id = ?",
     args: [id],
   });
+  // Also count categories referenced only inside an uncertain plan's `fallbacks`
+  // JSON blob (each entry is {"categoryId":"..."}). Without this a category used
+  // only by an alternative could be deleted, orphaning the reference. The LIKE
+  // pattern needs no wildcard escaping: category ids are app-generated slugs/
+  // uuids that never contain `%` or `_` (SQLite's LIKE metacharacters).
+  const fallbackRes = await db.execute({
+    sql: `SELECT COUNT(*) AS n FROM calendar_tasks WHERE fallbacks LIKE '%"categoryId":"' || ? || '"%'`,
+    args: [id],
+  });
   const planCount = Number((planRes.rows[0] as unknown as { n: number }).n ?? 0);
   const actualCount = Number((actualRes.rows[0] as unknown as { n: number }).n ?? 0);
-  return { planCount, actualCount };
+  const fallbackCount = Number((fallbackRes.rows[0] as unknown as { n: number }).n ?? 0);
+  return { planCount, actualCount, fallbackCount };
 }
 
 export async function deleteCategory(
   id: string,
-): Promise<{ ok: true } | { ok: false; reason: "not-found" | "system-locked" | "in-use"; planCount?: number; actualCount?: number }> {
+): Promise<{ ok: true } | { ok: false; reason: "not-found" | "system-locked" | "in-use"; planCount?: number; actualCount?: number; fallbackCount?: number }> {
   await initDb();
   const existing = await getCategoryById(id);
   if (!existing) return { ok: false, reason: "not-found" };
   if (existing.isSystem) return { ok: false, reason: "system-locked" };
   const usage = await categoryUsage(id);
-  if (usage.planCount > 0 || usage.actualCount > 0) {
-    return { ok: false, reason: "in-use", planCount: usage.planCount, actualCount: usage.actualCount };
+  // Refuse deletion while ANY surface still references the category — including
+  // fallback-only references buried in the JSON blob, which used to slip through.
+  if (usage.planCount > 0 || usage.actualCount > 0 || usage.fallbackCount > 0) {
+    return {
+      ok: false,
+      reason: "in-use",
+      planCount: usage.planCount,
+      actualCount: usage.actualCount,
+      fallbackCount: usage.fallbackCount,
+    };
   }
   await db.execute({ sql: "DELETE FROM calendar_categories WHERE id = ?", args: [id] });
   return { ok: true };

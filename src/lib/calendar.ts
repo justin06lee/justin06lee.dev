@@ -137,6 +137,18 @@ async function planExists(id: string): Promise<boolean> {
   return r.rows.length > 0;
 }
 
+/** True iff any fallback references a category that no longer exists. Fallback
+ *  categoryIds are stored inside the `fallbacks` JSON blob, so they'd otherwise
+ *  escape the FK-existence check that `categoryId` gets — leaving a dangling
+ *  reference the category-delete guard can't see. */
+async function anyFallbackCategoryMissing(fbs: PlanFallback[] | undefined | null): Promise<boolean> {
+  if (!fbs || fbs.length === 0) return false;
+  for (const f of fbs) {
+    if (f.categoryId && !(await categoryExists(f.categoryId))) return true;
+  }
+  return false;
+}
+
 type DbCalendarTaskJoined = DbCalendarTask & {
   cat_id: string | null;
   cat_name: string | null;
@@ -187,6 +199,11 @@ export type CreateTaskResult =
 export async function createTask(input: NewCalendarTask): Promise<CreateTaskResult> {
   await initDb();
   if (input.categoryId && !(await categoryExists(input.categoryId))) {
+    return { ok: false, reason: "invalid-category" };
+  }
+  // Fallbacks are only persisted when the plan is uncertain, so only validate
+  // their categories in that case — matching what actually gets stored.
+  if (input.isUncertain && (await anyFallbackCategoryMissing(input.fallbacks))) {
     return { ok: false, reason: "invalid-category" };
   }
   const id = randomUUID();
@@ -255,6 +272,12 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
     isUncertain: patch.isUncertain !== undefined ? patch.isUncertain : existing.isUncertain,
     fallbacks: patch.fallbacks !== undefined ? patch.fallbacks : existing.fallbacks,
   };
+  // Validate the fallbacks' categories against the merged (post-patch) state,
+  // since they only persist when the plan stays uncertain. Keeps a dangling FK
+  // out of the JSON blob just like the parent-category check above.
+  if (merged.isUncertain && (await anyFallbackCategoryMissing(merged.fallbacks))) {
+    return { ok: false, reason: "invalid-category" };
+  }
   // Same invariant as createTask: when not uncertain, fallbacks are erased so
   // the off state is unambiguous and toggling back on doesn't surface stale data.
   const fallbacksJson = merged.isUncertain ? serializeFallbacks(merged.fallbacks) : null;
@@ -284,11 +307,17 @@ export async function updateTask(id: string, patch: CalendarTaskPatch): Promise<
 
 export async function deleteTask(id: string): Promise<{ ok: boolean }> {
   await initDb();
-  const result = await db.execute({
-    sql: "DELETE FROM calendar_tasks WHERE id = ?",
-    args: [id],
-  });
-  return { ok: (result.rowsAffected ?? 0) > 0 };
+  // Simulate ON DELETE SET NULL (libsql keeps PRAGMA foreign_keys off): null out
+  // any actual that referenced this plan, then delete the plan — atomically in
+  // one batch so no actual is ever left pointing at a vanished plan_id.
+  const [, deleteRs] = await db.batch(
+    [
+      { sql: "UPDATE calendar_actuals SET plan_id = NULL WHERE plan_id = ?", args: [id] },
+      { sql: "DELETE FROM calendar_tasks WHERE id = ?", args: [id] },
+    ],
+    "write",
+  );
+  return { ok: (deleteRs.rowsAffected ?? 0) > 0 };
 }
 
 export type PlanSummary = { id: string; title: string };
@@ -443,6 +472,31 @@ async function getActualById(id: string): Promise<CalendarActual | null> {
   return row ? rowToActual(row) : null;
 }
 
+/**
+ * True iff some OTHER closed actual on the SAME lane overlaps [startAt, endAt).
+ * The partial UNIQUE index only guards running rows, so closed-vs-closed
+ * collisions on a lane are otherwise unenforced. Strictly track-scoped:
+ * parallel lanes are meant to overlap, so cross-lane overlap is never a
+ * conflict. Overlap is computed on epoch bounds (exact across midnight); the
+ * `date` anchor is a coarse day bucket and can't be trusted for this math.
+ * Half-open intervals: touching edges (prev.end === next.start) don't overlap.
+ */
+async function closedActualOverlapsOnTrack(
+  excludeId: string,
+  track: number,
+  startAt: number,
+  endAt: number,
+): Promise<boolean> {
+  const r = await db.execute({
+    sql: `SELECT 1 FROM calendar_actuals
+          WHERE id != ? AND track = ? AND end_at IS NOT NULL
+            AND start_at < ? AND end_at > ?
+          LIMIT 1`,
+    args: [excludeId, track, endAt, startAt],
+  });
+  return r.rows.length > 0;
+}
+
 export type StartActualInput = {
   planId?: string | null;
   categoryId?: string | null;
@@ -463,17 +517,27 @@ export type StartActualResult =
 
 /** Detect a violation of the partial UNIQUE index guarding one running row
  *  per track. libsql surfaces the SQLITE_CONSTRAINT_UNIQUE code on its error
- *  objects. The name check still matches the pre-parallel index name as a
- *  prefix, so it covers databases migrated in either direction. */
+ *  objects. The index-name check still matches the pre-parallel index name
+ *  (`idx_calendar_actuals_running`) as a prefix, so it covers databases
+ *  migrated in either direction. */
 function isRunningUniqueViolation(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const err = e as { code?: string; message?: string };
-  if (err.code === "SQLITE_CONSTRAINT_UNIQUE" || err.code === "SQLITE_CONSTRAINT") {
-    return true;
-  }
   const msg = err.message ?? "";
-  return /UNIQUE constraint failed.*calendar_actuals/i.test(msg) ||
-         msg.includes("idx_calendar_actuals_running");
+  const isUniqueFailure =
+    err.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+    err.code === "SQLITE_CONSTRAINT" ||
+    /UNIQUE constraint failed/i.test(msg);
+  if (!isUniqueFailure) return false;
+  // Narrowed: a bare SQLITE_CONSTRAINT also covers CHECK / NOT NULL / FK
+  // failures, so additionally require the message to name OUR running-per-track
+  // index or its `track` column. Otherwise an unrelated constraint failure would
+  // be misreported as `concurrent-start`; genuinely unrelated errors fall
+  // through here and rethrow at the call site.
+  return (
+    msg.includes("idx_calendar_actuals_running") ||
+    /calendar_actuals\.track/i.test(msg)
+  );
 }
 
 export async function startActual(input: StartActualInput): Promise<StartActualResult> {
@@ -598,8 +662,11 @@ export async function stopAllActuals(
   await initDb();
   const running = await getRunningActuals();
   if (running.length === 0) return { stopped: [] };
+  // Clamp end to the row's own start: `nowMs` was captured before this SELECT,
+  // so a lane started in the interim could otherwise be closed with
+  // end_at < start_at. MAX(nowMs, start_at) guarantees end >= start for every row.
   await db.execute({
-    sql: `UPDATE calendar_actuals SET end_at=?, updated_at=? WHERE end_at IS NULL`,
+    sql: `UPDATE calendar_actuals SET end_at=MAX(?, start_at), updated_at=? WHERE end_at IS NULL`,
     args: [nowMs, nowMs],
   });
   const stopped = await Promise.all(running.map((r) => getActualById(r.id)));
@@ -616,9 +683,9 @@ export type ActualPatch = Partial<{
 
 export type UpdateActualResult =
   | { ok: true; actual: CalendarActual }
-  | { ok: false; reason: "not-found" | "start-after-end" | "would-overlap-running" | "invalid-category" };
+  | { ok: false; reason: "not-found" | "start-after-end" | "would-overlap-running" | "would-overlap" | "invalid-category" };
 
-export async function updateActual(id: string, patch: ActualPatch): Promise<UpdateActualResult> {
+export async function updateActual(id: string, patch: ActualPatch, timezone: string): Promise<UpdateActualResult> {
   await initDb();
   const existing = await getActualById(id);
   if (!existing) return { ok: false, reason: "not-found" };
@@ -638,6 +705,13 @@ export async function updateActual(id: string, patch: ActualPatch): Promise<Upda
     return { ok: false, reason: "start-after-end" };
   }
 
+  // Re-anchor `date` whenever startAt moves. Day-view queries filter on `date`
+  // and clampActualToDay keys off it too, so an edit that pushes the start
+  // across a day boundary would otherwise strand the row — gone from both the
+  // old day (start no longer there) and the new day (never anchored there).
+  const date =
+    patch.startAt !== undefined ? epochToDateInTz(merged.startAt, timezone) : existing.date;
+
   // Single-active invariant, scoped to this row's own lane. Overlapping a
   // running row on a DIFFERENT track is the entire point of parallel tracks
   // (coding while a workout is timed), so only same-lane collisions are
@@ -653,15 +727,25 @@ export async function updateActual(id: string, patch: ActualPatch): Promise<Upda
     return { ok: false, reason: "would-overlap-running" };
   }
 
+  // Closed-vs-closed same-lane overlap: the UNIQUE index only guards running
+  // rows, so editing a closed actual's bounds to collide with another closed
+  // actual on this lane must be rejected explicitly. Cross-lane overlap is fine.
+  if (
+    merged.endAt !== null &&
+    (await closedActualOverlapsOnTrack(id, existing.track, merged.startAt, merged.endAt))
+  ) {
+    return { ok: false, reason: "would-overlap" };
+  }
+
   // Catch the partial UNIQUE violation as a fallback for the TOCTOU window
   // between `getRunningActual` above and the UPDATE below. App-level pre-check
   // gives a cleaner error in the uncontested case; the catch covers races.
   try {
     await db.execute({
       sql: `UPDATE calendar_actuals
-            SET category_id=?, title=?, start_at=?, end_at=?, notes=?, updated_at=?
+            SET category_id=?, title=?, start_at=?, end_at=?, notes=?, date=?, updated_at=?
             WHERE id=?`,
-      args: [merged.categoryId, merged.title, merged.startAt, merged.endAt, merged.notes, Date.now(), id],
+      args: [merged.categoryId, merged.title, merged.startAt, merged.endAt, merged.notes, date, Date.now(), id],
     });
   } catch (e) {
     if (isRunningUniqueViolation(e)) {
@@ -697,7 +781,7 @@ export type CreateActualInput = {
 
 export type CreateActualResult =
   | { ok: true; actual: CalendarActual }
-  | { ok: false; reason: "start-after-end" | "invalid-category" | "invalid-plan" };
+  | { ok: false; reason: "start-after-end" | "invalid-category" | "invalid-plan" | "would-overlap" };
 
 /**
  * Backfills a closed (non-running) actual with explicit start/end times. Does
@@ -714,6 +798,13 @@ export async function createActual(input: CreateActualInput): Promise<CreateActu
   }
   const id = randomUUID();
   const now = Date.now();
+  // Reject a backfill that would overlap another closed actual on the same lane
+  // (parallel lanes may overlap; this one may not). `id` is freshly minted so
+  // the self-exclusion is a no-op here — it just reuses the shared helper.
+  const track = input.track ?? 0;
+  if (await closedActualOverlapsOnTrack(id, track, input.startAt, input.endAt)) {
+    return { ok: false, reason: "would-overlap" };
+  }
   const date = epochToDateInTz(input.startAt, input.timezone);
   await db.execute({
     sql: `INSERT INTO calendar_actuals
@@ -727,7 +818,7 @@ export async function createActual(input: CreateActualInput): Promise<CreateActu
       input.title ?? null,
       input.startAt,
       input.endAt,
-      input.track ?? 0,
+      track,
       input.notes ?? null,
       now,
       now,
@@ -802,10 +893,10 @@ export async function loadDayPageData(date: string, yesterday: string): Promise<
  *                  trim/lower(actual.title) === trim/lower(alt.title)
  *
  * For each candidate we collect the sub-intervals where matching actuals
- * overlap the candidate's own time slot. The plan's score is the union length
- * of those sub-intervals across parent + all alternatives — overlapping
- * candidates fulfilled by the same actual minute count once, not multiple
- * times. Per-day total is the sum across plans on that day.
+ * overlap the candidate's own time slot. The day's score is the union length of
+ * those sub-intervals across every plan's parent + all alternatives — a single
+ * union over the whole day, so an actual minute claimed by two overlapping
+ * same-category plans (or two candidates of one plan) counts once, not twice.
  *
  * Cross-midnight actuals are clamped to each day they touch. Running actuals
  * (`end_at IS NULL`) clamp to "now".
@@ -828,9 +919,14 @@ export async function getOverlapHeatmapForRange(
         args: [from, to],
       },
       {
+        // Mirror getActualsInRange: the extra `(end_at IS NULL AND date <= ?)`
+        // clause pulls in a still-running actual anchored MORE than one day
+        // before `from`, which the plain BETWEEN window would miss — so a
+        // long-open block still contributes its "now"-clamped minutes.
         sql: `SELECT date, start_at, end_at, category_id, title FROM calendar_actuals
-              WHERE date BETWEEN ? AND ?`,
-        args: [dayBefore, to],
+              WHERE (date BETWEEN ? AND ?)
+                 OR (end_at IS NULL AND date <= ?)`,
+        args: [dayBefore, to, to],
       },
     ],
     "read",
@@ -924,22 +1020,26 @@ export async function getOverlapHeatmapForRange(
   for (const [date, plans] of plansByDate) {
     const dayActuals = actualsByDate.get(date);
     if (!dayActuals || dayActuals.length === 0) continue;
-    let total = 0;
     let plannedMinutes = 0;
+    // Accumulate EVERY fulfilled sub-interval for the whole day across all plans
+    // into one array, then union once below. Unioning per-plan and summing would
+    // double-credit a shared actual minute when two same-category plans overlap
+    // it (plan A "email" 09:00-10:00 + plan B "code" 09:30-10:30, both matched
+    // by one Work actual 09:00-10:30, must credit 90 real min, not 120). A single
+    // union also subsumes the per-candidate de-dup within a single plan.
+    const dayFulfilled: [number, number][] = [];
     for (const plan of plans) {
       plannedMinutes += plan.interval[1] - plan.interval[0];
-      // Collect fulfilled sub-intervals across the parent + alternatives. Each
-      // matching actual gets clipped to its candidate's interval before being
-      // unioned, so a candidate at 18:00–19:00 fulfilled by an actual that
-      // ran 17:30–18:30 contributes only [18:00, 18:30].
-      const fulfilled: [number, number][] = [];
+      // Each matching actual is clipped to its candidate's interval before being
+      // collected, so a candidate at 18:00–19:00 fulfilled by an actual that ran
+      // 17:30–18:30 contributes only [18:00, 18:30].
 
       // Parent candidate: category-only match.
       for (const a of dayActuals) {
         if (a.categoryId !== plan.categoryId) continue;
         const lo = Math.max(a.interval[0], plan.interval[0]);
         const hi = Math.min(a.interval[1], plan.interval[1]);
-        if (hi > lo) fulfilled.push([lo, hi]);
+        if (hi > lo) dayFulfilled.push([lo, hi]);
       }
 
       // Alternative candidates: category AND title both must match.
@@ -954,16 +1054,17 @@ export async function getOverlapHeatmapForRange(
             if (a.titleLower !== altTitleLower) continue;
             const lo = Math.max(a.interval[0], altStart);
             const hi = Math.min(a.interval[1], altEnd);
-            if (hi > lo) fulfilled.push([lo, hi]);
+            if (hi > lo) dayFulfilled.push([lo, hi]);
           }
         }
       }
-
-      if (fulfilled.length === 0) continue;
-      // Intersecting with the full day is a no-op after the helper's internal
-      // normalize step — saves us exporting normalizeIntervals just for this.
-      total += intervalIntersectionMinutes(fulfilled, FULL_DAY);
     }
+
+    if (dayFulfilled.length === 0) continue;
+    // Intersecting with the full day is a no-op after the helper's internal
+    // normalize step — it unions the (possibly overlapping) sub-intervals so
+    // each real minute is counted once. Saves exporting normalizeIntervals.
+    const total = intervalIntersectionMinutes(dayFulfilled, FULL_DAY);
     if (total > 0 && plannedMinutes > 0) {
       const denom = Math.min(FULL_TARGET_MIN, Math.max(MIN_TARGET_MIN, plannedMinutes));
       out[date] = Math.min(1, total / denom);
