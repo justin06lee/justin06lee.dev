@@ -84,6 +84,7 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
                 { label: "calendar", href: "/calendar" },
                 { label: "articles", href: "/articles" },
                 { label: "gallery", href: "/gallery" },
+                { label: "oddjobs", href: "https://oddjob.justin06lee.dev" },
             ]}
             linkComponent={Link}
         />
