@@ -38,7 +38,7 @@ export default async function DeskEditPage({ params }: Props) {
         initialRaw={
           draft.raw ??
           buildArticleDraft({
-            title: actualName || "Untitled",
+            title: actualName || "untitled",
           })
         }
         initialSha={draft.sha}

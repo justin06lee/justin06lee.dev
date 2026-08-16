@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { Desk } from "@/components/chrome/desk";
 import { Prose } from "@/components/chrome/prose";
 import { Button } from "@/components/chrome/button";
+import { useDialog } from "@/components/Dialog";
 import type { Asset } from "@/components/chrome/asset-sidebar";
 import type { DrawingSaveResult } from "@/components/chrome/drawing-window";
 import { bodyLineOffset, parseArticleDraft } from "@/lib/article-draft";
@@ -40,13 +41,12 @@ export function OperatorArticleEditor({
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [assetError, setAssetError] = useState("");
-  const [assetToDelete, setAssetToDelete] = useState<OperatorImageAsset | null>(null);
-  const [deletingAsset, setDeletingAsset] = useState<string | null>(null);
 
+  const dialog = useDialog();
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
 
-  const articleName = articlePath[articlePath.length - 1] ?? "Untitled";
+  const articleName = articlePath[articlePath.length - 1] ?? "untitled";
   const articleLabel = articlePath.join(" / ");
   const parsed = useMemo(
     () => parseArticleDraft(raw, articleName),
@@ -60,8 +60,8 @@ export function OperatorArticleEditor({
   // Strip the leading front-matter region (`# title`, `cover:`, `excerpt:`,
   // `tags:`, `prerequisites:`) so the preview renders body-only and doesn't
   // echo the raw metadata. `lineOffset` is the count of stripped source lines,
-  // which keeps the two-way line-sync aligned (editor line N <-> preview block
-  // line N - lineOffset). Reused across renders (stable ref keyed on the
+  // which keeps the two-way line-sync aligned (editor line N maps to preview
+  // block line N minus lineOffset). Reused across renders (stable ref keyed on the
   // fallback title) as Desk requires.
   const transformSource = useCallback(
     (source: string) => {
@@ -91,6 +91,10 @@ export function OperatorArticleEditor({
   // Fired by the Desk toolbar's Save button and by cmd/ctrl+s (Desk owns that
   // key binding). sha threads the optimistic-concurrency token forward.
   async function handleSave(value: string) {
+    // Re-entry guard: a second save (e.g. a double cmd/ctrl+s) while one is in
+    // flight would hit GitHub with the same, soon-to-be-stale sha and 422; block
+    // it so only one save advances the optimistic-concurrency token at a time.
+    if (saving) return;
     setSaving(true);
     setSaveError("");
     setSaveMessage("");
@@ -102,10 +106,12 @@ export function OperatorArticleEditor({
       const result = await saveArticleAction(null, formData);
       if (result?.error) setSaveError(result.error);
       if (result?.message) setSaveMessage(result.message);
-      if (result?.sha) setSha(result.sha);
+      // Only adopt a sha from a successful save — never overwrite a good token
+      // with the stale one a failed save might carry.
+      if (result?.sha && !result.error) setSha(result.sha);
     } catch (error) {
       setSaveError(
-        error instanceof Error ? error.message : "Unable to save article.",
+        error instanceof Error ? error.message : "unable to save article.",
       );
     } finally {
       setSaving(false);
@@ -118,7 +124,7 @@ export function OperatorArticleEditor({
       const imageFiles = files.filter((file) => file.type.startsWith("image/"));
       if (imageFiles.length === 0) {
         setAssetError(
-          "Only image files can be dropped here (png, jpeg, gif, webp, svg).",
+          "only image files can be dropped here (png, jpeg, gif, webp, svg).",
         );
         return;
       }
@@ -136,48 +142,48 @@ export function OperatorArticleEditor({
               | { error?: string }
               | null;
             throw new Error(
-              body?.error || `Upload failed (status ${response.status}).`,
+              body?.error || `upload failed (status ${response.status}).`,
             );
           }
           const asset = (await response.json()) as OperatorImageAsset;
           setAssets((current) => [asset, ...current]);
         } catch (error) {
-          setAssetError(error instanceof Error ? error.message : "Upload failed.");
+          setAssetError(error instanceof Error ? error.message : "upload failed.");
         }
       }
     });
   }
 
-  function handleDeleteAsset(asset: Asset) {
+  // Deleting an asset routes through the app-wide dialog provider (accessible,
+  // focus-trapped, on-palette) rather than a hand-rolled modal. The confirm
+  // resolves before we touch GitHub, so a cancel is a no-op.
+  async function handleDeleteAsset(asset: Asset) {
     const original = assets.find((item) => item.filename === asset.id);
     if (!original) return;
     setAssetError("");
-    setAssetToDelete(original);
-  }
-
-  function confirmAssetDelete() {
-    if (!assetToDelete) return;
-    setAssetError("");
-    setDeletingAsset(assetToDelete.filename);
+    const ok = await dialog.confirm({
+      title: `delete ${original.displayName}?`,
+      message: "existing markdown references will break.",
+      confirmText: "delete",
+      danger: true,
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteImageAction({
           articlePath,
-          darkFilename: assetToDelete.darkFilename,
-          darkSha: assetToDelete.darkSha,
-          filename: assetToDelete.filename,
-          sha: assetToDelete.sha,
+          darkFilename: original.darkFilename,
+          darkSha: original.darkSha,
+          filename: original.filename,
+          sha: original.sha,
         });
         setAssets((current) =>
-          current.filter((item) => item.filename !== assetToDelete.filename),
+          current.filter((item) => item.filename !== original.filename),
         );
-        setAssetToDelete(null);
       } catch (error) {
         setAssetError(
-          error instanceof Error ? error.message : "Unable to delete image.",
+          error instanceof Error ? error.message : "unable to delete image.",
         );
-      } finally {
-        setDeletingAsset(null);
       }
     });
   }
@@ -195,7 +201,7 @@ export function OperatorArticleEditor({
       setAssets((current) => [result, ...current]);
     } catch (error) {
       setAssetError(
-        error instanceof Error ? error.message : "Unable to save drawing.",
+        error instanceof Error ? error.message : "unable to save drawing.",
       );
     }
   }
@@ -207,9 +213,9 @@ export function OperatorArticleEditor({
           {saving ? <span className="text-white/60">saving...</span> : null}
           {saveError ? <span className="text-red-400">{saveError}</span> : null}
           {saveMessage && !saveError ? (
-            <span className="text-green-400">{saveMessage}</span>
+            <span className="text-white/60">{saveMessage}</span>
           ) : null}
-          {assetError && !assetToDelete ? (
+          {assetError ? (
             <span className="text-red-400">{assetError}</span>
           ) : null}
         </div>
@@ -269,41 +275,6 @@ export function OperatorArticleEditor({
           </Prose>
         )}
       />
-
-      {assetToDelete ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4">
-          <div className="flex w-full max-w-sm flex-col gap-4 border border-white/20 bg-black p-6">
-            <p className="text-sm text-white">
-              Delete{" "}
-              <span className="font-medium">{assetToDelete.displayName}</span>?
-              Existing markdown references will break.
-            </p>
-            {assetError ? (
-              <p className="text-sm text-red-400">{assetError}</p>
-            ) : null}
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAssetError("");
-                  setAssetToDelete(null);
-                }}
-                className="px-4 py-1.5 text-sm transition-colors hover:bg-white/10"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingAsset === assetToDelete.filename}
-                onClick={confirmAssetDelete}
-                className="bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-red-600"
-              >
-                {deletingAsset === assetToDelete.filename ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }

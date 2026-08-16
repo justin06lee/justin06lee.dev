@@ -82,31 +82,38 @@ export function parseArticleDraft(
       continue;
     }
 
-    const coverMatch = line.match(/^cover:\s*(.+)$/i);
+    // Metadata keys accept an empty value (e.g. a bare `cover:` from a starter
+    // template): the line is consumed as front-matter, but an empty capture
+    // leaves the field unset rather than storing "" or shifting into the body.
+    const coverMatch = line.match(/^cover:\s*(.*)$/i);
     if (coverMatch) {
       let raw = coverMatch[1].trim();
-      const mdImg = raw.match(/^!\[.*?\]\((.+?)\)$/);
-      if (mdImg) raw = mdImg[1];
-      cover = raw;
+      if (raw) {
+        const mdImg = raw.match(/^!\[.*?\]\((.+?)\)$/);
+        if (mdImg) raw = mdImg[1];
+        cover = raw;
+      }
       cursor += 1;
       continue;
     }
 
-    const excerptMatch = line.match(/^excerpt:\s*(.+)$/i);
+    const excerptMatch = line.match(/^excerpt:\s*(.*)$/i);
     if (excerptMatch) {
-      excerpt = excerptMatch[1].trim();
+      const value = excerptMatch[1].trim();
+      if (value) excerpt = value;
       cursor += 1;
       continue;
     }
 
-    const hiddenMatch = line.match(/^hidden:\s*(.+)$/i);
+    const hiddenMatch = line.match(/^hidden:\s*(.*)$/i);
     if (hiddenMatch) {
-      hidden = /^(true|yes|1|hidden)$/i.test(hiddenMatch[1].trim());
+      const value = hiddenMatch[1].trim();
+      if (value) hidden = /^(true|yes|1|hidden)$/i.test(value);
       cursor += 1;
       continue;
     }
 
-    const tagsMatch = line.match(/^tags:\s*(.+)$/i);
+    const tagsMatch = line.match(/^tags:\s*(.*)$/i);
     if (tagsMatch) {
       for (const tag of tagsMatch[1].split(",")) {
         const t = tag.trim();

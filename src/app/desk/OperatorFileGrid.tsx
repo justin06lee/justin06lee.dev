@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileGrid, type FileGridFile } from "@/components/chrome/file-grid";
@@ -29,34 +29,63 @@ type OperatorFile = FileGridFile & { pathSegments: string[]; hidden: boolean };
  */
 export function OperatorFileGrid({ items }: { items: OperatorFileItem[] }) {
   const router = useRouter();
-  // Local hidden state keyed by href, seeded from the server list, so the toggle
-  // is optimistic (instant) and can roll back if the write fails.
-  const [hiddenById, setHiddenById] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(items.map((i) => [i.href, i.hidden]))
-  );
+  // Only in-flight/optimistic overrides live here, keyed by href — NOT a seeded
+  // copy of every row. That way refreshed server props are the default source of
+  // truth; an override only shadows a row while its write is pending.
+  const [pending, setPending] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+
+  // Drop an override once the refreshed server props agree with it, so server
+  // truth wins and there's no flash back to the old value between the optimistic
+  // update and the refresh landing.
+  useEffect(() => {
+    setPending((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const item of items) {
+        if (item.href in next && next[item.href] === item.hidden) {
+          delete next[item.href];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [items]);
 
   const files: OperatorFile[] = items.map((item) => ({
     id: item.href,
     name: item.name,
     href: item.href,
     pathSegments: item.pathSegments,
-    hidden: hiddenById[item.href] ?? item.hidden,
+    hidden: item.href in pending ? pending[item.href] : item.hidden,
   }));
 
   async function toggleVisibility(file: OperatorFile, nextHidden: boolean) {
+    // In-flight guard: a second toggle before the first resolves would write the
+    // same stale sha and 422; ignore it while one write is pending on this row.
+    if (file.id in pending) return;
     setError(null);
-    setHiddenById((m) => ({ ...m, [file.id]: nextHidden }));
+    setPending((m) => ({ ...m, [file.id]: nextHidden }));
     try {
       await setArticleVisibilityAction({
         pathSegments: file.pathSegments,
         hidden: nextHidden,
       });
+      // Pull fresh server state; the effect above drops the override once props
+      // catch up, so the optimistic value stays put until then (no flicker).
       router.refresh();
     } catch (e) {
-      // Roll the checkbox back and surface the reason.
-      setHiddenById((m) => ({ ...m, [file.id]: !nextHidden }));
+      // Roll the override back to server truth and surface the reason. Also
+      // refresh in case the write actually committed to GitHub before throwing,
+      // so the UI reconciles either way.
+      setPending((m) => {
+        const nextMap = { ...m };
+        delete nextMap[file.id];
+        return nextMap;
+      });
       setError(e instanceof Error ? e.message : "couldn't update visibility.");
+      router.refresh();
     }
   }
 
@@ -79,6 +108,7 @@ export function OperatorFileGrid({ items }: { items: OperatorFileItem[] }) {
             >
               <Checkbox
                 checked={!file.hidden}
+                disabled={file.id in pending}
                 onChange={(e) => toggleVisibility(file, !e.target.checked)}
                 label={file.hidden ? "hidden" : "visible"}
                 wrapperClassName="text-xs text-white/60"
