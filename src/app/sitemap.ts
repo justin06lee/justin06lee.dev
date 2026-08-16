@@ -4,8 +4,8 @@ import { listArticleSummaries } from "@/lib/github";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://justin06lee.dev";
 
-    // Only public surfaces belong here — /me and /desk are admin, /oddjobs is an
-    // empty placeholder, and /calendar/* is dynamic/admin-driven.
+    // Only public surfaces belong here — /me and /desk are admin, and
+    // /calendar/* is dynamic/admin-driven. (oddjobs lives at its own subdomain.)
     const staticRoutes: MetadataRoute.Sitemap = [
         { url: `${base}/`, changeFrequency: "weekly", priority: 1 },
         { url: `${base}/articles`, changeFrequency: "weekly", priority: 0.8 },
