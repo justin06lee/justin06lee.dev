@@ -1,0 +1,28 @@
+# Valhalla installs as a single skill (the repo root). Keep the runtime and the
+# discipline knowledge; leave development-only and optional trees out of the
+# user's skills directory.
+
+# Development-only
+tests/
+.github/
+docs/
+screenshots/
+assets/
+*.gif
+
+# Optional add-ons that need their own installer; not part of the core skill
+extensions/
+
+# Repo meta that has no role inside an installed skill
+CHANGELOG.md
+CONTRIBUTORS.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+SECURITY.md
+PRIVACY.md
+CITATION.cff
+install.sh
+install.ps1
+uninstall.sh
+uninstall.ps1
+pyproject.toml

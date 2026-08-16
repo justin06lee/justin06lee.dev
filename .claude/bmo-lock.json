@@ -8,8 +8,30 @@
       "source": "justin06lee/chrome.md",
       "installed_path": "/Volumes/T7/Stockpile/Workspace/github.com/justin06lee/justin06lee/shipped/justin06lee.dev/.claude/skills/chrome",
       "installed_at": "2026-07-15T04:13:29Z",
-      "updated_at": "2026-08-05T20:15:25Z",
+      "updated_at": "2026-08-16T01:31:54Z",
       "source_ref": "master",
+      "source_type": "github"
+    },
+    "dev-chrome": {
+      "name": "dev-chrome",
+      "description": "Use when building NEW components for the chrome registry (chrome.justin06lee.dev / @justin06lee/chrome), or when working in any project that uses chrome and the UI you need isn't in the registry yet. Covers finding the registry repo on this machine, deciding between a new component and a prop on an existing one, writing to the house quality bar, and upstreaming the result into the registry and the docs site. Triggers on \"add a chrome component\", \"chrome doesn't have\", \"build a component for chrome\", \"contribute to chrome.justin06lee.dev\", \"new registry component\", or hitting a missing UI need in a project with a chrome.json.",
+      "scope": "project",
+      "source": "justin06lee/dev.chrome.md",
+      "installed_path": "/Volumes/T7/Stockpile/Workspace/github.com/justin06lee/justin06lee/shipped/justin06lee.dev/.claude/skills/dev-chrome",
+      "installed_at": "2026-08-16T01:32:03Z",
+      "updated_at": "2026-08-16T01:32:03Z",
+      "source_ref": "master",
+      "source_type": "github"
+    },
+    "valhalla": {
+      "name": "valhalla",
+      "description": "One-command autonomous SEO for a codebase. Say \"/valhalla\" (optionally with a path) and it does the entire job in one sweep: understands the product, decides which SEO disciplines apply, fans out specialists in parallel, and applies every relevant fix directly to the source on a branch, then shows one diff. No sub-commands, no per-skill decisions. Triggers on: valhalla, \"audit this codebase and fix the SEO\", \"do all the SEO\", \"full SEO pass\", \"make this SEO-complete\", \"SEO autopilot\", \"fix all the seo\", or any request to improve a project's SEO end to end.\n",
+      "scope": "project",
+      "source": "justin06lee/valhalla.md",
+      "installed_path": "/Volumes/T7/Stockpile/Workspace/github.com/justin06lee/justin06lee/shipped/justin06lee.dev/.claude/skills/valhalla",
+      "installed_at": "2026-08-16T01:41:36Z",
+      "updated_at": "2026-08-16T01:41:36Z",
+      "source_ref": "main",
       "source_type": "github"
     }
   }
