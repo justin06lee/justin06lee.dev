@@ -445,6 +445,52 @@ vs siblings: prose is the renderer; `article` is the page layout that typically 
 <Prose>{`# hello\n\nmarkdown with $e^{i\\pi} + 1 = 0$ and \`\`\`ts\ncode\n\`\`\``}</Prose>
 ```
 
+## salon
+
+**Role:** a salon hang — a wall of images shown at their own aspect ratios, justified into rows that each fill the width.
+**Install:** `bunx @justin06lee/chrome@latest add salon`
+**Composes:** nothing beyond utils
+
+the pieces keep their real proportions — a tall poster next to a wide banner next to a square — and the varied hang is the point. rows are justified with the standard greedy fill: pieces accumulate until the height that would make the row span the container drops to `targetRowHeight`, then the row closes at exactly that height. every piece in a row therefore shares one height and keeps its own aspect ratio, and because each rendered box already has the piece's aspect ratio, the image `object-cover`s into it with no crop (as long as `width`/`height` describe the image's true ratio). `width`/`height` are intrinsic *ratios*, not render sizes — `{ width: 16, height: 9 }` packs identically to `{ width: 1600, height: 900 }`.
+
+the packing geometry is extracted to a separate `salon-layout.ts` (shipped alongside the component) so it can be tested without a DOM, and it is: `justifyRows(items, containerWidth, gap, targetHeight, maxHeight)` is the whole algorithm, with tests covering gap accounting, exact-width spans, and the two trailing-row branches. pieces with a non-positive or non-finite aspect ratio are skipped rather than throwing.
+
+the trailing row is the one deliberate exception. a leftover row usually can't fill the width without stretching a stray piece into a billboard, so it left-aligns at `targetRowHeight` instead — leaving a gap on the right, which is the justified-gallery convention, not a bug. the exception's exception: if the leftover row *nearly* fills on its own (its fill height stays under `maxRowHeight`, default `targetRowHeight * 1.5`) it justifies like any other row. raise `maxRowHeight` to make more trailing rows stretch to full width; lower it toward `targetRowHeight` to keep them all left-aligned.
+
+width is measured with a `ResizeObserver` so the hang reflows on resize, via `useIsomorphicLayoutEffect` (real `useLayoutEffect` on the client, `useEffect` on the server to dodge the SSR warning). the first, pre-measurement paint uses `assumedWidth` (1040) so the server and initial-client markup agree before the observer fires — set it near your real container width for server-rendered walls, or the first frame packs rows for the wrong width and visibly reflows on mount. one consequence worth knowing: because every piece is sized to fill its row, one unusually wide piece shortens the entire row it lands in — the shapes interact, they aren't independent.
+
+each piece is a bordered box that brightens on hover/focus. a `title` renders as a gradient placard that fades in over the piece on hover/focus (snapped, not faded, under `prefers-reduced-motion`); a piece with no `src` renders that title as a centered typographic placard instead, so a wall can mix images and text plates. linking follows the house rule: internal hrefs route through `linkComponent` (falls back to a plain `<a>`), while external ones — flagged `external` or any `http(s)` href — always stay a plain `<a>` opening in a new tab with `rel="noopener noreferrer"`; a piece with no href renders as a plain div. the wall is a `role="group"` named by `ariaLabel`, and each linked piece takes its accessible name from `alt` (or a string `title`).
+
+vs siblings: `gallery` is the uniform, searchable, sortable card grid — every project the same card sized to a column, and it brings its own page heading and margins; `shelf` is one horizontal row you skim, stacked with other rows; `showcase` is a single framed demo preview. salon is none of those — many pieces at their real proportions, packed into a justified multi-row wall — so reach for it when the images *are* the content and their shapes carry meaning. `stack` (in `references/effects.md`) is the fanned pile rather than a laid-out wall.
+
+**Key props:**
+- `items: SalonItem[]` — required — the pieces to hang, each at its own aspect ratio: { src?: string; width: number; height: number; href?: string; alt?: string; title?: ReactNode; external?: boolean }[]. width/height are intrinsic pixels that set the aspect ratio, not the render size; omit src to render a typographic placard in the slot; a title shows as a placard on hover/focus; external (or an http(s) href) opens in a new tab as a plain <a>.
+- `targetRowHeight: number = 260` — ideal row height in px before a row is justified to fill the width.
+- `gap: number = 12` — gap between pieces and rows in px.
+- `maxRowHeight: number = targetRowHeight * 1.5` — how tall a trailing, un-fillable row may grow before it stops stretching and left-aligns at the target height.
+- `maxWidth: number` — container max width in px. unbounded by default (fills its parent).
+- `assumedWidth: number = 1040` — assumed width for the first (server) render, before the container is measured.
+- `linkComponent: React.ElementType` — router link for internal hrefs (e.g. next/link). defaults to a plain <a>; external hrefs always stay <a>.
+- `ariaLabel: string` — accessible name for the wall region.
+- `className: string`
+
+**Example:**
+```tsx
+import Link from "next/link";
+
+<Salon
+  ariaLabel="selected works"
+  targetRowHeight={240}
+  linkComponent={Link}
+  items={[
+    { src: "/banner.jpg", width: 1600, height: 540, title: "the horizon line", href: "/work/horizon" },
+    { src: "/poster.jpg", width: 800, height: 1200, title: "monolith", alt: "tall poster" },
+    { src: "/square.jpg", width: 1000, height: 1000, title: "study in gray" },
+    { src: "/wide.jpg", width: 1920, height: 1080, title: "wide angle", href: "https://example.com", external: true },
+  ]}
+/>
+```
+
 ## shelf
 
 **Role:** horizontally scrolling row of cards — the browsable counterpart to gallery's searchable grid.
