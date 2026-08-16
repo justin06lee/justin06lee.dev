@@ -14,39 +14,40 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
 ]);
 
-// Reads the IP's bucket, computes allowed, and writes the new bucket state.
-// Allowed can briefly over-consume under concurrent requests from the same IP;
-// acceptable for this use case.
+// Atomically consumes up to `delta` pats from the IP's window and returns how
+// many were allowed. Two hardening fixes over the old read-then-write:
+//   1. Prune expired buckets so pat_rate can't grow unboundedly (login_attempts
+//      and api_mutation_rate already do this — pat_rate was the odd one out).
+//   2. Single-statement upsert with RETURNING (same pattern as
+//      checkApiMutationRate): a non-atomic SELECT-then-write lets two concurrent
+//      requests from one IP both read the same count and both credit the shared
+//      counter, exceeding RATE_MAX_PATS. `pats` accumulates the requested delta;
+//      the cap is applied when deriving `allowed`, so the grant stays exact
+//      (including partial grants at the boundary) without needing the old value.
 const consume = async (ip: string, delta: number): Promise<number> => {
   const now = Date.now();
-  const read = await db.execute({
-    sql: "SELECT window_start, pats FROM pat_rate WHERE ip = ?",
-    args: [ip],
+  const windowStart = now - RATE_WINDOW_MS;
+
+  await db.execute({
+    sql: "DELETE FROM pat_rate WHERE window_start < ?",
+    args: [windowStart],
   });
-  const row = read.rows[0] as unknown as { window_start: number; pats: number } | undefined;
 
-  let allowed: number;
-  let windowStart: number;
-  let pats: number;
-  if (!row || now - Number(row.window_start) >= RATE_WINDOW_MS) {
-    allowed = Math.min(delta, RATE_MAX_PATS);
-    windowStart = now;
-    pats = allowed;
-  } else {
-    const remaining = Math.max(0, RATE_MAX_PATS - Number(row.pats));
-    allowed = Math.min(delta, remaining);
-    windowStart = Number(row.window_start);
-    pats = Number(row.pats) + allowed;
-  }
+  const res = await db.execute({
+    sql: `INSERT INTO pat_rate (ip, window_start, pats) VALUES (?, ?, ?)
+          ON CONFLICT(ip) DO UPDATE SET
+            pats = CASE WHEN pat_rate.window_start < ? THEN ? ELSE pat_rate.pats + ? END,
+            window_start = CASE WHEN pat_rate.window_start < ? THEN ? ELSE pat_rate.window_start END
+          RETURNING pats`,
+    args: [ip, now, delta, windowStart, delta, delta, windowStart, now],
+  });
+  const newPats = Number((res.rows[0] as unknown as { pats: number }).pats);
 
-  if (allowed > 0) {
-    await db.execute({
-      sql: `INSERT INTO pat_rate (ip, window_start, pats) VALUES (?, ?, ?)
-            ON CONFLICT(ip) DO UPDATE SET window_start = excluded.window_start, pats = excluded.pats`,
-      args: [ip, windowStart, pats],
-    });
-  }
-  return allowed;
+  // allowed = (granted after this request) − (granted before it). Because
+  // `pats` stores the cumulative *requested* total, prevTotal = newPats − delta
+  // holds in both the reset branch (prevTotal 0) and the accumulate branch, so
+  // this is exact under the RATE_MAX_PATS cap.
+  return Math.min(newPats, RATE_MAX_PATS) - Math.min(newPats - delta, RATE_MAX_PATS);
 };
 
 export async function GET() {
@@ -60,6 +61,12 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
   if (!origin || !ALLOWED_ORIGINS.has(origin)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Reject oversized bodies before buffering: the payload is a tiny {delta}
+  // object, so a large body is abuse. Cheap DoS guard on this public endpoint.
+  if (Number(req.headers.get("content-length")) > 1024) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }
 
   await initDb();

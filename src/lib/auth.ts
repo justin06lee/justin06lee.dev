@@ -8,6 +8,11 @@ import { db, initDb } from "@/lib/db";
  * and most reverse proxies and not forwarded from the client), falling back to
  * the rightmost value of x-forwarded-for (the hop nearest to us, not the
  * client-controlled leftmost value). Returns "unknown" if neither is present.
+ *
+ * Security note: this trusts the platform edge (Vercel) to set x-real-ip and to
+ * strip/append x-forwarded-for. That assumption holds on Vercel; changing this
+ * derivation risks breaking legitimate rate limiting, so it is intentionally
+ * left as-is.
  */
 export function getClientIp(req: NextRequest): string {
   const realIp = req.headers.get("x-real-ip");

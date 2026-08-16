@@ -58,6 +58,9 @@ async function doInit(): Promise<void> {
       count INTEGER NOT NULL,
       first_attempt INTEGER NOT NULL
     )`,
+    // checkRateLimit prunes `WHERE first_attempt < ?` on every login attempt;
+    // without this index that prune is a full table scan.
+    `CREATE INDEX IF NOT EXISTS idx_login_attempts_first_attempt ON login_attempts(first_attempt)`,
     `CREATE TABLE IF NOT EXISTS api_mutation_rate (
       ip TEXT PRIMARY KEY,
       count INTEGER NOT NULL,
