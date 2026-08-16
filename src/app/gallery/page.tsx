@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import { ItemGallery } from "@/components/ItemGallery";
 import { GalleryTabs, type GalleryTab } from "@/components/GalleryTabs";
+import { Salon } from "@/components/chrome/salon";
 import { getItemsByCategory } from "@/lib/items";
+import { getProjectSalonItems } from "@/lib/project-images";
 
 export const dynamic = "force-dynamic";
 
@@ -45,18 +47,36 @@ export default async function GalleryPage({
     const meta = TAB_META[tab];
     const items = await getItemsByCategory(tab);
 
+    // Projects hang as a salon wall of their README hero images; the other tabs
+    // keep the searchable card grid.
+    const salonItems = tab === "projects" ? await getProjectSalonItems(items) : [];
+
     return (
         <div className="min-h-screen bg-black text-white">
             <Navbar />
             <GalleryTabs active={tab} />
-            <ItemGallery
-                title={meta.title}
-                subtitle={meta.subtitle}
-                items={items}
-                initialSort="newest"
-                chipBase={0.4}
-                chipStep={0.1}
-            />
+            {tab === "projects" ? (
+                <main className="mx-auto max-w-6xl px-4 pb-24 pt-16">
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-semibold tracking-tight">{meta.title}</h1>
+                        <p className="mt-1 text-sm text-white/70">{meta.subtitle}</p>
+                    </div>
+                    {salonItems.length > 0 ? (
+                        <Salon items={salonItems} ariaLabel="projects" />
+                    ) : (
+                        <p className="text-sm text-white/40">no projects yet.</p>
+                    )}
+                </main>
+            ) : (
+                <ItemGallery
+                    title={meta.title}
+                    subtitle={meta.subtitle}
+                    items={items}
+                    initialSort="newest"
+                    chipBase={0.4}
+                    chipStep={0.1}
+                />
+            )}
         </div>
     );
 }
