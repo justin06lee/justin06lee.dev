@@ -32,7 +32,15 @@ export async function POST(req: NextRequest) {
 
   await initDb();
 
-  const formData = await req.formData();
+  // Malformed/oversized multipart bodies make formData() throw; without a guard
+  // that surfaces as an unhandled 500. Return a clean 400 instead (matches
+  // /api/desk/upload).
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+  }
   const file = formData.get("file");
   const articleSlugRaw = formData.get("article_slug");
 

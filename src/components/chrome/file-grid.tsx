@@ -318,7 +318,7 @@ export function FileGrid<T extends FileGridFile>({
           className="pointer-events-none fixed left-0 top-0 z-[70]"
           style={{ transform: "translate3d(-9999px, -9999px, 0)" }}
         >
-          <div className="border border-white/30 bg-black px-3 py-2 text-xs text-white/80 shadow-lg">
+          <div className="border border-white/30 bg-black px-3 py-2 text-xs text-white/80">
             {dragging.name}
           </div>
         </div>

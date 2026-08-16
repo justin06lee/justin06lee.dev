@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 
 const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 const MONTH_NAMES_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
 ] as const;
 
 function buildMonthGrid(year: number, month: number): (string | null)[] {
@@ -35,7 +35,7 @@ export type HeatmapMonth = {
   /** 0-based month index (0 = jan). */
   index: number;
   year: number;
-  /** Label as rendered, e.g. "Jan". */
+  /** Label as rendered, e.g. "jan". */
   label: string;
 };
 

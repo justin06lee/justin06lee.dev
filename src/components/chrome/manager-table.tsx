@@ -165,9 +165,9 @@ export function ManagerTable({
 
   async function handleDelete(row: ManagerRow) {
     const ok = await dialog.confirm({
-      title: `Delete "${row.name}"?`,
-      message: "This cannot be undone.",
-      confirmText: "Delete",
+      title: `delete "${row.name}"?`,
+      message: "this cannot be undone.",
+      confirmText: "delete",
       danger: true,
     });
     if (!ok) return;
@@ -178,10 +178,10 @@ export function ManagerTable({
     <table className={cn("w-full text-sm", className)}>
       <thead className="text-xs uppercase tracking-wider text-white/50">
         <tr>
-          <th className="text-left py-2">Name</th>
-          <th className="text-left py-2">Color</th>
-          <th className="text-right py-2">Status</th>
-          <th className="text-right py-2 w-32">Actions</th>
+          <th className="text-left py-2">name</th>
+          <th className="text-left py-2">color</th>
+          <th className="text-right py-2">status</th>
+          <th className="text-right py-2 w-32">actions</th>
         </tr>
       </thead>
       <tbody>
@@ -207,7 +207,7 @@ export function ManagerTable({
                     </span>
                   ) : (
                     <InlineEdit
-                      aria-label={`Rename ${row.name}`}
+                      aria-label={`rename ${row.name}`}
                       value={row.name}
                       disabled={pending}
                       onCommit={async (next) => {
@@ -222,7 +222,7 @@ export function ManagerTable({
                 </td>
                 <td className="py-2 pr-3">
                   <ColorSwatchPicker
-                    ariaLabel={`Color for ${row.name}`}
+                    ariaLabel={`color for ${row.name}`}
                     value={row.color ?? null}
                     palette={paletteColors}
                     onChange={(hex) =>
@@ -246,7 +246,7 @@ export function ManagerTable({
                     }
                     className="text-xs text-white/60 hover:text-white disabled:opacity-50"
                   >
-                    {archived ? "Unarchive" : "Archive"}
+                    {archived ? "unarchive" : "archive"}
                   </button>
                 </td>
                 <td className="py-2 text-right">
@@ -257,7 +257,7 @@ export function ManagerTable({
                       onClick={() => void handleDelete(row)}
                       className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
                     >
-                      Delete
+                      delete
                     </button>
                   )}
                 </td>

@@ -23,9 +23,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const row = result.rows[0] as unknown as { mime_type: string; data: string };
   const buffer = Buffer.from(row.data, "base64");
 
+  // Serve-time allowlist: legacy rows may hold a dangerous stored mime type
+  // (e.g. image/svg+xml from before the ingest allowlist tightened), and a
+  // browser navigating to such a URL would execute inline SVG script on our
+  // origin. Revalidating here neutralizes any bad stored value without needing
+  // to touch the DB — anything outside the allowlist downgrades to a benign,
+  // non-rendering octet-stream. The CSP + sandbox and inline Content-Disposition
+  // further ensure the response can never execute script even if served.
+  const SAFE = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+  const ct = SAFE.has(row.mime_type) ? row.mime_type : "application/octet-stream";
+
   return new NextResponse(buffer, {
     headers: {
-      "Content-Type": row.mime_type,
+      "Content-Type": ct,
+      "Content-Disposition": 'inline; filename="upload"',
+      "Content-Security-Policy": "default-src 'none'; sandbox",
       "Cache-Control": "public, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
     },

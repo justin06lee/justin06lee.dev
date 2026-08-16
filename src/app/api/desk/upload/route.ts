@@ -20,6 +20,12 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file provided." }, { status: 400 });
   }
+  // Reject oversized uploads before buffering + base64-encoding the whole file.
+  // Mirrors MAX_UPLOAD_BYTES in operator-content (10 MB), which otherwise only
+  // checks after the bytes are already in memory.
+  if (file.size > 10 * 1024 * 1024) {
+    return NextResponse.json({ error: "file too large" }, { status: 400 });
+  }
   if (typeof articlePathRaw !== "string" || !articlePathRaw) {
     return NextResponse.json({ error: "Article path is required." }, { status: 400 });
   }

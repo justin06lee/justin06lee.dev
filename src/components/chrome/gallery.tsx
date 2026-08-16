@@ -24,9 +24,9 @@ export type GalleryItem = {
   description: string;
   year: number;
   tech: string[];
-  /** "View Code" link. */
+  /** "view code" link. */
   repo?: string;
-  /** "Live" link. */
+  /** "live" link. */
   live?: string;
   /** Muted italic line under the description. */
   notes?: string;
@@ -49,10 +49,10 @@ export type GalleryProps = {
 };
 
 const SORT_LABEL: Record<GallerySort, string> = {
-  newest: "Newest",
-  oldest: "Oldest",
-  az: "A–Z",
-  za: "Z–A",
+  newest: "newest",
+  oldest: "oldest",
+  az: "a–z",
+  za: "z–a",
 };
 
 const SORT_KEYS: GallerySort[] = ["newest", "oldest", "az", "za"];
@@ -90,7 +90,7 @@ const PIN_GLOW_STYLE: CSSProperties = CHROME_GLOW_STYLE;
  */
 export function Gallery({
   title,
-  subtitle = "A curated list of things I've built or explored.",
+  subtitle = "a curated list of things i've built or explored.",
   items = [],
   initialSort = "newest",
   chipBase = 0.4,
@@ -112,7 +112,8 @@ export function Gallery({
   const allTags = useMemo(() => {
     const s = new Set<string>();
     items.forEach((p) => p.tech.forEach((t) => s.add(t)));
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
+    // Pin the locale so server and client sort identically (hydration-safe).
+    return Array.from(s).sort((a, b) => a.localeCompare(b, "en"));
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -130,13 +131,13 @@ export function Gallery({
       if (pinDiff !== 0) return pinDiff;
       switch (sort) {
         case "newest":
-          return b.year - a.year || a.title.localeCompare(b.title);
+          return b.year - a.year || a.title.localeCompare(b.title, "en");
         case "oldest":
-          return a.year - b.year || a.title.localeCompare(b.title);
+          return a.year - b.year || a.title.localeCompare(b.title, "en");
         case "az":
-          return a.title.localeCompare(b.title);
+          return a.title.localeCompare(b.title, "en");
         case "za":
-          return b.title.localeCompare(a.title);
+          return b.title.localeCompare(a.title, "en");
       }
     });
 
@@ -188,12 +189,12 @@ export function Gallery({
         >
           <Menu
             align="right"
-            label="Sort by"
+            label="sort by"
             items={sortItems}
             trigger={
               <>
                 <ListFilter className="size-4" aria-hidden />
-                <span>Sort: {SORT_LABEL[sort]}</span>
+                <span>sort: {SORT_LABEL[sort]}</span>
               </>
             }
           />
@@ -208,7 +209,7 @@ export function Gallery({
         >
           <input
             type="text"
-            placeholder="Search items, tech…"
+            placeholder="search items, tech…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full border border-white/20 bg-black px-4 py-2 text-white outline-none placeholder:text-white/40 focus:border-white/40"
@@ -244,14 +245,14 @@ export function Gallery({
             onClick={() => setSelected([])}
             className="-mt-1 px-2 text-sm text-white underline-offset-4 hover:underline"
           >
-            Clear filters
+            clear filters
           </button>
         )}
       </div>
 
       {filtered.length === 0 ? (
         <div className="py-24 text-center text-white/60">
-          No items match your filters.
+          no items match your filters.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -296,7 +297,7 @@ function ProjectCard({
             {item.pinned && (
               <span
                 role="img"
-                aria-label="Pinned"
+                aria-label="pinned"
                 className="mt-1 size-3.5 shrink-0"
                 style={PIN_GLOW_STYLE}
               >
@@ -336,7 +337,7 @@ function ProjectCard({
                 rel="noopener noreferrer"
                 className="px-2 text-sm text-white underline-offset-4 hover:underline"
               >
-                View Code
+                view code
               </a>
             )}
             {item.live && (
@@ -346,7 +347,7 @@ function ProjectCard({
                 rel="noopener noreferrer"
                 className="px-2 text-sm text-white underline-offset-4 hover:underline"
               >
-                Live
+                live
               </a>
             )}
           </CardActions>

@@ -134,7 +134,7 @@ export function EditorTextarea({
               // preventDefault keeps the textarea focused + its selection intact
               onMouseDown={(event) => event.preventDefault()}
               onClick={syncToPreview}
-              className="pointer-events-auto absolute right-2 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white"
+              className="pointer-events-auto absolute right-2 flex items-center gap-1 border border-white/20 bg-black px-2 py-1 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white"
               style={{
                 top: selectionRect.top,
                 transform:

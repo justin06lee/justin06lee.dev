@@ -44,8 +44,13 @@ export async function POST(req: NextRequest) {
   }
   const { id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned } = body;
 
+  // An empty string passes `typeof id === "string"` but is not a usable slug;
+  // reject it explicitly with a clear message instead of storing a blank PK.
+  if (typeof id !== "string" || id.length === 0) {
+    return NextResponse.json({ error: "id is required and must be a non-empty string" }, { status: 400 });
+  }
+
   if (
-    typeof id !== "string" ||
     typeof title !== "string" ||
     typeof description !== "string" ||
     typeof year !== "number" ||
@@ -59,9 +64,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
 
-  await db.execute({
+  // ON CONFLICT DO NOTHING turns a duplicate slug into a clean 409 instead of a
+  // PRIMARY KEY violation surfacing as an unhandled 500.
+  const result = await db.execute({
     sql: `INSERT INTO items (id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO NOTHING`,
     args: [
       id,
       category,
@@ -77,6 +85,10 @@ export async function POST(req: NextRequest) {
       pinned === true ? 1 : 0,
     ],
   });
+
+  if (result.rowsAffected === 0) {
+    return NextResponse.json({ error: "an item with that id already exists" }, { status: 409 });
+  }
 
   return NextResponse.json({ ok: true });
 }

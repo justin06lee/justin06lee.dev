@@ -71,6 +71,11 @@ export async function POST(req: NextRequest) {
     timezone: tz,
   });
   if (!result.ok) {
+    // Same-lane overlap is a conflict (409), not a bad request; the rest
+    // (start-after-end / invalid-category / invalid-plan) are 400.
+    if (result.reason === "would-overlap") {
+      return NextResponse.json({ error: "Actual would overlap another on this lane" }, { status: 409 });
+    }
     return NextResponse.json({ error: result.reason }, { status: 400 });
   }
   return NextResponse.json(result.actual);

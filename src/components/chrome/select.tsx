@@ -164,7 +164,7 @@ export default function Select<T extends string | number>({
             <span className="truncate">{selected.label}</span>
           </>
         ) : (
-          <span className="text-white/50 truncate">{placeholder ?? "Select…"}</span>
+          <span className="text-white/50 truncate">{placeholder ?? "select…"}</span>
         )}
         <span className="ml-auto text-white/30">▾</span>
       </button>
@@ -199,7 +199,7 @@ export default function Select<T extends string | number>({
             );
           })}
           {options.length === 0 && (
-            <div className={`${optionPad} text-white/40`}>No options</div>
+            <div className={`${optionPad} text-white/40`}>no options</div>
           )}
         </div>
       )}

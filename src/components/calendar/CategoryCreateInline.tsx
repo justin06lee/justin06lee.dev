@@ -33,7 +33,7 @@ export default function CategoryCreateInline({ initialName, existingCategories, 
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      setError(body.error ?? "Failed to create");
+      setError(body.error ?? "failed to create");
       setSubmitting(false);
       return;
     }
@@ -47,15 +47,15 @@ export default function CategoryCreateInline({ initialName, existingCategories, 
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Category name"
+        placeholder="category name"
         className="w-full"
       />
       {/* Palette restricted to the app's 8 category hexes. */}
-      <ColorSwatchPicker value={color} onChange={setColor} palette={CATEGORY_PALETTE} ariaLabel="Category color" />
+      <ColorSwatchPicker value={color} onChange={setColor} palette={CATEGORY_PALETTE} ariaLabel="category color" />
       {error && <div className="text-xs text-red-400">{error}</div>}
       <div className="flex gap-2 justify-end">
         <Button variant="link" size="sm" onClick={onCancel} className="text-white/60 hover:text-white">
-          Cancel
+          cancel
         </Button>
         <Button
           variant="outline"
@@ -63,7 +63,7 @@ export default function CategoryCreateInline({ initialName, existingCategories, 
           onClick={submit}
           disabled={submitting || name.trim().length === 0}
         >
-          {submitting ? "Creating..." : "Create"}
+          {submitting ? "creating…" : "create"}
         </Button>
       </div>
     </div>

@@ -38,18 +38,18 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
           body: JSON.stringify({ categoryId, title: title.trim() || null }),
         });
         if (!r.ok) {
-          setError("Failed to start");
+          setError("failed to start");
           return;
         }
       } else {
         const startAt = localInputToEpoch(startInput, timezone);
         const endAt = localInputToEpoch(endInput, timezone);
         if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) {
-          setError("Invalid time");
+          setError("invalid time");
           return;
         }
         if (startAt >= endAt) {
-          setError("Start must be before end");
+          setError("start must be before end");
           return;
         }
         const r = await fetch("/api/calendar/actuals", {
@@ -60,7 +60,7 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
         });
         if (!r.ok) {
           const errBody = await r.json().catch(() => ({}));
-          setError(errBody.error ?? "Failed to add");
+          setError(errBody.error ?? "failed to add");
           return;
         }
       }
@@ -77,23 +77,23 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
       className="border border-white/20 p-3 space-y-2"
     >
       <div className="flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wider text-white/60">
-          {mode === "now" ? "New activity" : "Backfill activity"}
+        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+          {mode === "now" ? "new activity" : "backfill activity"}
         </div>
         <Segmented<"now" | "backfill">
           size="compact"
           value={mode}
           onChange={setMode}
           options={[
-            { value: "now", label: "Now" },
-            { value: "backfill", label: "Backfill" },
+            { value: "now", label: "now" },
+            { value: "backfill", label: "backfill" },
           ]}
-          ariaLabel="Activity mode"
+          ariaLabel="activity mode"
         />
       </div>
       <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />
       <Input
-        placeholder="Title (optional)"
+        placeholder="title (optional)"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         className="w-full"
@@ -101,7 +101,7 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
       {mode === "backfill" && (
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <label className="text-xs text-white/60">Start</label>
+            <label className="text-xs text-white/60">start</label>
             <Input
               type="datetime-local"
               value={startInput}
@@ -110,7 +110,7 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-white/60">End</label>
+            <label className="text-xs text-white/60">end</label>
             <Input
               type="datetime-local"
               value={endInput}
@@ -123,10 +123,10 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
       {error && <div className="text-xs text-red-400">{error}</div>}
       <div className="flex justify-end gap-2">
         <Button variant="link" size="sm" onClick={onCancel} className="text-white/60 hover:text-white">
-          Cancel
+          cancel
         </Button>
         <Button type="submit" variant="outline" size="sm" disabled={submitting}>
-          {submitting ? "Saving..." : mode === "now" ? "Start" : "Add"}
+          {submitting ? "saving…" : mode === "now" ? "start" : "add"}
         </Button>
       </div>
     </form>

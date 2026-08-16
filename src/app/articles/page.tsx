@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
+import Link from "next/link";
 import * as motion from "motion/react-client";
 import Navbar from "@/components/Navbar";
 import { ArticleList } from "@/components/chrome/article-list";
 import { listArticleSummaries } from "@/lib/github";
+
+export const metadata: Metadata = {
+  title: "articles",
+  description: "thoughts, guides, and things i find interesting.",
+  alternates: { canonical: "/articles" },
+};
 
 export default async function ArticlesPage() {
   // Hidden articles are excluded from the public index (still shown in /desk).
@@ -36,6 +44,7 @@ export default async function ArticlesPage() {
               tags: a.tags,
             }))}
             basePath="/articles"
+            linkComponent={Link}
           />
         </motion.div>
       </main>

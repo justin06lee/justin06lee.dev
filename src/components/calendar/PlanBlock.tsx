@@ -22,7 +22,7 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
 
   const tint = categoryTintStyle(task.category?.color, 0.10);
   const borderStyle = task.category?.color
-    ? { borderColor: task.category.color, color: "#e5e5e5" }
+    ? { borderColor: task.category.color, color: "rgba(255,255,255,0.9)" }
     : { borderColor: "rgba(255,255,255,0.4)", color: "rgba(255,255,255,0.85)" };
 
   const titleText = task.category
@@ -41,9 +41,13 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
   const altLines = task.isUncertain
     ? task.fallbacks.map((f) => `${f.startTime}–${f.endTime} ${f.title}`)
     : [];
-  const fullText = altLines.length > 0
-    ? `${headerText}\n${altLines.map((l) => `· ${l}`).join("\n")}`
-    : headerText;
+  // The tooltip is the accessible description (aria-describedby), so the
+  // "uncertain" note lives here in plain words — sighted users saw it via the
+  // inline `~`, but that never reached screen readers.
+  const uncertainNote = task.isUncertain ? "\nuncertain, alternatives accepted" : "";
+  const altBlock = altLines.length > 0 ? `\n${altLines.map((l) => `· ${l}`).join("\n")}` : "";
+  const fullText = `${headerText}${uncertainNote}${altBlock}`;
+  const tipId = `plan-tip-${task.id}`;
 
   const handleClick = () => {
     if (onClick) onClick();
@@ -55,17 +59,13 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
       type="button"
       onClick={handleClick}
       aria-label={headerText}
-      title={fullText}
+      aria-describedby={tipId}
       className={`group absolute border border-dashed text-left text-xs transition hover:bg-white/5 ${halfLeft ? "left-12 right-1/2 mr-0.5" : "left-12 right-2"}`}
       style={{ top: `${top}%`, height: `${height}%`, ...tint, ...borderStyle }}
     >
       <div className="absolute inset-0 overflow-hidden px-1 py-0.5 flex items-center gap-1 min-w-0">
         {task.isUncertain && (
-          <span
-            aria-hidden="true"
-            title="uncertain — alternatives accepted"
-            className="font-mono text-[10px] opacity-70 shrink-0"
-          >
+          <span aria-hidden="true" className="font-mono text-[10px] opacity-70 shrink-0">
             ~
           </span>
         )}
@@ -73,8 +73,10 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
         <span className="truncate">{titleText}</span>
       </div>
       <span
-        className={`absolute z-30 left-0 top-full mt-1 px-2 py-1 bg-black border border-white/30 text-white text-xs whitespace-pre-line max-w-[260px] shadow-lg pointer-events-none transition-opacity ${
-          tipOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        id={tipId}
+        role="tooltip"
+        className={`absolute z-30 left-0 top-full mt-1 px-2 py-1 bg-black border border-white/30 text-white text-xs whitespace-pre-line max-w-[260px] pointer-events-none transition-opacity ${
+          tipOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
         }`}
       >
         {fullText}

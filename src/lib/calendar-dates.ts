@@ -12,10 +12,20 @@ export function todayInTz(timezone: string): string {
   return formatDateInTz(new Date(), timezone);
 }
 
+// Sane year bounds shared by the date/year validators. Anonymous routes like
+// /calendar/day/YYYY-MM-DD flow into per-day/per-month cache keys and (via
+// prayer-times) upstream API calls, so accepting years 0000-9999 lets an
+// unauthenticated caller enumerate ~120k distinct keys. Clamping to a range
+// that covers any real use keeps that attack surface small. It also fixes a
+// correctness bug: year 0 breaks lexicographic YYYY-MM-DD comparisons.
+const MIN_YEAR = 2000;
+const MAX_YEAR = 2100;
+
 /** Validates a YYYY-MM-DD string. */
 export function isValidDateString(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const [y, m, d] = s.split("-").map(Number);
+  if (y < MIN_YEAR || y > MAX_YEAR) return false;
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
@@ -29,7 +39,9 @@ export function isValidYearMonthString(s: string): boolean {
 
 /** Validates YYYY string. */
 export function isValidYearString(s: string): boolean {
-  return /^\d{4}$/.test(s);
+  if (!/^\d{4}$/.test(s)) return false;
+  const y = Number(s);
+  return y >= MIN_YEAR && y <= MAX_YEAR;
 }
 
 /** Validates an HH:MM string (00:00–23:59). */

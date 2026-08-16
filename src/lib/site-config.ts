@@ -25,6 +25,11 @@ export type SiteConfig = {
     x: string;
     email: string;
     instagram: string;
+    // The /me form also renders these two; declaring them keeps the type in
+    // sync with what's actually persisted and rendered (extra keys already
+    // round-trip through the JSON column).
+    youtube?: string;
+    website?: string;
   };
   pfp: Pfp;
   prayerLocation: PrayerLocation;
@@ -65,6 +70,14 @@ export function validatePrayerLocation(input: unknown): PrayerLocation | null {
   if (typeof o.country !== "string") return null;
   if (typeof o.method !== "number") return null;
   if (typeof o.timezone !== "string") return null;
+  // An unknown IANA zone passes the typeof check but later throws RangeError in
+  // `new Intl.DateTimeFormat({ timeZone })`, which would persistently 500 every
+  // /calendar page for all visitors. Reject it here so a bad value is never stored.
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: o.timezone });
+  } catch {
+    return null;
+  }
   if (o.latitude !== null && (typeof o.latitude !== "number" || !Number.isFinite(o.latitude) || o.latitude < -90 || o.latitude > 90)) return null;
   if (o.longitude !== null && (typeof o.longitude !== "number" || !Number.isFinite(o.longitude) || o.longitude < -180 || o.longitude > 180)) return null;
   return {

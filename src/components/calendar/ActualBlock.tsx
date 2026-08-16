@@ -27,6 +27,7 @@ export default function ActualBlock({ actual, startMin, endMin, isRunning, halfR
 
   const timeText = `${minutesToHHMM(startMin)}–${endMin === 1440 ? "..." : minutesToHHMM(endMin)}`;
   const fullText = `${timeText} ${label}`;
+  const tipId = `actual-tip-${actual.id}`;
 
   // Actuals are tooltip-only on the timeline; the sidebar/log is the edit
   // affordance. Every click here just toggles the tooltip.
@@ -36,8 +37,8 @@ export default function ActualBlock({ actual, startMin, endMin, isRunning, halfR
     <button
       onClick={handleClick}
       aria-label={fullText}
-      title={fullText}
-      className={`group absolute border text-left text-xs ${halfRight ? "left-1/2 right-1 ml-0.5" : "left-12 right-2"} ${isRunning ? "animate-pulse" : ""}`}
+      aria-describedby={tipId}
+      className={`group absolute border text-left text-xs ${halfRight ? "left-1/2 right-1 ml-0.5" : "left-12 right-2"} ${isRunning ? "animate-pulse motion-reduce:animate-none" : ""}`}
       style={{ top: `${top}%`, height: `${height}%`, ...tint }}
     >
       <div className="absolute inset-0 overflow-hidden px-1 py-0.5 flex items-center gap-1 min-w-0">
@@ -45,8 +46,10 @@ export default function ActualBlock({ actual, startMin, endMin, isRunning, halfR
         <span className="truncate">{label}</span>
       </div>
       <span
-        className={`absolute z-30 left-0 top-full mt-1 px-2 py-1 bg-black border border-white/30 text-white text-xs whitespace-normal max-w-[260px] shadow-lg pointer-events-none transition-opacity ${
-          tipOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        id={tipId}
+        role="tooltip"
+        className={`absolute z-30 left-0 top-full mt-1 px-2 py-1 bg-black border border-white/30 text-white text-xs whitespace-normal max-w-[260px] pointer-events-none transition-opacity ${
+          tipOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
         }`}
       >
         {fullText}

@@ -18,7 +18,25 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Vendored Claude skills tree — not application source, don't lint it.
+      ".claude/**",
     ],
+  },
+  {
+    rules: {
+      // ignoreRestSiblings clears the `{ node, ...props }` rest-strip warnings in
+      // the chrome components; the ^_ patterns cover intentionally-unused
+      // bindings like `_lk` / `_tk` and unused caught errors.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
   },
 ];
 

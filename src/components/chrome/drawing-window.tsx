@@ -27,9 +27,9 @@ export interface DrawingSaveResult {
 }
 
 const DEFAULT_PRESETS: DrawingPreset[] = [
-  { key: "square", label: "Square", width: 1024, height: 1024 },
-  { key: "landscape", label: "Wide", width: 1280, height: 720 },
-  { key: "portrait", label: "Tall", width: 720, height: 1280 },
+  { key: "square", label: "square", width: 1024, height: 1024 },
+  { key: "landscape", label: "wide", width: 1280, height: 720 },
+  { key: "portrait", label: "tall", width: 720, height: 1280 },
 ];
 
 // Drawn directly on a black canvas (default mode).
@@ -671,7 +671,7 @@ export function DrawingWindow({
         downloadDataUrl(darkDataUrl ?? dataUrl, filename);
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save drawing.");
+      setError(saveError instanceof Error ? saveError.message : "unable to save drawing.");
     } finally {
       setInternalSaving(false);
     }
@@ -719,7 +719,7 @@ export function DrawingWindow({
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[1fr_240px]">
-          <div className="min-h-0 border-b border-white/10 bg-stone-950 p-3 lg:border-b-0 lg:border-r">
+          <div className="min-h-0 border-b border-white/10 bg-black p-3 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex flex-wrap items-center gap-2 border border-white/10 bg-black/60 px-3 py-2 text-xs text-white/70">
               <span className="text-white/50">view</span>
               <button type="button" onClick={() => adjustZoom(-0.25)} className="border border-white/20 px-2 py-0.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white">
@@ -742,7 +742,7 @@ export function DrawingWindow({
               <span className="ml-auto text-white/50">space / middle-drag to pan</span>
             </div>
 
-            <div className="flex h-full min-h-[18rem] items-center justify-center overflow-hidden border border-white/10 bg-stone-950">
+            <div className="flex h-full min-h-[18rem] items-center justify-center overflow-hidden border border-white/10 bg-black">
               <div style={{ transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)` }}>
                 <canvas
                   ref={canvasRef}
@@ -754,7 +754,7 @@ export function DrawingWindow({
                   onPointerCancel={finishStroke}
                   onPointerLeave={finishStroke}
                   className={cn(
-                    "block max-h-[55vh] max-w-full touch-none select-none border border-stone-700 bg-black",
+                    "block max-h-[55vh] max-w-full touch-none select-none border border-white/20 bg-black",
                     spacePressed || isPanning ? "cursor-grab" : "cursor-crosshair",
                   )}
                   style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
@@ -765,9 +765,9 @@ export function DrawingWindow({
 
           <div className="min-h-0 space-y-5 overflow-y-auto bg-white/[0.02] p-4 pb-8 pr-6">
             <div>
-              <label className="mb-1 block text-xs text-white/60">Canvas size</label>
+              <label className="mb-1 block text-xs text-white/60">canvas size</label>
               <select
-                aria-label="Canvas size"
+                aria-label="canvas size"
                 value={canvasPreset}
                 onChange={(event) => {
                   setCanvasPreset(event.target.value);
@@ -785,13 +785,13 @@ export function DrawingWindow({
             </div>
 
             <div>
-              <p className="mb-1 text-xs text-white/60">Tools</p>
+              <p className="mb-1 text-xs text-white/60">tools</p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setTool("brush")}
-                  aria-label="Brush"
-                  title="Brush"
+                  aria-label="brush"
+                  title="brush"
                   className={cn(
                     "flex h-10 w-10 items-center justify-center border transition-colors",
                     tool === "brush"
@@ -804,8 +804,8 @@ export function DrawingWindow({
                 <button
                   type="button"
                   onClick={() => setTool("eraser")}
-                  aria-label="Eraser"
-                  title="Eraser"
+                  aria-label="eraser"
+                  title="eraser"
                   className={cn(
                     "flex h-10 w-10 items-center justify-center border transition-colors",
                     tool === "eraser"
@@ -819,7 +819,7 @@ export function DrawingWindow({
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-white/60">Color</label>
+              <label className="mb-1 block text-xs text-white/60">color</label>
               <div className="flex items-center gap-2">
                 {palette.map((presetColor) => {
                   const selected = color.toLowerCase() === presetColor.toLowerCase();
@@ -827,7 +827,7 @@ export function DrawingWindow({
                     <button
                       key={presetColor}
                       type="button"
-                      aria-label={`Use color ${presetColor}`}
+                      aria-label={`use color ${presetColor}`}
                       title={presetColor}
                       onClick={() => setColor(presetColor)}
                       className={cn(
@@ -845,7 +845,7 @@ export function DrawingWindow({
                     "relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden border bg-black text-white transition-transform hover:scale-105",
                     customColorSelected ? "border-white ring-2 ring-white/30" : "border-white/15",
                   )}
-                  title="Custom color"
+                  title="custom color"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-current text-white">
                     <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeWidth="1.8" />
@@ -855,14 +855,14 @@ export function DrawingWindow({
                     value={color}
                     onChange={(event) => setColor(event.target.value)}
                     className="absolute inset-0 cursor-pointer opacity-0"
-                    aria-label="Choose custom color"
+                    aria-label="choose custom color"
                   />
                 </label>
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-white/60">Brush size</label>
+              <label className="mb-1 block text-xs text-white/60">brush size</label>
               <div className="flex gap-2">
                 {brushSizes.map((brushSize) => (
                   <button
@@ -875,7 +875,7 @@ export function DrawingWindow({
                         ? "border-white bg-white text-black"
                         : "border-white/15 text-white/80 hover:bg-white/10 hover:text-white",
                     )}
-                    aria-label={`Use ${brushSize}px brush`}
+                    aria-label={`use ${brushSize}px brush`}
                     title={`${brushSize}px`}
                   >
                     <span
@@ -888,14 +888,14 @@ export function DrawingWindow({
             </div>
 
             <div>
-              <p className="mb-1 text-xs text-white/60">History</p>
+              <p className="mb-1 text-xs text-white/60">history</p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={handleUndo}
                   disabled={historyState.undo === 0}
-                  aria-label="Undo"
-                  title="Undo"
+                  aria-label="undo"
+                  title="undo"
                   className="flex h-10 w-10 items-center justify-center border border-white/15 text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <UndoIcon />
@@ -904,8 +904,8 @@ export function DrawingWindow({
                   type="button"
                   onClick={handleRedo}
                   disabled={historyState.redo === 0}
-                  aria-label="Redo"
-                  title="Redo"
+                  aria-label="redo"
+                  title="redo"
                   className="flex h-10 w-10 items-center justify-center border border-white/15 text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <RedoIcon />
@@ -913,8 +913,8 @@ export function DrawingWindow({
                 <button
                   type="button"
                   onClick={handleClear}
-                  aria-label="Clear canvas"
-                  title="Clear canvas"
+                  aria-label="clear canvas"
+                  title="clear canvas"
                   className="flex h-10 w-10 items-center justify-center border border-white/15 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                 >
                   <ClearIcon />
@@ -930,7 +930,7 @@ export function DrawingWindow({
               onClick={handleSave}
               className="w-full bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "Saving..." : saveLocked ? "Another window is saving..." : "Save image"}
+              {isSaving ? "saving…" : saveLocked ? "another window is saving…" : "save image"}
             </button>
           </div>
         </div>

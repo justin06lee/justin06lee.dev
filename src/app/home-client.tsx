@@ -107,7 +107,7 @@ function Intro({ config, onDone }: { config: SiteConfig; onDone: () => void }) {
         </div>
       }
       lines={["hi.", justinStep, "welcome to my website."]}
-      skipLabel="Skip"
+      skipLabel="skip"
       onComplete={onDone}
     />
   );

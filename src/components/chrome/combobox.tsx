@@ -11,9 +11,9 @@ export type ComboboxProps<T extends string | number> = {
   options: ComboboxOption<T>[];
   placeholder?: string;
   searchPlaceholder?: string;
-  /** Show a "Clear" row when something is selected. */
+  /** Show a "clear" row when something is selected. */
   allowClear?: boolean;
-  /** When set, renders a "+ Create {query}" row that calls this with the query. */
+  /** When set, renders a "+ create {query}" row that calls this with the query. */
   onCreate?: (query: string) => void;
   className?: string;
   ariaLabel?: string;
@@ -29,8 +29,8 @@ export function Combobox<T extends string | number>({
   value,
   onChange,
   options,
-  placeholder = "Select…",
-  searchPlaceholder = "Search…",
+  placeholder = "select…",
+  searchPlaceholder = "search…",
   allowClear,
   onCreate,
   className,
@@ -140,7 +140,7 @@ export function Combobox<T extends string | number>({
                 activeIndex === createIndex && "bg-white/10",
               )}
             >
-              + Create {query.trim() ? `"${query.trim()}"` : "new"}
+              + create {query.trim() ? `"${query.trim()}"` : "new"}
             </button>
           )}
 
@@ -160,7 +160,7 @@ export function Combobox<T extends string | number>({
                 activeIndex === clearIndex && "bg-white/10",
               )}
             >
-              Clear
+              clear
             </button>
           )}
 
@@ -193,7 +193,7 @@ export function Combobox<T extends string | number>({
           ))}
 
           {filtered.length === 0 && (
-            <div className="px-3 py-2 text-xs text-white/40">No matches</div>
+            <div className="px-3 py-2 text-xs text-white/40">no matches</div>
           )}
           </div>
         </div>

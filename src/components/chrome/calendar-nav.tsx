@@ -84,7 +84,7 @@ export function CalendarNav({
         asLinks && viewHref && LinkComp ? (
           // Link-based switcher — same look as Segmented, but each segment is a
           // prefetched anchor so switching views navigates from cache.
-          <div role="group" aria-label="Calendar view" className="inline-flex items-center gap-1">
+          <div role="group" aria-label="calendar view" className="inline-flex items-center gap-1">
             {views.map((v) => {
               const active = v === view;
               return (
@@ -110,7 +110,7 @@ export function CalendarNav({
             value={view ?? views[0] ?? "day"}
             onChange={(v) => onViewChange?.(v)}
             options={views.map((v) => ({ value: v, label: v }))}
-            ariaLabel="Calendar view"
+            ariaLabel="calendar view"
           />
         )
       ) : (
@@ -122,7 +122,7 @@ export function CalendarNav({
           variant="ghost"
           size="sm"
           icon={ChevronLeft}
-          label="Previous"
+          label="previous"
           {...(asLinks && prevHref
             ? { href: prevHref, linkComponent, prefetch }
             : { onClick: onPrev, disabled: !onPrev })}
@@ -144,7 +144,7 @@ export function CalendarNav({
           variant="ghost"
           size="sm"
           icon={ChevronRight}
-          label="Next"
+          label="next"
           {...(asLinks && nextHref
             ? { href: nextHref, linkComponent, prefetch }
             : { onClick: onNext, disabled: !onNext })}

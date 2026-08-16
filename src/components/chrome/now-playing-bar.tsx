@@ -95,14 +95,14 @@ export function NowPlayingBar({
           )}
         >
           <span className="text-[10px] uppercase tracking-wider text-white/50">
-            Now playing
+            now playing
           </span>
           {startMs !== undefined ? (
             <span className="flex min-w-0 max-w-full items-center gap-2 text-sm text-white">
               {accent && (
                 <span
                   aria-hidden
-                  className="size-1.5 shrink-0 rounded-full"
+                  className="size-1.5 shrink-0"
                   style={{ background: accent }}
                 />
               )}
@@ -113,7 +113,7 @@ export function NowPlayingBar({
             </span>
           ) : (
             <span className="truncate text-sm text-white/50">
-              Nothing running
+              nothing running
             </span>
           )}
           {subtitle && (

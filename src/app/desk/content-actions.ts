@@ -110,9 +110,12 @@ export async function saveArticleAction(
       sha: result.sha,
     };
   } catch (error) {
+    // Never echo the input sha back on failure: a save that 422s (stale sha)
+    // still holds the OLD token, and returning it lets a late-settling failed
+    // call clobber a good sha set by a concurrent successful save — wedging
+    // every subsequent save. Only the success branch returns a fresh sha.
     return {
-      error: error instanceof Error ? error.message : "Unable to save article.",
-      sha,
+      error: error instanceof Error ? error.message : "unable to save article.",
     };
   }
 }

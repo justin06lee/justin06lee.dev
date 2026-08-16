@@ -18,14 +18,14 @@ export interface EditorFormatAction {
   placeholder?: string;
 }
 
-/** Default markdown formatting actions: H2, Bold, List, Code, Link, Math. */
+/** Default markdown formatting actions: h2, bold, list, code, link, math. */
 export const MARKDOWN_FORMAT_ACTIONS: EditorFormatAction[] = [
-  { label: "H2", before: "\n## ", placeholder: "Section Title" },
-  { label: "Bold", before: "**", after: "**", placeholder: "bold text" },
-  { label: "List", before: "\n- ", placeholder: "List item" },
-  { label: "Code", before: "\n```txt\n", after: "\n```\n", placeholder: "code" },
-  { label: "Link", before: "[", after: "](https://example.com)", placeholder: "label" },
-  { label: "Math", before: "\n$$\n", after: "\n$$\n", placeholder: "x^2 + y^2 = z^2" },
+  { label: "h2", before: "\n## ", placeholder: "section title" },
+  { label: "bold", before: "**", after: "**", placeholder: "bold text" },
+  { label: "list", before: "\n- ", placeholder: "list item" },
+  { label: "code", before: "\n```txt\n", after: "\n```\n", placeholder: "code" },
+  { label: "link", before: "[", after: "](https://example.com)", placeholder: "label" },
+  { label: "math", before: "\n$$\n", after: "\n$$\n", placeholder: "x^2 + y^2 = z^2" },
 ];
 
 interface DrawingWindowState {

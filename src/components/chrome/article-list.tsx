@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ElementType,
 } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/chrome/badge";
@@ -86,9 +87,11 @@ function loadBannerStill(src: string): Promise<BannerStill> {
 function ArticleCard({
   article,
   basePath,
+  linkComponent = "a",
 }: {
   article: ArticlePreview;
   basePath: string;
+  linkComponent?: ElementType;
 }) {
   const blobRef = useRef<Blob | null>(null);
   const gifUrlRef = useRef<string | null>(null);
@@ -129,7 +132,11 @@ function ArticleCard({
       gifUrlRef.current = url;
       const img = new Image();
       img.onload = () => {
-        if (wantsHover.current) setGifSrc(url);
+        // Between createObjectURL and this decode, an unhover can revoke `url`
+        // and a re-hover can replace gifUrlRef with a fresh one. Adopt the
+        // frame only if this exact url is still the active one — otherwise we'd
+        // point <img> at an already-revoked blob url.
+        if (wantsHover.current && gifUrlRef.current === url) setGifSrc(url);
       };
       // Drop the url on decode failure so the blob isn't pinned indefinitely.
       img.onerror = () => {
@@ -153,9 +160,15 @@ function ArticleCard({
 
   const displaySrc = gifSrc ?? stillSrc;
 
+  // Card hrefs are internal by construction (`${basePath}/${slug}`); route them
+  // through linkComponent (next/link, …). A stray external http(s) basePath
+  // stays a plain <a> (a router Link can't own another origin).
+  const href = `${basePath}/${article.slug}`;
+  const CardLink = /^https?:\/\//.test(href) ? "a" : linkComponent;
+
   return (
-    <a
-      href={`${basePath}/${article.slug}`}
+    <CardLink
+      href={href}
       className="group block border border-white/10 bg-white/[0.02] transition-colors hover:border-white/20 hover:bg-white/[0.04]"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -200,7 +213,7 @@ function ArticleCard({
           </div>
         )}
       </div>
-    </a>
+    </CardLink>
   );
 }
 
@@ -215,6 +228,12 @@ export type ArticleListProps = {
   defaultTag?: string;
   /** Stagger each card's entrance fade by index (capped). Default true. */
   stagger?: boolean;
+  /**
+   * Anchor component for internal card `href`s — pass your router's Link (e.g.
+   * next/link) for client-side navigation. Card hrefs are internal by
+   * construction; defaults to a plain <a>.
+   */
+  linkComponent?: ElementType;
   className?: string;
 };
 
@@ -224,7 +243,8 @@ export type ArticleListProps = {
  * until hover, then swapping to the animated original in full color. Cards
  * stagger their entrance fade by index (via FadeIn, which honors
  * prefers-reduced-motion); pass `stagger={false}` to render instantly.
- * Dark-only. Uses plain <a> / <img> so it stays framework-agnostic.
+ * Dark-only. Card links render as plain <a> by default; pass `linkComponent`
+ * to route them through your router's Link. Banner images stay plain <img>.
  */
 export function ArticleList({
   articles,
@@ -232,6 +252,7 @@ export function ArticleList({
   defaultQuery = "",
   defaultTag,
   stagger = true,
+  linkComponent = "a",
   className,
 }: ArticleListProps) {
   const [query, setQuery] = useState(defaultQuery);
@@ -242,7 +263,8 @@ export function ArticleList({
   const allTags = useMemo(() => {
     const s = new Set<string>();
     articles.forEach((a) => a.tags.forEach((t) => s.add(t)));
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
+    // Pin the locale so server and client sort identically (hydration-safe).
+    return Array.from(s).sort((a, b) => a.localeCompare(b, "en"));
   }, [articles]);
 
   const filtered = useMemo(() => {
@@ -259,7 +281,7 @@ export function ArticleList({
     <div className={cn("w-full", className)}>
       <input
         type="text"
-        placeholder="Search articles..."
+        placeholder="search articles…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         className="mb-4 w-full border border-white/20 bg-black px-4 py-2 text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/40"
@@ -301,13 +323,14 @@ export function ArticleList({
               // doesn't keep late rows invisible. Keys are slugs, so cards
               // surviving a filter change keep their DOM and don't re-animate.
               <FadeIn key={article.slug} delay={staggerDelay(Math.min(i, 8), 0.06)}>
-                <ArticleCard article={article} basePath={basePath} />
+                <ArticleCard article={article} basePath={basePath} linkComponent={linkComponent} />
               </FadeIn>
             ) : (
               <ArticleCard
                 key={article.slug}
                 article={article}
                 basePath={basePath}
+                linkComponent={linkComponent}
               />
             ),
           )}

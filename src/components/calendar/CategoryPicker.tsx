@@ -20,6 +20,13 @@ export default function CategoryPicker({ selectedId, onChange, categories: initi
   // Holds the create-form's seed name while creating; null when picking.
   const [creating, setCreating] = useState<string | null>(null);
 
+  // Refreshed server props win: a category created/renamed/archived elsewhere
+  // arrives via router.refresh as a new `initialCategories`, and without this
+  // sibling pickers would keep showing their stale mount-time snapshot forever.
+  useEffect(() => {
+    if (initialCategories) setCategories(initialCategories);
+  }, [initialCategories]);
+
   useEffect(() => {
     if (loaded) return;
     let cancelled = false;
@@ -65,11 +72,11 @@ export default function CategoryPicker({ selectedId, onChange, categories: initi
       value={selectedId}
       onChange={onChange}
       options={options}
-      placeholder="No category"
-      searchPlaceholder="Search categories..."
+      placeholder="no category"
+      searchPlaceholder="search categories…"
       allowClear
       onCreate={(query) => setCreating(query)}
-      ariaLabel="Category"
+      ariaLabel="category"
     />
   );
 }

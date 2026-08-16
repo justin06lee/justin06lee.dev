@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+import { join } from "path";
 import { ImageResponse } from "next/og";
 
 export const size = {
@@ -7,7 +9,13 @@ export const size = {
 
 export const contentType = "image/png";
 
-export default function OGImage() {
+export default async function OGImage() {
+	// Load the real Poppins face so the fontFamily declaration below is honored
+	// by Satori (without a fonts buffer it silently falls back to its default).
+	const poppins = await readFile(
+		join(process.cwd(), "public", "Poppins-Regular.ttf")
+	);
+
 	return new ImageResponse(
 		(
 			<div
@@ -27,8 +35,9 @@ export default function OGImage() {
 				</div>
 			</div>
 		),
-		size
+		{
+			...size,
+			fonts: [{ name: "Poppins", data: poppins, style: "normal" }],
+		}
 	);
 }
-
-

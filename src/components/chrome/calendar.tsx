@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 
 const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
 ] as const;
 
 /** Sunday-aligned grid of YYYY-MM-DD strings for a "YYYY-MM" month, null = padding. */

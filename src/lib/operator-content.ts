@@ -408,10 +408,17 @@ export async function uploadOperatorImageByPath({
     "upload";
   const imagePath = [...normalizedPath, "images"];
 
+  // GitHub's Contents API requires the current blob sha to overwrite an existing
+  // file; without it, re-uploading a same-named image 422s (surfacing as the
+  // "modified by someone else" conflict). Look up the existing entry first so a
+  // re-upload cleanly replaces it.
+  const existing = await getFileContentEntry(...imagePath, safeName);
+
   const result = await putContent({
     encodedContent: data,
     message: `Upload ${safeName} to ${normalizedPath[normalizedPath.length - 1]}`,
     pathSegments: [...imagePath, safeName],
+    sha: existing?.sha as string | undefined,
   });
 
   return {
@@ -566,9 +573,16 @@ function parsePngDataUrl(dataUrl: string): string {
     throw new Error("Drawing must be exported as a PNG image.");
   }
 
-  const approximateBytes = Math.ceil(match[1].length * 0.75);
-  if (approximateBytes > MAX_IMAGE_BYTES) {
+  const buffer = Buffer.from(match[1], "base64");
+  if (buffer.length > MAX_IMAGE_BYTES) {
     throw new Error("Drawing exceeds the 10 MB size limit.");
+  }
+
+  // The `data:image/png` label is client-supplied and unverified — sniff the
+  // decoded bytes and reject anything that isn't actually a PNG before it's
+  // committed to the repo.
+  if (detectImageMime(buffer) !== "image/png") {
+    throw new Error("Drawing must be a valid PNG image.");
   }
 
   return match[1];

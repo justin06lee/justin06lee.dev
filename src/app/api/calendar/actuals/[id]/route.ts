@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminWithMutationRate } from "@/lib/auth";
 import { updateActual, deleteActual, type ActualPatch } from "@/lib/calendar";
+import { getSiteConfig, resolveTimezone } from "@/lib/site-config";
 import {
   MAX_NOTES_LEN,
   MAX_TITLE_LEN,
@@ -57,11 +58,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     patch.notes = body.notes as string | null;
   }
 
-  const result = await updateActual(id, patch);
+  // Server half of the endAt NaN->null "keeps running" bug: `null` is still the
+  // legitimate running sentinel, but a FINITE endAt must never precede startAt.
+  // When both bounds are in this request we can reject early; when only endAt is
+  // sent, updateActual's merged start-after-end check (against the stored start)
+  // stays authoritative. Both are already validated finite by isFiniteEpochMs.
+  if (
+    patch.endAt !== undefined && patch.endAt !== null &&
+    patch.startAt !== undefined &&
+    patch.endAt < patch.startAt
+  ) {
+    return NextResponse.json({ error: "end-before-start" }, { status: 400 });
+  }
+
+  const config = await getSiteConfig();
+  const tz = resolveTimezone(config);
+  const result = await updateActual(id, patch, tz);
   if (!result.ok) {
     if (result.reason === "not-found") return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (result.reason === "would-overlap-running") {
       return NextResponse.json({ error: "Edit would overlap the running actual" }, { status: 409 });
+    }
+    if (result.reason === "would-overlap") {
+      return NextResponse.json({ error: "Edit would overlap another actual on this lane" }, { status: 409 });
     }
     // start-after-end / invalid-category are 400.
     return NextResponse.json({ error: result.reason }, { status: 400 });

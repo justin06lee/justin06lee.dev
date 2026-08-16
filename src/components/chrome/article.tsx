@@ -14,6 +14,11 @@ export type ArticleProps = {
   /** Renders a back link above the banner. */
   backHref?: string;
   backLabel?: string;
+  /**
+   * Anchor component for the back link when `backHref` is internal — pass your
+   * router's Link. External http(s) hrefs stay a plain <a>. Defaults to a plain <a>.
+   */
+  linkComponent?: React.ElementType;
   className?: string;
   /** Article body — typically <Prose>{markdown}</Prose>. */
   children?: React.ReactNode;
@@ -37,9 +42,14 @@ export function Article({
   banner,
   backHref,
   backLabel = "back",
+  linkComponent = "a",
   className,
   children,
 }: ArticleProps) {
+  // Internal backHref routes through linkComponent (next/link, …); an external
+  // http(s) href stays a plain <a> (a router Link can't own another origin).
+  const BackLink =
+    backHref && /^https?:\/\//.test(backHref) ? "a" : linkComponent;
   return (
     <article className={cn("mx-auto max-w-3xl select-text px-4 sm:px-6", className)}>
       {backHref && (
@@ -48,13 +58,13 @@ export function Article({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
-          <a
+          <BackLink
             href={backHref}
             className="mb-10 inline-flex items-center gap-1.5 text-sm text-white/60 underline-offset-4 transition-colors hover:text-white hover:underline"
           >
             <ArrowLeft className="size-4" />
             {backLabel}
-          </a>
+          </BackLink>
         </motion.div>
       )}
 

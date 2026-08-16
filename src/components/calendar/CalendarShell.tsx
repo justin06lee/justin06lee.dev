@@ -20,11 +20,16 @@ function prevToken(view: View, token: string | null): string | null {
   if (!token) return null;
   if (view === "day") return addDays(token, -1);
   if (view === "month") {
+    // Manual month arithmetic instead of Date.UTC: for years 0-99 Date.UTC
+    // remaps to 1900+y, corrupting the token. Zero-pad the year so low years
+    // round-trip through the URL (e.g. 0999-12).
     const [y, m] = token.split("-").map(Number);
-    const prev = new Date(Date.UTC(y, m - 2, 1));
-    return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
+    const py = m <= 1 ? y - 1 : y;
+    const pm = m <= 1 ? 12 : m - 1;
+    return `${String(py).padStart(4, "0")}-${String(pm).padStart(2, "0")}`;
   }
-  return String(Number(token) - 1);
+  // Zero-pad year tokens: /calendar/year/1000 → "999" would 404, needs "0999".
+  return String(Number(token) - 1).padStart(4, "0");
 }
 
 function nextToken(view: View, token: string | null): string | null {
@@ -32,10 +37,11 @@ function nextToken(view: View, token: string | null): string | null {
   if (view === "day") return addDays(token, 1);
   if (view === "month") {
     const [y, m] = token.split("-").map(Number);
-    const next = new Date(Date.UTC(y, m, 1));
-    return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`;
+    const ny = m >= 12 ? y + 1 : y;
+    const nm = m >= 12 ? 1 : m + 1;
+    return `${String(ny).padStart(4, "0")}-${String(nm).padStart(2, "0")}`;
   }
-  return String(Number(token) + 1);
+  return String(Number(token) + 1).padStart(4, "0");
 }
 
 export default function CalendarShell({

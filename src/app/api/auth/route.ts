@@ -19,13 +19,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Reject oversized bodies before buffering — a login payload is a small
+  // {password} object, so anything large is abuse (memory DoS on a public POST).
+  if (Number(req.headers.get("content-length")) > 4096) {
+    return NextResponse.json({ ok: false, error: "Payload too large" }, { status: 413 });
+  }
+
   let body: { password?: unknown };
   try { body = await req.json(); } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
   const { password } = body;
 
-  if (typeof password !== "string" || !verifyAdminKey(password)) {
+  // Bound the password length BEFORE verifyAdminKey: safeCompare allocates
+  // buffers sized to the input, so a multi-MB string would blow up allocation
+  // just to fail the compare. No legitimate password approaches 512 chars.
+  if (typeof password !== "string" || password.length > 512) {
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
+
+  if (!verifyAdminKey(password)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 

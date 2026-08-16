@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "raw.githubusercontent.com" },
-    ],
-  },
+  // No `images` block on purpose: the app uses raw <img> everywhere (zero
+  // next/image usages), so the image-optimizer stays off. A remotePatterns
+  // entry here would turn /_next/image into an open proxy for the allowed host.
   experimental: {
     serverActions: {
       bodySizeLimit: "15mb",
@@ -37,7 +35,10 @@ const nextConfig: NextConfig = {
           key: "Content-Security-Policy",
           value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://vitals.vercel-insights.com https://raw.githubusercontent.com; frame-ancestors 'none';",
         },
-        { key: "Permissions-Policy", value: 'camera=(), microphone=(), geolocation=("self")' },
+        // `self` must be a bare token; the quoted "self" is invalid
+        // structured-field syntax and silently disables geolocation entirely,
+        // breaking the /me prayer-location picker.
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
       ],
     },
   ],

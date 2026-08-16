@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
+import { MotionConfig } from "motion/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DialogProvider } from "@/components/Dialog";
 import { Analytics } from "@vercel/analytics/next";
@@ -72,8 +73,15 @@ export default function RootLayout({
 			<body className={`${GeistSans.variable} ${GeistMono.variable} antialiased bg-black text-white`}>
 				<ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
 					<DialogProvider>
-						{children}
-						<Analytics />
+						{/* reducedMotion="user" makes every bespoke motion/react-client
+						    animation (hero stagger, navbar/articles entrances) honor the OS
+						    "reduce motion" setting; chrome components already self-guard.
+						    MotionConfig is a client-only leaf, so rendering it here (a server
+						    layout) is safe — it resolves to a client reference, not server code. */}
+						<MotionConfig reducedMotion="user">
+							{children}
+							<Analytics />
+						</MotionConfig>
 					</DialogProvider>
 				</ThemeProvider>
 			</body>

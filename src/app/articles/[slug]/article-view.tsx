@@ -25,6 +25,7 @@ export default function ArticleView({ article }: { article: ArticleViewData }) {
       banner={article.banner_url ?? undefined}
       backHref="/articles"
       backLabel="back to articles"
+      linkComponent={Link}
       className="pt-20 pb-24"
     >
       <CollapsibleProse

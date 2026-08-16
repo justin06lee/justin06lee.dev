@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ElementType } from "react";
 import * as motion from "motion/react-client";
 import { cn } from "@/lib/utils";
 import { Ascii } from "@/components/chrome/ascii";
@@ -16,8 +16,13 @@ export interface NotFoundProps {
   title?: string;
   /** Muted line under the headline. */
   message?: string;
-  /** Footer links (plain anchors, framework-agnostic). */
+  /** Footer links. Internal hrefs route through `linkComponent`; external stay plain <a>. */
   links?: NotFoundLink[];
+  /**
+   * Anchor component for internal footer `href`s — pass your router's Link.
+   * External http(s) hrefs always render a plain <a>. Defaults to a plain <a>.
+   */
+  linkComponent?: ElementType;
   /** Override the random pick with a fixed cat (0-9) — e.g. for visual tests. */
   cat?: number;
   /** Show the subtle "made by justin06lee.dev" line at the bottom. Default true. */
@@ -35,6 +40,7 @@ export function NotFound({
   title = "404",
   message = "this page wandered off. the cat hasn't seen it either.",
   links = [{ label: "home", href: "/" }],
+  linkComponent = "a",
   cat,
   credit = true,
   className,
@@ -90,15 +96,21 @@ export function NotFound({
           transition={{ duration: 0.8, delay: 0.7 }}
           className="flex gap-6 text-sm"
         >
-          {links.map((link) => (
-            <a
-              key={`${link.label}:${link.href}`}
-              href={link.href}
-              className="px-4 py-2 underline-offset-4 hover:underline"
-            >
-              {link.label}
-            </a>
-          ))}
+          {links.map((link) => {
+            // Internal hrefs route through linkComponent (next/link, …); external
+            // http(s) links stay plain <a> (a router Link can't own another origin).
+            const external = /^https?:\/\//.test(link.href);
+            const LinkComp = external ? "a" : linkComponent;
+            return (
+              <LinkComp
+                key={`${link.label}:${link.href}`}
+                href={link.href}
+                className="px-4 py-2 underline-offset-4 hover:underline"
+              >
+                {link.label}
+              </LinkComp>
+            );
+          })}
         </motion.div>
       ) : null}
 
