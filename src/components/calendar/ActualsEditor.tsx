@@ -22,10 +22,13 @@ type Props = {
 export default function ActualsEditor({ actual, categories, timezone, onClose }: Props) {
   const router = useRouter();
   const dialog = useDialog();
+  // Values the inputs are seeded with; used below to detect no-op time edits.
+  const initialStartInput = epochToLocalInput(actual.startAt, timezone);
+  const initialEndInput = actual.endAt ? epochToLocalInput(actual.endAt, timezone) : "";
   const [categoryId, setCategoryId] = useState<string | null>(actual.categoryId);
   const [title, setTitle] = useState<string>(actual.title ?? "");
-  const [startInput, setStartInput] = useState<string>(epochToLocalInput(actual.startAt, timezone));
-  const [endInput, setEndInput] = useState<string>(actual.endAt ? epochToLocalInput(actual.endAt, timezone) : "");
+  const [startInput, setStartInput] = useState<string>(initialStartInput);
+  const [endInput, setEndInput] = useState<string>(initialEndInput);
   const [stillRunning, setStillRunning] = useState<boolean>(actual.endAt === null);
   const [notes, setNotes] = useState<string>(actual.notes ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -37,10 +40,32 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
     const body: Record<string, unknown> = {
       categoryId,
       title: title.trim() || null,
-      startAt: localInputToEpoch(startInput, timezone),
-      endAt: stillRunning ? null : localInputToEpoch(endInput, timezone),
       notes: notes.trim() || null,
     };
+
+    // Unchecking "still running" must supply a valid end. An empty/invalid input
+    // parses to NaN, which JSON serializes as null, which the server reads as
+    // "keep running" — silently defeating the intent. Block the save instead.
+    if (stillRunning) {
+      body.endAt = null;
+    } else {
+      const endAt = localInputToEpoch(endInput, timezone);
+      if (!Number.isFinite(endAt)) {
+        setError("end time is required");
+        setSubmitting(false);
+        return;
+      }
+      // DST guard: localInputToEpoch can round-trip an untouched value to a
+      // DIFFERENT epoch across the fall-back repeated hour, so only send endAt
+      // when the field actually changed from what it was seeded with.
+      if (endInput !== initialEndInput) body.endAt = endAt;
+    }
+
+    // Same DST guard for start — a no-op save must not rewrite the stored time.
+    if (startInput !== initialStartInput) {
+      body.startAt = localInputToEpoch(startInput, timezone);
+    }
+
     const r = await fetch(`/api/calendar/actuals/${actual.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -49,7 +74,7 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
     });
     if (!r.ok) {
       const errBody = await r.json().catch(() => ({}));
-      setError(errBody.error ?? "Failed to save");
+      setError(errBody.error ?? "failed to save");
       setSubmitting(false);
       return;
     }
@@ -59,9 +84,9 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
 
   async function remove() {
     const ok = await dialog.confirm({
-      title: "Delete this activity?",
-      message: "This block will be permanently removed.",
-      confirmText: "Delete",
+      title: "delete this activity?",
+      message: "this block will be permanently removed.",
+      confirmText: "delete",
       danger: true,
     });
     if (!ok) return;
@@ -71,7 +96,7 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
       credentials: "include",
     });
     if (!r.ok) {
-      setError("Failed to delete");
+      setError("failed to delete");
       setSubmitting(false);
       return;
     }
@@ -96,21 +121,21 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
     <div
       className="fixed inset-0 z-30 flex items-center justify-center bg-black/70"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit activity"
     >
       <div
         className="w-full max-w-md border border-white/20 bg-black p-4 space-y-3"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="edit activity"
       >
-        <h3 className="text-sm uppercase tracking-wider text-white/70">Edit activity</h3>
+        <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">edit activity</h3>
         <div className="space-y-1">
-          <label className="text-xs text-white/60">Category</label>
+          <label className="text-xs text-white/60">category</label>
           <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-white/60">Title</label>
+          <label className="text-xs text-white/60">title</label>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -119,7 +144,7 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <label className="text-xs text-white/60">Start</label>
+            <label className="text-xs text-white/60">start</label>
             <Input
               type="datetime-local"
               value={startInput}
@@ -128,7 +153,7 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-white/60">End</label>
+            <label className="text-xs text-white/60">end</label>
             <Input
               type="datetime-local"
               disabled={stillRunning}
@@ -142,10 +167,10 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
           checked={stillRunning}
           onChange={(e) => setStillRunning(e.target.checked)}
           wrapperClassName="text-xs text-white/70"
-          label="Still running"
+          label="still running"
         />
         <div className="space-y-1">
-          <label className="text-xs text-white/60">Notes</label>
+          <label className="text-xs text-white/60">notes</label>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -155,14 +180,14 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
         {error && <div className="text-xs text-red-400">{error}</div>}
         <div className="flex justify-between pt-1">
           <Button variant="link" size="sm" onClick={remove} disabled={submitting} className="text-red-400 hover:text-red-300">
-            Delete
+            delete
           </Button>
           <div className="flex gap-2">
             <Button variant="link" size="sm" onClick={onClose} className="text-white/60 hover:text-white">
-              Cancel
+              cancel
             </Button>
             <Button variant="outline" size="sm" onClick={save} disabled={submitting}>
-              {submitting ? "Saving..." : "Save"}
+              {submitting ? "saving…" : "save"}
             </Button>
           </div>
         </div>

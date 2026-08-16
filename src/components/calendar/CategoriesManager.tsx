@@ -40,7 +40,7 @@ export default function CategoriesManager({ initial }: Props) {
     const r = await patchReq(id, { name });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.error ?? "Failed to update");
+      throw new Error(e.error ?? "failed to update");
     }
     const updated = (await r.json()) as CalendarCategory;
     setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
@@ -50,7 +50,7 @@ export default function CategoriesManager({ initial }: Props) {
     const r = await patchReq(id, { color: hex });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.error ?? "Failed to update");
+      throw new Error(e.error ?? "failed to update");
     }
     const updated = (await r.json()) as CalendarCategory;
     setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
@@ -60,7 +60,7 @@ export default function CategoriesManager({ initial }: Props) {
     const r = await patchReq(id, { archived });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.error ?? "Failed to update");
+      throw new Error(e.error ?? "failed to update");
     }
     const updated = (await r.json()) as CalendarCategory;
     setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
@@ -76,9 +76,9 @@ export default function CategoriesManager({ initial }: Props) {
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
       if (e.planCount !== undefined || e.actualCount !== undefined) {
-        throw new Error(`In use by ${e.planCount} plans and ${e.actualCount} actuals — reassign or archive first.`);
+        throw new Error(`in use by ${e.planCount} plans and ${e.actualCount} actuals — reassign or archive first.`);
       }
-      throw new Error(e.error ?? "Failed to delete");
+      throw new Error(e.error ?? "failed to delete");
     }
     setCategories((prev) => prev.filter((c) => c.id !== id));
   }
@@ -111,7 +111,7 @@ export default function CategoriesManager({ initial }: Props) {
           onClick={() => setCreating(true)}
           className="border border-dashed border-white/20 hover:bg-white/5 px-3 py-2 text-sm text-white/70"
         >
-          + New category
+          + new category
         </button>
       )}
 

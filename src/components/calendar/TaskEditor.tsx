@@ -125,9 +125,9 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
   const remove = async () => {
     if (!task) return;
     const ok = await dialog.confirm({
-      title: "Delete this task?",
-      message: "The plan and any actuals tied to it will lose this reference.",
-      confirmText: "Delete",
+      title: "delete this task?",
+      message: "the plan and any actuals tied to it will lose this reference.",
+      confirmText: "delete",
       danger: true,
     });
     if (!ok) return;
@@ -160,21 +160,21 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
     <div
       className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={task ? "Edit task" : "New task"}
     >
       <form
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
         className="w-full max-w-md bg-black border border-white/20 p-5 flex flex-col gap-3 text-sm max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-label={task ? "edit task" : "new task"}
       >
         <div className="flex items-center justify-between">
-          <span className="font-mono uppercase tracking-widest text-white/70 text-xs">
-            {task ? "Edit task" : "New task"} · {date}
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+            {task ? "edit task" : "new task"} · {date}
           </span>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-white/60 hover:text-white">×</button>
+          <button type="button" onClick={onClose} aria-label="close" className="text-white/60 hover:text-white">×</button>
         </div>
         <label className="flex flex-col gap-1">
           <span className="text-white/60 text-xs">category</span>
@@ -298,7 +298,7 @@ function AlternativesSection({
                 <button
                   type="button"
                   onClick={() => remove(i)}
-                  aria-label={`Remove alternative ${i + 1}`}
+                  aria-label={`remove alternative ${i + 1}`}
                   className="text-white/40 hover:text-white text-xs px-1"
                 >
                   ×

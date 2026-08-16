@@ -56,6 +56,18 @@ export default function DayView({
   // Pre-compute renderable actuals (clamped to this day's [0,1440] window).
   const renderActuals = actuals
     .map((a) => {
+      const running = a.endAt === null;
+      // A running actual that ends on the visible day derives its right edge
+      // from Date.now(); computing that during SSR and first hydration would
+      // mismatch the server HTML. On today's page we defer the live height
+      // until the client clock (nowMinutes) is set — mirroring now-playing-bar's
+      // null-until-mounted pattern — and render a zero-height placeholder at the
+      // start until then. On other days a running block just fills to midnight,
+      // which is deterministic, so it renders immediately.
+      if (running && date === today && nowMinutes === null) {
+        const w = clampActualToDay(date, a.startAt, a.startAt + 1, timezone);
+        return w ? { actual: a, startMin: w.startMin, endMin: w.startMin } : null;
+      }
       const w = clampActualToDay(date, a.startAt, a.endAt, timezone);
       return w ? { actual: a, ...w } : null;
     })
@@ -152,7 +164,7 @@ export default function DayView({
               />
             ))}
             {renderActuals.length === 0 && (
-              <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+              <div className="absolute top-2 right-2 font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
                 no actuals yet
               </div>
             )}

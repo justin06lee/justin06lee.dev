@@ -41,7 +41,7 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
   }
 
   return (
-    <motion.div {...fadeIn} transition={{ duration: 0.4 }}>
+    <motion.div {...fadeIn} transition={{ duration: 0.6 }}>
       <Calendar
         className="w-full"
         // CalendarShell already renders the period nav (prev/today/next +

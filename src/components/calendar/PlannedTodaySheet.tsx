@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarTask, CalendarActual } from "@/lib/calendar";
 import type { CalendarCategory } from "@/lib/calendar-categories";
 import AdHocActualForm from "./AdHocActualForm";
-import { epochToHHMMInTz } from "@/lib/calendar-dates";
+import { epochToHHMMInTz, clampActualToDay } from "@/lib/calendar-dates";
 import { useDialog } from "@/components/Dialog";
 import { SLEEP_CATEGORY_ID } from "@/lib/calendar-constants";
 
@@ -24,6 +24,11 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
   const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  // router.refresh() is async; a bare call clears `busy` while props are still
+  // stale, so a second click could fire a duplicate start. Keep the controls
+  // disabled through the transition until the refreshed data lands.
+  const [isPending, startTransition] = useTransition();
+  const locked = busy || isPending;
 
   // Lanes mean several actuals can be open at once. The lowest lane is the
   // primary one this sheet's summary and stop button act on; sleep is matched
@@ -48,8 +53,12 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
 
   const untimed = tasks.filter((t) => t.date === date && !t.startTime);
 
+  // Include yesterday-anchored blocks that clamp into this day (e.g. a sleep
+  // 23:30→07:00 that renders on day 2), not just those whose start date equals
+  // `date` — the log is the only edit affordance for cross-midnight actuals.
+  // The predicate is an OR over a single pass, so each actual appears once.
   const todayActuals = actuals
-    .filter((a) => a.date === date)
+    .filter((a) => a.date === date || clampActualToDay(date, a.startAt, a.endAt, timezone) !== null)
     .sort((a, b) => a.startAt - b.startAt);
 
   async function reportFailure(label: string, r: Response) {
@@ -67,10 +76,10 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
         body: JSON.stringify({ planId }),
       });
       if (!r.ok) {
-        await reportFailure("Failed to start", r);
+        await reportFailure("failed to start", r);
         return;
       }
-      router.refresh();
+      startTransition(() => router.refresh());
     } finally {
       setBusy(false);
     }
@@ -88,10 +97,10 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
         body: JSON.stringify(runningActual ? { id: runningActual.id } : {}),
       });
       if (!r.ok) {
-        await reportFailure("Failed to stop", r);
+        await reportFailure("failed to stop", r);
         return;
       }
-      router.refresh();
+      startTransition(() => router.refresh());
     } finally {
       setBusy(false);
     }
@@ -115,10 +124,10 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
             body: JSON.stringify({ categoryId: SLEEP_CATEGORY_ID }),
           });
       if (!r.ok) {
-        await reportFailure(isSleeping ? "Failed to wake up" : "Failed to start sleep", r);
+        await reportFailure(isSleeping ? "failed to wake up" : "failed to start sleep", r);
         return;
       }
-      router.refresh();
+      startTransition(() => router.refresh());
     } finally {
       setBusy(false);
     }
@@ -127,7 +136,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
   return (
     <div className="space-y-4 text-sm">
       <section>
-        <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Now playing</div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">now playing</div>
         {runningActual ? (
           <div className="flex items-center justify-between border border-white/20 bg-white/5 px-3 py-2">
             <div>
@@ -140,33 +149,33 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
             <button
               type="button"
               onClick={stop}
-              disabled={busy}
+              disabled={locked}
               className="text-xs border border-white/30 hover:bg-white/10 px-2 py-1 disabled:opacity-40"
             >
-              Stop
+              stop
             </button>
           </div>
         ) : (
-          <div className="text-xs text-white/40">Nothing running</div>
+          <div className="text-xs text-white/40">nothing running</div>
         )}
       </section>
 
       <section>
-        <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Sleep</div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">sleep</div>
         <button
           type="button"
           onClick={toggleSleep}
-          disabled={busy}
+          disabled={locked}
           className="w-full text-left border border-white/20 hover:bg-white/10 px-3 py-2 text-sm disabled:opacity-40"
         >
-          {isSleeping ? "Wake up" : "Sleep"}
+          {isSleeping ? "wake up" : "sleep"}
         </button>
       </section>
 
       <section>
-        <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Planned today</div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">planned today</div>
         {uniqueTimed.length === 0 && (
-          <div className="text-xs text-white/40">No timed plans for this day</div>
+          <div className="text-xs text-white/40">no timed plans for this day</div>
         )}
         <div className="space-y-1">
           {uniqueTimed.map((t) => {
@@ -176,7 +185,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
                 type="button"
                 key={t.id}
                 onClick={() => isLive ? stop() : startFromPlan(t.id)}
-                disabled={busy}
+                disabled={locked}
                 className={`w-full flex items-center justify-between border px-3 py-2 text-left disabled:opacity-40 ${isLive ? "border-white/60 bg-white/10" : "border-white/15 hover:bg-white/5"}`}
               >
                 <span className="flex items-center gap-2 truncate">
@@ -190,7 +199,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
                     {t.category ? `${t.category.name} — ${t.title}` : t.title}
                   </span>
                 </span>
-                <span className="text-[10px] text-white/50 shrink-0">{isLive ? "Stop" : "Start"}</span>
+                <span className="text-[10px] text-white/50 shrink-0">{isLive ? "stop" : "start"}</span>
               </button>
             );
           })}
@@ -199,7 +208,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
 
       {untimed.length > 0 && (
         <section>
-          <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Untimed</div>
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">untimed</div>
           <div className="space-y-1">
             {untimed.map((t) => (
               <button
@@ -220,7 +229,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
                     {t.category ? `${t.category.name} — ${t.title}` : t.title}
                   </span>
                 </span>
-                {onEditPlan && <span className="text-[10px] text-white/50 shrink-0">Edit</span>}
+                {onEditPlan && <span className="text-[10px] text-white/50 shrink-0">edit</span>}
               </button>
             ))}
           </div>
@@ -228,9 +237,9 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
       )}
 
       <section>
-        <div className="text-xs uppercase tracking-wider text-white/50 mb-2">Activity log</div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">activity log</div>
         {todayActuals.length === 0 ? (
-          <div className="text-xs text-white/40">Nothing logged yet</div>
+          <div className="text-xs text-white/40">nothing logged yet</div>
         ) : (
           <div className="space-y-1">
             {todayActuals.map((a) => {
@@ -257,7 +266,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
                     )}
                     <span className="truncate">{label}</span>
                   </span>
-                  {onEditActual && <span className="text-[10px] text-white/50 shrink-0">Edit</span>}
+                  {onEditActual && <span className="text-[10px] text-white/50 shrink-0">edit</span>}
                 </button>
               );
             })}
@@ -279,7 +288,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
             onClick={() => setCreating(true)}
             className="w-full text-left border border-dashed border-white/20 hover:bg-white/5 px-3 py-2 text-sm text-white/70"
           >
-            + New activity
+            + new activity
           </button>
         )}
       </section>

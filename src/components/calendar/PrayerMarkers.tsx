@@ -9,7 +9,16 @@ import { TimelineMarker } from "@/components/chrome/timeline";
  * in without blocking the day view.
  */
 export default async function PrayerMarkers({ date }: { date: string }) {
-  const prayers = await getPrayerTimesForDate(date);
+  // Suspense isolates a slow fetch's latency but NOT a thrown error — an
+  // initDb()/cache hiccup inside getPrayerTimesForDate would otherwise bubble
+  // up and blank the whole day page. Swallow it into the same "unavailable"
+  // fallback that a null result already renders.
+  let prayers: Awaited<ReturnType<typeof getPrayerTimesForDate>> = null;
+  try {
+    prayers = await getPrayerTimesForDate(date);
+  } catch {
+    prayers = null;
+  }
   if (!prayers) {
     return (
       <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
@@ -17,12 +26,14 @@ export default async function PrayerMarkers({ date }: { date: string }) {
       </div>
     );
   }
+  // Prayer names lowercased to match the site's lowercase voice; the property
+  // access still uses the API's capitalized keys.
   const markers: [string, string][] = [
-    ["Fajr", prayers.Fajr],
-    ["Dhuhr", prayers.Dhuhr],
-    ["Asr", prayers.Asr],
-    ["Maghrib", prayers.Maghrib],
-    ["Isha", prayers.Isha],
+    ["fajr", prayers.Fajr],
+    ["dhuhr", prayers.Dhuhr],
+    ["asr", prayers.Asr],
+    ["maghrib", prayers.Maghrib],
+    ["isha", prayers.Isha],
   ];
   // TimelineMarker resolves its own top% against the full 24h track, so the
   // markers sit correctly once slotted into Timeline's marker layer.

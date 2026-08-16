@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CalendarActual, CalendarTask } from "@/lib/calendar";
 import type { CalendarCategory } from "@/lib/calendar-categories";
@@ -27,6 +27,10 @@ export default function NowPlayingBar({ date, tasks, actuals, categories, timezo
   const dialog = useDialog();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
+  // router.refresh() is async; clearing `busy` before it resolves leaves the
+  // toggle live against stale props, so keep it disabled through the transition.
+  const [isPending, startTransition] = useTransition();
+  const locked = busy || isPending;
 
   // Several actuals can be open at once now, one per track. Sorted by lane so
   // the bar's order is stable, with the lowest lane treated as the primary —
@@ -60,12 +64,12 @@ export default function NowPlayingBar({ date, tasks, actuals, categories, timezo
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
         await dialog.alert({
-          title: isSleeping ? "Failed to wake up" : "Failed to start sleep",
+          title: isSleeping ? "failed to wake up" : "failed to start sleep",
           message: body.error ?? `HTTP ${r.status}`,
         });
         return;
       }
-      router.refresh();
+      startTransition(() => router.refresh());
     } finally {
       setBusy(false);
     }
@@ -81,7 +85,7 @@ export default function NowPlayingBar({ date, tasks, actuals, categories, timezo
         open={expanded}
         onClose={() => setExpanded(false)}
         side="bottom"
-        ariaLabel="Planner sheet"
+        ariaLabel="planner sheet"
         className="h-[80vh]"
       >
         <PlannedTodaySheet
@@ -116,11 +120,11 @@ export default function NowPlayingBar({ date, tasks, actuals, categories, timezo
           onLaneClick={() => setExpanded(true)}
           actions={
             <>
-              <Button size="sm" variant="outline" onClick={toggleSleep} disabled={busy} className="px-2 py-1 text-xs">
-                {isSleeping ? "Wake up" : "Sleep"}
+              <Button size="sm" variant="outline" onClick={toggleSleep} disabled={locked} className="px-2 py-1 text-xs">
+                {isSleeping ? "wake up" : "sleep"}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setExpanded(true)} label="Open planner sheet" className="px-2 py-1 text-xs">
-                Open
+              <Button size="sm" variant="outline" onClick={() => setExpanded(true)} label="open planner sheet" className="px-2 py-1 text-xs">
+                open
               </Button>
             </>
           }
@@ -133,11 +137,11 @@ export default function NowPlayingBar({ date, tasks, actuals, categories, timezo
           onClick={() => setExpanded(true)}
           actions={
             <>
-              <Button size="sm" variant="outline" onClick={toggleSleep} disabled={busy} className="px-2 py-1 text-xs">
-                {isSleeping ? "Wake up" : "Sleep"}
+              <Button size="sm" variant="outline" onClick={toggleSleep} disabled={locked} className="px-2 py-1 text-xs">
+                {isSleeping ? "wake up" : "sleep"}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setExpanded(true)} label="Open planner sheet" className="px-2 py-1 text-xs">
-                Open
+              <Button size="sm" variant="outline" onClick={() => setExpanded(true)} label="open planner sheet" className="px-2 py-1 text-xs">
+                open
               </Button>
             </>
           }
