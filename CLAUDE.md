@@ -24,7 +24,7 @@ Dark-only theme, minimal black/white aesthetic, motion-driven, ASCII flourishes.
 - **Theme**: `next-themes`, dark mode forced
 - **Database**: **Turso / libSQL** via `@libsql/client` (raw SQL, no ORM)
 - **Markdown**: `react-markdown` + `remark-gfm` + `remark-math` + `rehype-katex` + `rehype-slug`
-- **Sanitization**: `isomorphic-dompurify`
+- **Sanitization**: markdown is rendered with `react-markdown` + `skipHtml` (raw HTML is dropped, not sanitized); there is no `dangerouslySetInnerHTML` anywhere
 - **Auth**: hand-rolled DB-backed sessions + httpOnly cookie + ADMIN_KEY env
 - **Content source**: GitHub Contents API (read for articles, read+write for the operator/CMS)
 - **Analytics**: `@vercel/analytics`
@@ -89,13 +89,12 @@ src/
     github.ts, github-paths.ts    # public article reader (Contents API)
     operator-content.ts           # admin: write articles/images back to GitHub
     article-draft.ts, article-sections.ts  # markdown parsing/serializing
-    sanitize.ts, theme-images.ts
+    theme-images.ts
 
 public/
-  ascii/ascii1..9.txt             # responsive ASCII swap on small screens
+  ascii/ascii{1,3,4,9}.txt        # responsive ASCII swap on small screens
   cat-sprite.jpg                  # 12x10 cat sprite sheet
   Poppins-Regular.ttf             # body font
-  justin06leefav.png              # favicon
 ```
 
 ## Calendar
@@ -134,7 +133,7 @@ Prayer times come from the Aladhan API, fetched per month, with a three-tier cac
 - **Comments explain *why*, not *what*.** Concurrency races, DST quirks, FK simulation, asymmetric match rules — these warrant comments. Mechanical descriptions don't.
 - Defensive JSON parsing throughout (`try/catch` returning a safe default for malformed columns).
 - DB schema is bootstrapped by `initDb()` (memoized). Idempotent column additions via `ensureColumn` use a regex allowlist for identifiers (SQLite can't parameterize them).
-- Admin endpoints gated by `requireAdmin*` middleware. User HTML sanitized with `isomorphic-dompurify`.
+- Admin endpoints gated by `requireAdmin*` middleware. User-authored markdown is rendered through `react-markdown` with `skipHtml` (raw HTML never reaches the DOM); uploaded images are served with a hardened `Content-Type` allowlist + `Content-Disposition: inline` + `default-src 'none'; sandbox` CSP.
 - Security headers (CSP, X-Frame-Options DENY, Permissions-Policy, Referrer-Policy) configured in `next.config.ts`.
 - No emojis in product copy or UI.
 
