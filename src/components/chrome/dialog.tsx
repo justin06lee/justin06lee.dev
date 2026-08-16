@@ -171,7 +171,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             >
             <div className="space-y-2">
               <div className="text-xs font-mono uppercase tracking-widest text-white/50">
-                {state.kind === "confirm" ? "Confirm" : "Notice"}
+                {state.kind === "confirm" ? "confirm" : "notice"}
               </div>
               <div id="chrome-dialog-title" className="text-sm text-white">{state.options.title}</div>
               {state.options.message && (
@@ -181,7 +181,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             <div className="flex items-center justify-end gap-2 pt-1">
               {state.kind === "confirm" && (
                 <button ref={cancelBtnRef} type="button" onClick={() => close(false)} className="text-xs text-white/60 hover:text-white px-3 py-1">
-                  {state.options.cancelText ?? "Cancel"}
+                  {state.options.cancelText ?? "cancel"}
                 </button>
               )}
               <button
@@ -194,7 +194,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                     : "border-white/40 hover:bg-white hover:text-black"
                 }`}
               >
-                {state.kind === "confirm" ? state.options.confirmText ?? "OK" : state.options.okText ?? "OK"}
+                {state.kind === "confirm" ? state.options.confirmText ?? "ok" : state.options.okText ?? "ok"}
               </button>
             </div>
           </div>

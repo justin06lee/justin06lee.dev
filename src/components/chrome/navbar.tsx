@@ -29,6 +29,12 @@ export type NavbarProps = {
   className?: string;
   /** Heading shown at the top of the mobile panel. Defaults to "menu". */
   menuLabel?: string;
+  /**
+   * Anchor component for internal `href`s — pass your router's Link (e.g.
+   * next/link) for client-side navigation. External http(s) and "#" hrefs
+   * always render a plain <a>. Defaults to a plain <a>.
+   */
+  linkComponent?: React.ElementType;
 };
 
 // Labels can be ReactNodes and placeholder hrefs (e.g. "#") can repeat, so keys
@@ -41,10 +47,12 @@ function NavItem({
   link,
   className,
   onNavigate,
+  linkComponent = "a",
 }: {
   link: NavLink;
   className?: string;
   onNavigate?: () => void;
+  linkComponent?: React.ElementType;
 }) {
   const handleClick = () => {
     link.onClick?.();
@@ -58,10 +66,15 @@ function NavItem({
       </button>
     );
   }
+  // Internal hrefs route through linkComponent (next/link, …) when provided.
+  // External http(s) links and "#" placeholders stay plain <a> (a router Link
+  // can't own another origin, and "#" is a non-navigating placeholder).
+  const external = /^https?:\/\//.test(link.href) || link.href.startsWith("#");
+  const LinkComp = external ? "a" : linkComponent;
   return (
-    <a href={link.href} onClick={handleClick} className={className}>
+    <LinkComp href={link.href} onClick={handleClick} className={className}>
       {link.label}
-    </a>
+    </LinkComp>
   );
 }
 
@@ -69,8 +82,10 @@ function NavItem({
  * Fixed top navigation. Desktop shows a left cluster (brand + leftLinks) and a
  * right cluster (links + actions); below `md` it collapses to a hamburger whose
  * slide-in panel lists the union of leftLinks and links. Routes are caller-supplied —
- * plain <a href> (or a <button> when an item has onClick and no href), framework-
- * agnostic. Behavior lives in the headless useNavbar hook.
+ * plain <a href> by default (or a <button> when an item has onClick and no href).
+ * Pass `linkComponent` to route internal hrefs through your router's Link;
+ * external http(s) and "#" hrefs stay plain <a>. Behavior lives in the headless
+ * useNavbar hook.
  */
 export function Navbar({
   brand,
@@ -79,6 +94,7 @@ export function Navbar({
   actions,
   className,
   menuLabel = "menu",
+  linkComponent = "a",
 }: NavbarProps) {
   const { open, setOpen, panelRef } = useNavbar();
 
@@ -94,7 +110,7 @@ export function Navbar({
             {leftLinks.length > 0 && (
               <div className="hidden items-center gap-6 md:flex">
                 {leftLinks.map((l, i) => (
-                  <NavItem key={navItemKey(l, i)} link={l} className={linkClass} />
+                  <NavItem key={navItemKey(l, i)} link={l} className={linkClass} linkComponent={linkComponent} />
                 ))}
               </div>
             )}
@@ -103,7 +119,7 @@ export function Navbar({
 
         <div className="ml-auto hidden items-center gap-1 md:flex">
           {links.map((l, i) => (
-            <NavItem key={navItemKey(l, i)} link={l} className={cn(linkClass, "px-4 py-2")} />
+            <NavItem key={navItemKey(l, i)} link={l} className={cn(linkClass, "px-4 py-2")} linkComponent={linkComponent} />
           ))}
           {actions}
         </div>
@@ -159,6 +175,7 @@ export function Navbar({
                     link={l}
                     className={cn(linkClass, "py-1")}
                     onNavigate={() => setOpen(false)}
+                    linkComponent={linkComponent}
                   />
                 ))}
               </div>

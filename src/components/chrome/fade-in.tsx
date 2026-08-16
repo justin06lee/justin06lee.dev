@@ -18,7 +18,7 @@ export interface FadeInProps extends React.HTMLAttributes<HTMLElement> {
 
 /**
  * Fade + translate a node in on mount. Pure CSS (no motion dependency):
- * a keyframe drives opacity 0 -> 1 and translate(x, y) -> 0, with the offsets
+ * a keyframe drives opacity 0 to 1 and translate(x, y) to 0, with the offsets
  * passed as CSS custom properties. Honors prefers-reduced-motion.
  *
  * Timing mirrors a motion/framer `initial={{opacity:0, y:-10}}` /
@@ -59,7 +59,7 @@ export function FadeIn({
       }
       {...rest}
     >
-      {/* Opacity 0 -> 1 and translate(--fade-x, --fade-y) -> 0. fill-mode
+      {/* Opacity 0 to 1 and translate(--fade-x, --fade-y) to 0. fill-mode
           "both" keeps the element hidden during a stagger delay. React hoists
           this to <head> and dedupes across instances by href. */}
       <style precedence="default" href="chrome-fade-in-keyframes">{`

@@ -121,13 +121,13 @@ type SocialItem = {
 };
 
 const ORDER: Array<{ key: SocialKey; label: string; tooltip: string; Icon: LucideIcon }> = [
-  { key: "github", label: "GitHub", tooltip: "GitHub", Icon: GithubIcon },
-  { key: "linkedin", label: "LinkedIn", tooltip: "LinkedIn", Icon: LinkedinIcon },
-  { key: "x", label: "X", tooltip: "X", Icon: XIcon },
-  { key: "email", label: "Email", tooltip: "Copy email", Icon: Mail },
-  { key: "youtube", label: "YouTube", tooltip: "YouTube", Icon: YoutubeIcon },
-  { key: "instagram", label: "Instagram", tooltip: "Instagram", Icon: InstagramIcon },
-  { key: "website", label: "Website", tooltip: "Website", Icon: Globe },
+  { key: "github", label: "github", tooltip: "github", Icon: GithubIcon },
+  { key: "linkedin", label: "linkedin", tooltip: "linkedin", Icon: LinkedinIcon },
+  { key: "x", label: "x", tooltip: "x", Icon: XIcon },
+  { key: "email", label: "email", tooltip: "copy email", Icon: Mail },
+  { key: "youtube", label: "youtube", tooltip: "youtube", Icon: YoutubeIcon },
+  { key: "instagram", label: "instagram", tooltip: "instagram", Icon: InstagramIcon },
+  { key: "website", label: "website", tooltip: "website", Icon: Globe },
 ];
 
 const tooltipClass =
@@ -146,7 +146,7 @@ function SocialButton({
 }) {
   const [copied, setCopied] = useState(false);
   const { key, href, label, tooltip, Icon } = item;
-  const tooltipText = key === "email" && copied ? "Copied!" : tooltip;
+  const tooltipText = key === "email" && copied ? "copied" : tooltip;
 
   const inner = (
     <>
@@ -211,7 +211,7 @@ export function Socials({ links, size = "md", gap = "normal", className }: Socia
 
   return (
     <nav
-      aria-label="Social links"
+      aria-label="social links"
       className={cn("flex flex-wrap items-center", gapMap[gap], className)}
     >
       {items.map((item) => (

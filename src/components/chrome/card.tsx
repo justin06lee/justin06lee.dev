@@ -38,9 +38,14 @@ export type CardTitleProps = {
   children?: React.ReactNode;
   /** Renders the title as a link. External URLs get target="_blank". */
   href?: string;
+  /**
+   * Anchor component for internal `href`s — pass your router's Link. External
+   * http(s) URLs always render a plain <a>. Defaults to a plain <a>.
+   */
+  linkComponent?: React.ElementType;
 };
 
-export function CardTitle({ className, children, href }: CardTitleProps) {
+export function CardTitle({ className, children, href, linkComponent = "a" }: CardTitleProps) {
   const heading = (
     <h3 className={cn("text-lg font-semibold leading-tight", className)}>
       {children}
@@ -48,14 +53,17 @@ export function CardTitle({ className, children, href }: CardTitleProps) {
   );
   if (!href) return heading;
   const external = /^https?:\/\//.test(href);
+  // External links stay a plain <a> (a router Link can't own another origin);
+  // internal hrefs route through linkComponent (next/link, …) when provided.
+  const LinkComp = external ? "a" : linkComponent;
   return (
-    <a
+    <LinkComp
       href={href}
       className="underline-offset-4 hover:underline"
       {...(external && { target: "_blank", rel: "noopener noreferrer" })}
     >
       {heading}
-    </a>
+    </LinkComp>
   );
 }
 

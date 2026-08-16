@@ -35,7 +35,7 @@ export type ButtonProps = {
   background?: string;
   /** When set, click copies this string to the clipboard. */
   copy?: string;
-  /** Swaps into tooltip (and into children if children is a string) for 1.5s after copy. Defaults to "Copied!". */
+  /** Swaps into tooltip (and into children if children is a string) for 1.5s after copy. Defaults to "copied". */
   copyFeedback?: string;
   ref?: React.Ref<HTMLButtonElement | HTMLAnchorElement>;
 };
@@ -50,7 +50,7 @@ const variantClass: Record<ButtonVariant, string> = {
   outline: "border border-white/20 text-white hover:bg-white/5",
   dashed:
     "border border-dashed border-white/20 text-white/70 hover:text-white hover:bg-white/5",
-  ghost: "text-white hover:bg-white/10 hover:shadow-sm",
+  ghost: "text-white hover:bg-white/10",
   link: "text-white underline-offset-4 hover:underline",
 };
 
@@ -72,7 +72,7 @@ export function Button({
   fullWidth,
   background,
   copy,
-  copyFeedback = "Copied!",
+  copyFeedback = "copied",
   ref,
 }: ButtonProps) {
   const [copied, setCopied] = useState(false);

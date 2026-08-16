@@ -166,7 +166,7 @@ export function Donut({
       ref={preRef}
       className={className}
       style={{ background, contain: isolate ? "layout paint style" : undefined }}
-      aria-label="ASCII donut"
+      aria-label="ascii donut"
     />
   );
 }

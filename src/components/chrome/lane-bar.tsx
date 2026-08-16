@@ -131,7 +131,7 @@ export function LaneBar({
                     {lane.accent && (
                       <span
                         aria-hidden
-                        className="size-1.5 shrink-0 rounded-full"
+                        className="size-1.5 shrink-0"
                         style={{ background: lane.accent }}
                       />
                     )}

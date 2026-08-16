@@ -119,8 +119,8 @@ function NowLine({ minutes }: { minutes: number }) {
       className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
       style={{ top: `${(minutes / 1440) * 100}%` }}
     >
-      <div className="-ml-1 size-2 shrink-0 rounded-full bg-red-500" />
-      <div className="h-px flex-1 bg-red-500" />
+      <div className="-ml-1 size-2 shrink-0 bg-white" />
+      <div className="h-px flex-1 bg-white" />
     </div>
   );
 }
