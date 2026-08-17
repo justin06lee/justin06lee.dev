@@ -147,13 +147,20 @@ function Piece({
   const inner = (
     <>
       {item.src ? (
+        // Intrinsic width/height give the browser the true aspect ratio — a
+        // viewBox-only SVG otherwise has no intrinsic size and object-fit falls
+        // back to 300x150, cropping. object-contain guarantees the whole piece
+        // shows: the box is already the image's aspect, so it fills edge to
+        // edge, and any dimension mismatch letterboxes rather than crops.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={item.src}
           alt={item.alt ?? ""}
+          width={item.width}
+          height={item.height}
           loading="lazy"
           draggable={false}
-          className="block h-full w-full object-cover"
+          className="block h-full w-full object-contain"
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center px-4 text-center font-mono text-xs lowercase tracking-wide text-white/50">
