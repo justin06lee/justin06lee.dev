@@ -50,6 +50,7 @@ icons are lucide components passed as `icon` / `iconRight`. omitting `children` 
 - `icon: LucideIcon — lucide icon before text (or alone if no children).`
 - `iconRight: LucideIcon — lucide icon after text.`
 - `tooltip: string — white slide-up pill shown on hover.`
+- `tooltipSide: 'top' | 'bottom' = 'top' — side the tooltip pill appears on. the pill is not portaled, so a button near the top of the viewport (a header, a navbar) clips an upward pill — pass 'bottom' there.`
 - `label: string — aria-label override; required for icon-only buttons.`
 - `href: string — renders as <a>. external URLs (http(s)://) get target="_blank" auto-applied.`
 - `linkComponent: React.ElementType — anchor component for internal hrefs — pass your router's Link (e.g. next/link) for client-side navigation + prefetch. external http(s) hrefs always use a plain <a>.`

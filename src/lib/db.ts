@@ -145,6 +145,9 @@ async function doInit(): Promise<void> {
   await ensureColumn("calendar_tasks", "is_uncertain", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn("calendar_tasks", "fallbacks", "TEXT");
   await ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
+  // Optional sub-grouping within a gallery category (e.g. "colorful",
+  // "terminal") so projects can be hung as separate labelled sections.
+  await ensureColumn("items", "collection", "TEXT");
 
   // Parallel tracks. `track` lanes concurrent activity — working out while a
   // build runs, studying while socialising — so two things happening at once
@@ -217,6 +220,7 @@ export type DbItem = {
   notes: string | null;
   sort_order: number;
   pinned: number;
+  collection: string | null;
 };
 
 export type DbCalendarTask = {

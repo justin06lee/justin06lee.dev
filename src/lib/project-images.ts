@@ -87,11 +87,16 @@ function destination(item: GalleryItem): string | undefined {
   return item.live || item.link || item.repo;
 }
 
+/** The GitHub repo can live in any of the URL fields; only a github URL parses. */
+function repoUrlFor(item: GalleryItem): string | undefined {
+  return [item.repo, item.link, item.live].find((u) => parseRepoSlug(u));
+}
+
 /** Map gallery items to salon pieces, hanging each project's README hero image. */
 export async function getProjectSalonItems(items: GalleryItem[]): Promise<SalonItem[]> {
   return Promise.all(
     items.map(async (item): Promise<SalonItem> => {
-      const image = await getProjectImage(item.repo);
+      const image = await getProjectImage(repoUrlFor(item));
       const href = destination(item);
       if (!image) {
         // No hero image: a placard keeps the project on the wall.

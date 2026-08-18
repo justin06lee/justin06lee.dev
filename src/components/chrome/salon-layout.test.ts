@@ -2,67 +2,65 @@ import { describe, it, expect } from "vitest";
 import { justifyRows, type Sized } from "./salon-layout";
 
 const sq: Sized = { width: 100, height: 100 }; // aspect 1
-const wide: Sized = { width: 300, height: 100 }; // aspect 3
+const wide: Sized = { width: 600, height: 100 }; // aspect 6
 
-describe("justifyRows", () => {
-  it("packs a row to fill the width at (or below) the target height", () => {
-    // 5 squares, no gap: fill height = 1000 / 5 = 200 == target → one row.
-    const rows = justifyRows(Array(5).fill(sq), 1000, 0, 200, 300);
+const rowWidth = (items: Sized[], height: number, gap: number) =>
+  items.reduce((sum, it) => sum + height * (it.width / it.height), 0) + gap * (items.length - 1);
+
+describe("justifyRows (ragged rows at a target height)", () => {
+  it("lays every piece at the target height", () => {
+    const rows = justifyRows(Array(5).fill(sq), 1000, 0, 200);
     expect(rows).toHaveLength(1);
     expect(rows[0].items).toHaveLength(5);
     expect(rows[0].height).toBeCloseTo(200);
   });
 
-  it("wraps into multiple rows", () => {
-    const rows = justifyRows(Array(10).fill(sq), 1000, 0, 200, 300);
+  it("wraps when the next piece would run past the container", () => {
+    // 5 squares at h=200 exactly span 1000; a 6th wraps.
+    const rows = justifyRows(Array(6).fill(sq), 1000, 0, 200);
     expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.items.length === 5 && Math.abs(r.height - 200) < 1e-6)).toBe(true);
+    expect(rows[0].items).toHaveLength(5);
+    expect(rows[1].items).toHaveLength(1);
   });
 
-  it("accounts for the gap when sizing a row", () => {
-    // 5 squares, gap 10: fill height = (1000 - 40) / 5 = 192.
-    const rows = justifyRows(Array(5).fill(sq), 1000, 10, 200, 300);
+  it("leaves rows ragged — a sparse row keeps its natural (narrower) width, still at target height", () => {
+    const rows = justifyRows(Array(6).fill(sq), 1000, 0, 200);
+    expect(rows[1].height).toBeCloseTo(200); // NOT stretched to fill
+    expect(rowWidth(rows[1].items, rows[1].height, 0)).toBeLessThan(1000);
+  });
+
+  it("gives each row its own width — one row's length doesn't force another's", () => {
+    // squares then a very wide piece: two rows of different natural widths.
+    const rows = justifyRows([sq, sq, wide, sq], 1000, 0, 200);
+    const widths = rows.map((r) => rowWidth(r.items, r.height, 0));
+    // no row exceeds the container, and they are not all equal
+    for (const w of widths) expect(w).toBeLessThanOrEqual(1000 + 1e-6);
+    expect(new Set(widths.map((w) => Math.round(w))).size).toBeGreaterThan(1);
+  });
+
+  it("accounts for the gap when deciding where to wrap", () => {
+    // 4 squares + 3 gaps of 10 = 830 <= 1000; a 5th (1040) wraps.
+    const rows = justifyRows(Array(5).fill(sq), 1000, 10, 200);
+    expect(rows[0].items).toHaveLength(4);
+    expect(rows[1].items).toHaveLength(1);
+  });
+
+  it("scales down only a lone piece wider than the container (never crops, never overflows)", () => {
+    // one 6:1 piece at h=200 would be 1200 wide > 1000 → scaled to fit.
+    const rows = justifyRows([wide], 1000, 0, 200);
     expect(rows).toHaveLength(1);
-    expect(rows[0].height).toBeCloseTo(192);
-  });
-
-  it("every full row's pieces span the container width exactly", () => {
-    const gap = 12;
-    const width = 1000;
-    const rows = justifyRows([wide, sq, sq, wide, sq, sq, sq, wide], width, gap, 200, 400);
-    // Only assert on rows that closed by filling (all but possibly the last).
-    for (const row of rows.slice(0, -1)) {
-      const span =
-        row.items.reduce((sum, it) => sum + row.height * (it.width / it.height), 0) +
-        gap * (row.items.length - 1);
-      expect(span).toBeCloseTo(width);
-    }
-  });
-
-  it("left-aligns a sparse trailing row at the target instead of ballooning it", () => {
-    // 5 fill the first row; 2 left over would need height 500 to fill → capped.
-    const rows = justifyRows(Array(7).fill(sq), 1000, 0, 200, 300);
-    expect(rows).toHaveLength(2);
-    expect(rows[1].items).toHaveLength(2);
-    expect(rows[1].height).toBeCloseTo(200); // target, not the 500 that would fill
-  });
-
-  it("still justifies a trailing row that nearly fills on its own", () => {
-    // 4 leftover squares need height 250 to fill, under maxHeight 300 → justify.
-    const rows = justifyRows(Array(9).fill(sq), 1000, 0, 200, 300);
-    expect(rows).toHaveLength(2);
-    expect(rows[1].items).toHaveLength(4);
-    expect(rows[1].height).toBeCloseTo(250);
+    expect(rows[0].height).toBeCloseTo(200 * (1000 / 1200)); // ~166.7
+    expect(rowWidth(rows[0].items, rows[0].height, 0)).toBeCloseTo(1000);
   });
 
   it("skips pieces with a non-positive or non-finite aspect ratio", () => {
     const bad = [{ width: 0, height: 100 }, { width: 100, height: 0 }];
-    const rows = justifyRows([...bad, sq, sq], 1000, 0, 500, 800);
+    const rows = justifyRows([...bad, sq, sq], 1000, 0, 200);
     const total = rows.reduce((n, r) => n + r.items.length, 0);
     expect(total).toBe(2);
   });
 
   it("returns no rows for an empty input", () => {
-    expect(justifyRows([], 1000, 12, 200, 300)).toEqual([]);
+    expect(justifyRows([], 1000, 12, 200)).toEqual([]);
   });
 });

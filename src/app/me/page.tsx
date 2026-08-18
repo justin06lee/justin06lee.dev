@@ -27,6 +27,7 @@ type Item = {
   notes?: string;
   sort_order: number;
   pinned: boolean;
+  collection?: string | null;
 };
 
 type RawItem = Omit<Item, "tech" | "pinned"> & { tech: string; pinned: number };
@@ -582,6 +583,7 @@ function SiteConfigPanel() {
 function CategoryPanel({ category }: { category: ItemCategory }) {
   const [items, setItems] = useState<Item[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [allCollections, setAllCollections] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Item | null>(null);
@@ -605,8 +607,13 @@ function CategoryPanel({ category }: { category: ItemCategory }) {
       const allRows: RawItem[] = await allRes.json();
       setItems(rows.map(parseItem));
       const tags = new Set<string>();
-      allRows.forEach((r) => { try { JSON.parse(r.tech).forEach((t: string) => tags.add(t)); } catch { /* skip */ } });
-      setAllTags(Array.from(tags).sort((a, b) => a.localeCompare(b)));
+      const collections = new Set<string>();
+      allRows.forEach((r) => {
+        try { JSON.parse(r.tech).forEach((t: string) => tags.add(t)); } catch { /* skip */ }
+        if (r.collection && r.collection.trim()) collections.add(r.collection.trim());
+      });
+      setAllTags(Array.from(tags).sort((a, b) => a.localeCompare(b, "en")));
+      setAllCollections(Array.from(collections).sort((a, b) => a.localeCompare(b, "en")));
     } catch {
       setError("couldn't load items.");
     } finally {
@@ -701,8 +708,8 @@ function CategoryPanel({ category }: { category: ItemCategory }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {editing && <ItemForm item={editing} category={category} existingTags={allTags} itemCount={items.length} onSave={(item) => handleSave(item, false)} onCancel={() => setEditing(null)} />}
-      {adding && <ItemForm category={category} existingTags={allTags} itemCount={items.length} onSave={(item) => handleSave(item, true)} onCancel={() => setAdding(false)} />}
+      {editing && <ItemForm item={editing} category={category} existingTags={allTags} existingCollections={allCollections} itemCount={items.length} onSave={(item) => handleSave(item, false)} onCancel={() => setEditing(null)} />}
+      {adding && <ItemForm category={category} existingTags={allTags} existingCollections={allCollections} itemCount={items.length} onSave={(item) => handleSave(item, true)} onCancel={() => setAdding(false)} />}
       {!editing && !adding && (
         <>
           <Button variant="outline" size="sm" icon={Plus} onClick={() => setAdding(true)} className="self-start">add item</Button>
@@ -746,9 +753,9 @@ function CategoryPanel({ category }: { category: ItemCategory }) {
 /* ───────── Item Form ───────── */
 
 function ItemForm({
-  item, category, existingTags, itemCount, onSave, onCancel,
+  item, category, existingTags, existingCollections, itemCount, onSave, onCancel,
 }: {
-  item?: Item; category: ItemCategory; existingTags: string[]; itemCount: number; onSave: (item: Item) => void; onCancel: () => void;
+  item?: Item; category: ItemCategory; existingTags: string[]; existingCollections: string[]; itemCount: number; onSave: (item: Item) => void; onCancel: () => void;
 }) {
   const [title, setTitle] = useState(item?.title ?? "");
   const [itemCategory, setItemCategory] = useState<ItemCategory>(item?.category ?? category);
@@ -759,6 +766,8 @@ function ItemForm({
   const [repo, setRepo] = useState(item?.repo ?? "");
   const [live, setLive] = useState(item?.live ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
+  const [collection, setCollection] = useState(item?.collection ?? "");
+  const collectionsId = useId();
   const isNew = !item;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -768,6 +777,7 @@ function ItemForm({
       category: itemCategory, title, description, year,
       tech,
       link: link || undefined, repo: repo || undefined, live: live || undefined, notes: notes || undefined,
+      collection: collection.trim() || null,
       sort_order: isNew ? itemCount : item.sort_order,
       pinned: isNew ? false : item.pinned,
     });
@@ -813,6 +823,13 @@ function ItemForm({
         <label className="flex flex-col gap-1"><span className="text-xs text-white/60">live url</span><Input className="w-full" value={live} onChange={(e) => setLive(e.target.value)} /></label>
       </div>
       <label className="flex flex-col gap-1"><span className="text-xs text-white/60">notes</span><Input className="w-full" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-white/60">collection <span className="text-white/30">— groups projects into a separate section on the gallery</span></span>
+        <Input className="w-full" list={collectionsId} value={collection} onChange={(e) => setCollection(e.target.value)} placeholder="e.g. colorful, terminal, image…" />
+        <datalist id={collectionsId}>
+          {existingCollections.map((c) => <option key={c} value={c} />)}
+        </datalist>
+      </label>
       <div className="flex gap-2 mt-2">
         <Button variant="solid" size="sm" type="submit">{isNew ? "create" : "save"}</Button>
         <Button variant="ghost" size="sm" onClick={onCancel}>cancel</Button>

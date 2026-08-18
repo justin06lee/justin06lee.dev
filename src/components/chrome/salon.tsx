@@ -24,16 +24,10 @@ export type SalonItem = {
 export type SalonProps = {
   /** The pieces to hang, each at its own aspect ratio. */
   items: SalonItem[];
-  /** Ideal row height in px before a row is justified to fill the width. Defaults to 260. */
+  /** Height every row is laid at (pieces keep aspect, so widths vary). Defaults to 260. */
   targetRowHeight?: number;
   /** Gap between pieces (and rows) in px. Defaults to 12. */
   gap?: number;
-  /**
-   * How tall a trailing, un-fillable row is allowed to grow before it stops
-   * stretching and simply left-aligns at the target height. Defaults to
-   * `targetRowHeight * 1.5`.
-   */
-  maxRowHeight?: number;
   /** Container max width in px. Defaults to unbounded (fills its parent). */
   maxWidth?: number;
   /** Assumed width for the first (server) render, before the container is measured. Defaults to 1040. */
@@ -51,8 +45,8 @@ const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 
 /**
- * A salon hang: a wall of images shown at their own aspect ratios, packed into
- * justified rows that each fill the width.
+ * A salon hang: a wall of images shown at their own aspect ratios, laid into
+ * ragged rows.
  *
  * `gallery` is the uniform searchable grid — every project the same card, sized
  * to a column. `shelf` is one horizontal row you skim. A salon is neither: the
@@ -60,24 +54,19 @@ const useIsomorphicLayoutEffect =
  * to a square, and the point is the varied hang itself. It is what you reach for
  * when the images *are* the content and their shapes carry meaning.
  *
- * Rows are justified with the standard greedy fill: pieces accumulate until the
- * height that would make the row span the width drops to the target, then the
- * row closes at exactly that height. Every piece in a row therefore shares a
- * height and keeps its aspect ratio, and the row edges line up. Because the
- * computed box has the piece's own aspect ratio, the image fills it with no crop.
- *
- * The last row can't usually be filled without stretching a stray piece to a
- * billboard, so it left-aligns at the target height instead — unless it happens
- * to nearly fill, in which case it justifies like any other (`maxRowHeight` is
- * the cutoff). The container is measured with a ResizeObserver so the hang
- * reflows on resize; the first paint uses `assumedWidth` so server and client
- * markup agree before that measurement lands.
+ * Every row is laid at the target height (pieces keep their aspect, so widths
+ * vary) and wraps when the next piece would run past the container. Rows are NOT
+ * stretched to a common width, so each row ends at its own natural width — a
+ * ragged right edge — and one row's length never pushes the others wider or
+ * narrower. The only piece ever resized is a lone one wider than the container,
+ * scaled down to fit; nothing is ever cropped. The container is measured with a
+ * ResizeObserver so the hang reflows on resize; the first paint uses
+ * `assumedWidth` so server and client markup agree before that measurement lands.
  */
 export function Salon({
   items,
   targetRowHeight = 260,
   gap = 12,
-  maxRowHeight,
   maxWidth,
   assumedWidth = 1040,
   linkComponent,
@@ -101,8 +90,8 @@ export function Salon({
   }, []);
 
   const rows = React.useMemo(
-    () => justifyRows(items, width, gap, targetRowHeight, maxRowHeight ?? targetRowHeight * 1.5),
-    [items, width, gap, targetRowHeight, maxRowHeight],
+    () => justifyRows(items, width, gap, targetRowHeight),
+    [items, width, gap, targetRowHeight],
   );
 
   return (
@@ -182,7 +171,9 @@ function Piece({
   );
 
   const boxClass = cn(
-    "group relative block shrink-0 overflow-hidden border border-white/15 bg-white/[0.02]",
+    // Border is transparent until hover/focus (it still reserves its 1px so the
+    // layout doesn't shift), so at rest the pieces read as a clean wall.
+    "group relative block shrink-0 overflow-hidden border border-transparent bg-white/[0.02]",
     "outline-none transition-colors duration-200 hover:border-white/40 focus-visible:border-white/60 motion-reduce:transition-none",
   );
   const style: React.CSSProperties = { width, height };
