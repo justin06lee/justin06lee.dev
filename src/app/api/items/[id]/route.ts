@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { category, title, description, year, tech, link, repo, live, notes, sort_order, pinned } = body;
+  const { category, title, description, year, tech, link, repo, live, notes, sort_order, pinned, collection } = body;
 
   if (
     typeof title !== "string" ||
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   await db.execute({
-    sql: `UPDATE items SET category=?, title=?, description=?, year=?, tech=?, link=?, repo=?, live=?, notes=?, sort_order=?, pinned=?, updated_at=datetime('now')
+    sql: `UPDATE items SET category=?, title=?, description=?, year=?, tech=?, link=?, repo=?, live=?, notes=?, sort_order=?, pinned=?, collection=?, updated_at=datetime('now')
           WHERE id=?`,
     args: [
       category,
@@ -53,6 +53,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       typeof notes === "string" ? notes : null,
       typeof sort_order === "number" ? sort_order : 0,
       pinned === true ? 1 : 0,
+      typeof collection === "string" && collection.trim() ? collection.trim() : null,
       id,
     ],
   });

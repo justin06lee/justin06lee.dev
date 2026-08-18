@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned } = body;
+  const { id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned, collection } = body;
 
   // An empty string passes `typeof id === "string"` but is not a usable slug;
   // reject it explicitly with a clear message instead of storing a blank PK.
@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
   // ON CONFLICT DO NOTHING turns a duplicate slug into a clean 409 instead of a
   // PRIMARY KEY violation surfacing as an unhandled 500.
   const result = await db.execute({
-    sql: `INSERT INTO items (id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    sql: `INSERT INTO items (id, category, title, description, year, tech, link, repo, live, notes, sort_order, pinned, collection)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO NOTHING`,
     args: [
       id,
@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
       typeof notes === "string" ? notes : null,
       typeof sort_order === "number" ? sort_order : 0,
       pinned === true ? 1 : 0,
+      typeof collection === "string" && collection.trim() ? collection.trim() : null,
     ],
   });
 

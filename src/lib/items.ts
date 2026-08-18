@@ -1,7 +1,11 @@
 import { db, initDb, type DbItem } from "./db";
 import type { GalleryItem } from "@/components/ItemGallery";
 
-export async function getItemsByCategory(category: string): Promise<GalleryItem[]> {
+// The card grid only needs GalleryItem, but the projects salon groups by an
+// optional collection, so the query carries it alongside.
+export type SiteGalleryItem = GalleryItem & { collection: string | null };
+
+export async function getItemsByCategory(category: string): Promise<SiteGalleryItem[]> {
   await initDb();
   const result = await db.execute({
     sql: "SELECT * FROM items WHERE category = ? ORDER BY pinned DESC, sort_order ASC, year DESC",
@@ -19,5 +23,6 @@ export async function getItemsByCategory(category: string): Promise<GalleryItem[
     live: row.live ?? undefined,
     notes: row.notes ?? undefined,
     pinned: !!row.pinned,
+    collection: row.collection ?? null,
   }));
 }
