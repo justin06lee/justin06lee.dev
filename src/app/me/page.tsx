@@ -824,7 +824,7 @@ function ItemForm({
       </div>
       <label className="flex flex-col gap-1"><span className="text-xs text-white/60">notes</span><Input className="w-full" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-white/60">collection <span className="text-white/30">— groups projects into a separate section on the gallery</span></span>
+        <span className="text-xs text-white/60">collection <span className="text-white/30">— projects sharing one clump together on the gallery wall</span></span>
         <Input className="w-full" list={collectionsId} value={collection} onChange={(e) => setCollection(e.target.value)} placeholder="e.g. colorful, terminal, image…" />
         <datalist id={collectionsId}>
           {existingCollections.map((c) => <option key={c} value={c} />)}

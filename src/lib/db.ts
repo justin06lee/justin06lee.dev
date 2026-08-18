@@ -146,7 +146,7 @@ async function doInit(): Promise<void> {
   await ensureColumn("calendar_tasks", "fallbacks", "TEXT");
   await ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
   // Optional sub-grouping within a gallery category (e.g. "colorful",
-  // "terminal") so projects can be hung as separate labelled sections.
+  // "terminal") so projects sharing one clump together on the salon wall.
   await ensureColumn("items", "collection", "TEXT");
 
   // Parallel tracks. `track` lanes concurrent activity — working out while a
