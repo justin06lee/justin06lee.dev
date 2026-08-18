@@ -24,7 +24,7 @@ export type SalonItem = {
 export type SalonProps = {
   /** The pieces to hang, each at its own aspect ratio. */
   items: SalonItem[];
-  /** Height every row is laid at (pieces keep aspect, so widths vary). Defaults to 260. */
+  /** Target row height rows are justified around — the effective minimum piece size. Defaults to 260. */
   targetRowHeight?: number;
   /** Gap between pieces (and rows) in px. Defaults to 12. */
   gap?: number;
@@ -45,8 +45,8 @@ const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 
 /**
- * A salon hang: a wall of images shown at their own aspect ratios, laid into
- * ragged rows.
+ * A salon hang: a wall of images shown at their own aspect ratios, packed into
+ * justified rows that fill the width.
  *
  * `gallery` is the uniform searchable grid — every project the same card, sized
  * to a column. `shelf` is one horizontal row you skim. A salon is neither: the
@@ -54,12 +54,12 @@ const useIsomorphicLayoutEffect =
  * to a square, and the point is the varied hang itself. It is what you reach for
  * when the images *are* the content and their shapes carry meaning.
  *
- * Every row is laid at the target height (pieces keep their aspect, so widths
- * vary) and wraps when the next piece would run past the container. Rows are NOT
- * stretched to a common width, so each row ends at its own natural width — a
- * ragged right edge — and one row's length never pushes the others wider or
- * narrower. The only piece ever resized is a lone one wider than the container,
- * scaled down to fit; nothing is ever cropped. The container is measured with a
+ * Rows are justified to span the width, with the row height kept near
+ * `targetRowHeight` — the effective minimum piece size — so the wall reads full
+ * rather than ragged and pieces never shrink away to fit. The one exception is
+ * the trailing leftover row, which fills only if it nearly does and is otherwise
+ * capped so a stray piece sits at a sane size instead of stretching across.
+ * Nothing is ever cropped (see `Piece`). The container is measured with a
  * ResizeObserver so the hang reflows on resize; the first paint uses
  * `assumedWidth` so server and client markup agree before that measurement lands.
  */
