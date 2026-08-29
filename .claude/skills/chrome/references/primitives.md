@@ -40,7 +40,7 @@ renders a `<button>` by default, or an `<a>` when given `href`; external urls (m
 
 by default the anchor is a plain `<a>`, so the component stays framework-agnostic. pass `linkComponent` (your router's Link) to get client-side navigation for **internal** hrefs — external `http(s)` hrefs always fall back to a plain `<a>` regardless, since a router can't handle them. `prefetch` is forwarded to `linkComponent` when set.
 
-icons are lucide components passed as `icon` / `iconRight`. omitting `children` makes it an icon-only square button — those need an accessible name, resolved as `label` first, then `tooltip`. the `tooltip` prop renders a white slide-up pill above the button on hover (pure css transition, `aria-hidden`, positioned off the `group` class).
+icons are lucide components passed as `icon` / `iconRight`. omitting `children` makes it an icon-only square button — those need an accessible name, resolved as `label` first, then `tooltip`. the `tooltip` prop renders a white slide-up pill on hover (pure css transition, `aria-hidden`, positioned off the `group` class), above the button by default. the pill is not portaled, so a button sitting near the top of the viewport — a header, a navbar — clips an upward pill against the document's top edge; pass `tooltipSide="bottom"` there and it renders below with the slide mirrored.
 
 `copy` turns the button into a clipboard writer: click writes the string via `navigator.clipboard`, then the tooltip (and string children) swap to `copyFeedback` ("Copied!" by default) for 1.5s. precedence gotcha, documented in the source: `copy` and `disabled` win over `href` — when `copy` is set the element must be a real button, so the anchor branch is skipped and no navigation happens. do not combine `copy` with `href`. `onClick` still fires after the copy. classes merge via `cn`, `background` sets an inline css background (transparent otherwise), and `ref` forwards to the underlying button or anchor.
 
@@ -50,7 +50,7 @@ icons are lucide components passed as `icon` / `iconRight`. omitting `children` 
 - `icon: LucideIcon — lucide icon before text (or alone if no children).`
 - `iconRight: LucideIcon — lucide icon after text.`
 - `tooltip: string — white slide-up pill shown on hover.`
-- `tooltipSide: 'top' | 'bottom' = 'top' — side the tooltip pill appears on. the pill is not portaled, so a button near the top of the viewport (a header, a navbar) clips an upward pill — pass 'bottom' there.`
+- `tooltipSide: 'top' | 'bottom' = 'top' — side the pill appears on. 'bottom' for buttons near the top of the viewport, where an upward pill clips.`
 - `label: string — aria-label override; required for icon-only buttons.`
 - `href: string — renders as <a>. external URLs (http(s)://) get target="_blank" auto-applied.`
 - `linkComponent: React.ElementType — anchor component for internal hrefs — pass your router's Link (e.g. next/link) for client-side navigation + prefetch. external http(s) hrefs always use a plain <a>.`

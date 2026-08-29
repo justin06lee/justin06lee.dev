@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as motion from "motion/react-client";
 import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
@@ -48,13 +47,13 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
   return (
     <div className="w-screen flex justify-center text-center bg-black text-white">
       <div className="min-h-screen flex flex-col" key={introCycle}>
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: hasPlayed ? 0 : 16 }}
-        >
-          <Navbar pfp={config.pfp} />
-        </motion.div>
+        {/* The navbar animates itself in via `entrance`. It must: it is
+            position:fixed, so an animating wrapper's transform would become its
+            containing block and render it at the wrapper's width — which here
+            is a shrink-to-fit column, so the bar sat narrow and centered until
+            the tween ended and motion wrote `transform: none`, then snapped
+            out to full width. On a first visit it waits out the 16s intro. */}
+        <Navbar pfp={config.pfp} entrance={{ duration: 1, delay: hasPlayed ? 0 : 16 }} />
 
         {hasPlayed && <HomePage config={config} />}
 

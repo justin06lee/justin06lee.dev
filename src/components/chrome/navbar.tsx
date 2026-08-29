@@ -17,6 +17,15 @@ export type NavLink = {
   id?: string;
 };
 
+export type NavbarEntrance = {
+  /** Starting vertical offset in px (animates to 0). Default -10. */
+  y?: number;
+  /** Animation duration in seconds. Default 0.8. */
+  duration?: number;
+  /** Delay before the animation starts, in seconds. Default 0. */
+  delay?: number;
+};
+
 export type NavbarProps = {
   /** Left-side brand — your logo, name, or any node. */
   brand?: React.ReactNode;
@@ -35,6 +44,18 @@ export type NavbarProps = {
    * always render a plain <a>. Defaults to a plain <a>.
    */
   linkComponent?: React.ElementType;
+  /**
+   * Fade + slide the bar in on mount. `true` uses the house entrance
+   * (y: -10, 0.8s); pass an object to tune offset, duration and delay.
+   *
+   * Use this instead of wrapping <Navbar> in your own animating element. The
+   * nav is `position: fixed`, so a wrapper carrying a `transform` becomes its
+   * containing block and `inset-x-0` resolves against the wrapper's box rather
+   * than the viewport — the bar renders at the wrapper's width and only snaps
+   * to full width when the transform resolves back to `none` (or never, for a
+   * CSS animation with `fill-mode: both`, which lands on `translate(0,0)`).
+   */
+  entrance?: boolean | NavbarEntrance;
 };
 
 // Labels can be ReactNodes and placeholder hrefs (e.g. "#") can repeat, so keys
@@ -86,6 +107,9 @@ function NavItem({
  * Pass `linkComponent` to route internal hrefs through your router's Link;
  * external http(s) and "#" hrefs stay plain <a>. Behavior lives in the headless
  * useNavbar hook.
+ *
+ * Being `position: fixed`, it must own its own entrance animation — hence the
+ * `entrance` prop rather than leaving callers to wrap it. See that prop's note.
  */
 export function Navbar({
   brand,
@@ -95,15 +119,67 @@ export function Navbar({
   className,
   menuLabel = "menu",
   linkComponent = "a",
+  entrance,
 }: NavbarProps) {
   const { open, setOpen, panelRef } = useNavbar();
 
   const linkClass =
     "text-sm text-white underline-offset-4 hover:underline whitespace-nowrap";
 
+  const enter = entrance === true ? {} : entrance || null;
+
   return (
     <nav className={cn("fixed inset-x-0 top-0 z-40 w-full", className)}>
-      <div className="flex items-center gap-6 px-4 py-2 sm:px-6">
+      {/* The entrance rides the bar row, never the <nav> and never the panel.
+          A transform on <nav> would make it the containing block for the
+          mobile backdrop and panel below (both `position: fixed`), pinning
+          them to the bar's height instead of the viewport — the same trap this
+          prop exists to spare callers. The bar row has no fixed descendants,
+          so animating it is free. */}
+      <div
+        className={cn("flex items-center gap-6 px-4 py-2 sm:px-6", enter && "chrome-navbar-enter")}
+        style={
+          enter
+            ? ({
+                "--navbar-enter-y": `${enter.y ?? -10}px`,
+                animationDuration: `${enter.duration ?? 0.8}s`,
+                animationDelay: `${enter.delay ?? 0}s`,
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
+        {enter && (
+          // Hoisted and deduped by href, so N navbars ship one copy. Timing
+          // matches motion's default on-mount tween (easeInOut) so a bar sliding
+          // in beside motion-animated siblings stays in step.
+          <style precedence="default" href="chrome-navbar-enter-keyframes">{`
+            @keyframes chrome-navbar-enter {
+              from { opacity: 0; transform: translateY(var(--navbar-enter-y, -10px)); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes chrome-navbar-enter-reduced {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            .chrome-navbar-enter {
+              animation-name: chrome-navbar-enter;
+              animation-duration: 0.8s;
+              animation-delay: 0s;
+              animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+              animation-fill-mode: both;
+              animation-iteration-count: 1;
+            }
+            /* Reduced motion drops the travel, not the choreography: the bar
+               still arrives on the caller's delay (it may be sequenced after a
+               splash), it just fades rather than slides. Dropping the animation
+               outright would surface the nav mid-intro; keeping the transform
+               would leave an identity translate behind, and an identity
+               transform still establishes a containing block. */
+            @media (prefers-reduced-motion: reduce) {
+              .chrome-navbar-enter { animation-name: chrome-navbar-enter-reduced; }
+            }
+          `}</style>
+        )}
         {(brand || leftLinks.length > 0) && (
           <div className="mr-auto flex items-center gap-6">
             {brand}
