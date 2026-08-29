@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Navbar as ChromeNavbar } from "@/components/chrome/navbar";
+import { Navbar as ChromeNavbar, type NavbarProps } from "@/components/chrome/navbar";
 import { Rainbow } from "@/components/chrome/rainbow";
 import type { Pfp } from "@/lib/site-config";
 
@@ -31,7 +31,10 @@ function NavPfp({ pfp }: { pfp: Pfp }) {
     );
 }
 
-export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
+export default function Navbar({
+    pfp,
+    entrance,
+}: { pfp?: Pfp; entrance?: NavbarProps["entrance"] } = {}) {
     const [fetchedPfp, setFetchedPfp] = useState<Pfp | undefined>(pfp);
     const router = useRouter();
 
@@ -77,6 +80,7 @@ export default function Navbar({ pfp }: { pfp?: Pfp } = {}) {
     return (
         <ChromeNavbar
             brand={brand}
+            entrance={entrance}
             leftLinks={[
                 { label: "intro", onClick: playIntro, id: "intro" },
             ]}
