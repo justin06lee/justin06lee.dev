@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { firstHeroImage, isBadge, parseRepoSlug, resolveImageUrl } from "./project-images-parse";
+import { heroImageCandidates, isBadge, parseRepoSlug, resolveImageUrl } from "./project-images-parse";
 
 describe("parseRepoSlug", () => {
   it("parses a https github url", () => {
@@ -40,32 +40,35 @@ describe("isBadge", () => {
   });
 });
 
-describe("firstHeroImage", () => {
+/** The hero is simply the first candidate; the rest exist for 404 fall-through. */
+const hero = (markdown: string) => heroImageCandidates(markdown)[0] ?? null;
+
+describe("heroImageCandidates — the hero is the first candidate", () => {
   it("reads a leading markdown image", () => {
-    expect(firstHeroImage("![hero](banner.svg)\n\n# Title")).toBe("banner.svg");
+    expect(hero("![hero](banner.svg)\n\n# Title")).toBe("banner.svg");
   });
 
   it("reads a centered html img", () => {
-    expect(firstHeroImage('<p align="center"><img src="assets/logo.svg" /></p>')).toBe(
+    expect(hero('<p align="center"><img src="assets/logo.svg" /></p>')).toBe(
       "assets/logo.svg",
     );
   });
 
   it("skips a leading badge to find the hero", () => {
     const md = "![build](https://img.shields.io/badge/x) then ![hero](banner.png)";
-    expect(firstHeroImage(md)).toBe("banner.png");
+    expect(hero(md)).toBe("banner.png");
   });
 
   it("takes the earliest image across html and markdown", () => {
-    expect(firstHeroImage("<img src='a.png'> and ![](b.png)")).toBe("a.png");
+    expect(hero("<img src='a.png'> and ![](b.png)")).toBe("a.png");
   });
 
   it("extracts the image out of a link-wrapped image", () => {
-    expect(firstHeroImage("[![alt](img.svg)](https://example.com)")).toBe("img.svg");
+    expect(hero("[![alt](img.svg)](https://example.com)")).toBe("img.svg");
   });
 
   it("returns null when there is no image", () => {
-    expect(firstHeroImage("# just a heading\n\nsome prose")).toBeNull();
+    expect(hero("# just a heading\n\nsome prose")).toBeNull();
   });
 });
 

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Plugin PATH shim.
+#
+# Claude Code adds only <plugin-root>/bin to the Bash tool's PATH, and there is
+# no manifest field to point that elsewhere. The real launcher lives inside the
+# seo skill so that a skill-folder install (bmo, or a manual copy) carries its
+# own runtime; this shim keeps `claude-seo` working for plugin installs, where
+# the repository root is the plugin root.
+launcher_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+launcher="${launcher_dir}/../skills/seo/bin/claude-seo"
+
+if [[ ! -x "${launcher}" ]]; then
+    echo "Claude SEO launcher is missing at ${launcher}. Reinstall Claude SEO." >&2
+    exit 2
+fi
+
+exec "${launcher}" "$@"

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useId } from "react";
-import { Pencil, Trash2, Plus, LogOut, Save, Upload, MapPin, FolderInput, Pin, PinOff } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Trash2, Plus, LayoutGrid, LogOut, Save, Upload, MapPin, FolderInput, Pin, PinOff } from "lucide-react";
 import { useDialog } from "@/components/Dialog";
 import Navbar from "@/components/Navbar";
 import Select from "@/components/Select";
@@ -255,7 +256,12 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-4 pt-16 pb-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold">content manager</h1>
-          <Button variant="ghost" size="sm" icon={LogOut} onClick={handleLogout}>logout</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" icon={LayoutGrid} href="/me/wall" linkComponent={Link}>
+              arrange wall
+            </Button>
+            <Button variant="ghost" size="sm" icon={LogOut} onClick={handleLogout}>logout</Button>
+          </div>
         </div>
 
         <div className="flex gap-0 mb-6 border-b border-white/10 overflow-x-auto">

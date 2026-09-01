@@ -33,8 +33,16 @@ export function isBadge(url: string): boolean {
   return BADGE_MARKERS.some((m) => lower.includes(m));
 }
 
-/** Earliest non-badge image reference in the README, HTML `<img>` or markdown. */
-export function firstHeroImage(markdown: string): string | null {
+/**
+ * Every non-badge image reference in the README, in document order and
+ * de-duplicated.
+ *
+ * Callers try these in order and skip any that 404: a README routinely outlives
+ * the asset it points at (a renamed cover, a moved `assets/` dir), and using a
+ * dead URL anyway hangs a broken image on the wall. Falling through to the next
+ * candidate recovers a repo that has a working image further down.
+ */
+export function heroImageCandidates(markdown: string): string[] {
   const candidates: { index: number; url: string }[] = [];
 
   const htmlImg = /<img\b[^>]*?\ssrc\s*=\s*["']([^"']+)["']/gi;
@@ -47,8 +55,15 @@ export function firstHeroImage(markdown: string): string | null {
   }
 
   candidates.sort((a, b) => a.index - b.index);
-  const hero = candidates.find((c) => !isBadge(c.url));
-  return hero?.url ?? null;
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of candidates) {
+    if (isBadge(c.url) || seen.has(c.url)) continue;
+    seen.add(c.url);
+    out.push(c.url);
+  }
+  return out;
 }
 
 /** Resolve a README-relative image reference to an absolute raw URL. */

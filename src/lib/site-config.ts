@@ -17,8 +17,17 @@ export type PrayerLocation = {
   longitude: number | null;
 };
 
+/**
+ * How the projects tab hangs its pieces. "auto" runs the justified-rows salon
+ * packing; "manual" uses the hand-arranged wall from /me/wall. Kept as an
+ * explicit switch rather than inferred from "are there any placements?" so a
+ * wall can be arranged over several sittings without half of it going live.
+ */
+export type WallMode = "auto" | "manual";
+
 export type SiteConfig = {
   description: string[];
+  wallMode: WallMode;
   socials: {
     github: string;
     linkedin: string;
@@ -39,6 +48,7 @@ export const DEFAULT_TIMEZONE = "America/New_York";
 
 const EMPTY_CONFIG: SiteConfig = {
   description: [],
+  wallMode: "auto",
   socials: { github: "", linkedin: "", x: "", email: "", instagram: "" },
   pfp: { url: "", scale: 1, x: 0, y: 0 },
   prayerLocation: { city: "", country: "", method: 2, timezone: DEFAULT_TIMEZONE, latitude: null, longitude: null },
@@ -53,6 +63,9 @@ export const getSiteConfig = cache(async (): Promise<SiteConfig> => {
   const map = new Map(rows.map((r) => [r.key, r.value]));
   return {
     description: (() => { try { return map.has("description") ? JSON.parse(map.get("description")!) : EMPTY_CONFIG.description; } catch { return EMPTY_CONFIG.description; } })(),
+    // Stored as a bare token, not JSON — anything unrecognized falls back to
+    // "auto" so a bad value can never blank the gallery.
+    wallMode: map.get("wallMode") === "manual" ? "manual" : "auto",
     socials: (() => { try { return map.has("socials") ? JSON.parse(map.get("socials")!) : EMPTY_CONFIG.socials; } catch { return EMPTY_CONFIG.socials; } })(),
     pfp: (() => { try { return map.has("pfp") ? { ...EMPTY_CONFIG.pfp, ...JSON.parse(map.get("pfp")!) } : EMPTY_CONFIG.pfp; } catch { return EMPTY_CONFIG.pfp; } })(),
     prayerLocation: (() => { try { return map.has("prayerLocation") ? { ...EMPTY_CONFIG.prayerLocation, ...JSON.parse(map.get("prayerLocation")!) } : EMPTY_CONFIG.prayerLocation; } catch { return EMPTY_CONFIG.prayerLocation; } })(),
@@ -90,7 +103,7 @@ export function validatePrayerLocation(input: unknown): PrayerLocation | null {
   };
 }
 
-const ALLOWED_CONFIG_KEYS = ["description", "socials", "pfp", "prayerLocation"];
+const ALLOWED_CONFIG_KEYS = ["description", "socials", "pfp", "prayerLocation", "wallMode"];
 
 export async function updateSiteConfig(key: string, value: string) {
   if (!ALLOWED_CONFIG_KEYS.includes(key)) {

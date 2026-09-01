@@ -46,6 +46,7 @@ src/
     calendar/                     # Personal calendar — see "Calendar" section
       day/[date], month/[yyyymm], year/[yyyy], categories/
     me/                           # Item + site-config CMS (admin)
+      wall/                       # Free-form projects-wall editor (admin)
     desk/                         # Article CMS (admin) — writes to GitHub
       [slug]/, new-article/, content-actions.ts (server actions)
     oddjobs/                      # Placeholder
@@ -96,6 +97,40 @@ public/
   cat-sprite.jpg                  # 12x10 cat sprite sheet
   Poppins-Regular.ttf             # body font
 ```
+
+## Projects gallery
+`/gallery?tab=projects` renders one of two hangs, chosen by the `wallMode` site-config key:
+- **`auto`** (default) — projects are split into **themes** and each theme gets its own layout: `panels` → composed manga pages, `terminal` → pixel-art cards, `icons` → a uniform grid.
+- **`manual`** — the hand-arranged wall from `/me/wall` (`ProjectWall` + `lib/gallery-wall.ts`).
+
+### Themes (`lib/gallery-themes.ts`)
+Classification is a deliberate ladder of cheap heuristics, most explicit first: the item's `collection` column → the hero image's **filename** (`*-panel.*`, `icon.*`/`logo.*`, `*pixel*`/`*tui*`) → a hardcoded slug seed → aspect ratio. Lean on the filename rule going forward: rename the asset in the repo and the gallery re-sorts itself with no code change. The slug seed is a bandage for today's projects and rows can be deleted as repos are renamed.
+
+### Manga pages (`lib/manga-layout.ts`)
+The material is already-composed manga panels — someone framed each one — so the layout's hard constraint is **never re-crop**. An earlier fixed-slot template version violated this badly (`reze` lost 47% of itself); do not reintroduce any layout that picks a panel's shape before knowing the image's.
+
+- **A page is a split tree, not a list of rows.** `pageShapes` enumerates a deliberately narrow grammar — a page is a stack of tiers, a tier is a run of frames across, a frame is sometimes a short column of stacked panels, and nothing nests deeper. That grammar *is* the vocabulary of a printed page; widening it is how the wall drifts back into arbitrary rectangles.
+- **Every node's width is affine in its height (`w = m·h + c`, `c` in px carrying only gap terms).** Panel: `m = aspect, c = 0`. Row: `m = Σmᵢ, c = Σcᵢ + g(n-1)`. Stack: `m = 1/Σ(1/mᵢ), c = (Σ(cᵢ/mᵢ) - g(n-1))/Σ(1/mᵢ)`. Solving that top-down from the container width lands every panel on its own exact aspect — no crop, no dead space — at any width. **This is the load-bearing identity; changing a node type means re-deriving both terms.**
+- **What varies to absorb the images is the page's height, never a panel's shape.** A page is as tall as its panels require. Uniform page height was the thing given up, on purpose.
+- **Structure is chosen by scoring, not by rule.** Every template × a bounded set of panel assignments is solved and scored; the hard terms are the page-height band and a minimum panel edge (`minPanelSize`, 200px of the 1120 reference width — a *share* of the page, since the layout scales whole, so it holds on a phone too), and the soft ones are taste — a focal frame, a per-page drawn target height, a penalty on one flat tier of bare panels. Node geometry is invariant to the order of a node's children, so assignments are sampled rather than exhausted past n=4. ~2ms for a 12-panel wall. The edge floor is squared and weighted far above the taste terms — as a linear nudge it lost to them, and a ~130px sidecar next to a full-width band was routine — but stays finite, because a 5:1 strip sharing a tier puts the floor out of reach of every candidate and the least-bad page still has to win.
+- **Rendering is `width: calc(P% + Qpx)` per node plus `aspect-ratio` per panel.** Because the relation is affine, each child's width is affine in its parent's, so the browser reproduces the solve exactly — no measurement, no client JS, no first-paint reflow. `min-width: 0` and `flex: none` are load-bearing: a flex item's automatic minimum size is its content's, which would let a wide image refuse its solved slot. Rows use `align-items: flex-start`, never `stretch` — stretch overrides `aspect-ratio` and crops.
+- **Panels are `object-contain`, not `object-cover`.** The box is already the image's exact aspect, so the two agree when the measured dimensions are right — but when a measurement is stale or unreadable, contain shows a sliver of black and cover silently eats the art. Only one of those is recoverable.
+- Pages keep the tight 8px seam inside and a 48px black gutter between. Page splitting happens before layout, so it can never strand a single panel.
+- **A fresh seed per request is the point.** The gallery re-deals every load, so a newly added project lands anywhere rather than always at the bottom. `?seed=N` pins one for comparison.
+
+### Hero images (`lib/project-images.ts`)
+`probeImage` keeps `exists` separate from `dims` on purpose: a **404 means try the next README candidate**, while a 200 whose bytes can't be measured is still a good image and is kept at a default aspect. Collapsing the two is what put broken frames on the wall — a renamed asset left the dead URL rendering anyway. `heroImageCandidates` returns *all* non-badge refs so that fall-through has somewhere to go.
+
+The measured dimensions are what *size the panel*, so a stale measurement mis-frames the art. Two things guard that: lookups are memoised with React `cache()` (per render pass) and never a module-level Map — a Map outlives the request and pinned `toji` at a dead 599x181 while GitHub served 1234x393, cropping 5% of it off — and the image probe shares the README's 1h revalidate window, because what is really cached there is the measurement, not the bytes.
+
+Invariants worth knowing before changing the hand-arranged wall:
+- **Positions are design units, not pixels.** Desktop is authored on a 1200-unit canvas, mobile on a 390-unit one (`DESIGN_WIDTH`), and the renderer scales by `containerWidth / DESIGN_WIDTH`. This is what makes the editor WYSIWYG — there is no reflow to diverge from, only a scale factor. Never store or compare these numbers as CSS pixels.
+- **The two variants are independent layouts**, stored in separate columns (`items.wall_desktop` / `wall_mobile`). Editing one must never write the other; `ProjectWall` picks between them by *measured container width*, not by a media query.
+- **`seedWall` is shared by the editor and the public page, and must stay that way.** It keeps stored boxes verbatim and packs anything unplaced into a block below the hang. If only the editor seeded, a project added since the last arrangement would silently vanish from the live gallery.
+- **`wall_image` is rendered into a public `<img src>`**, so `PUT /api/items/wall` allowlists its scheme (site-relative or `http(s)` only). Keep that check if the field grows new write paths — `javascript:`/`data:` must stay rejected.
+- **The wall crops (`object-cover`), the salon does not (`object-contain`).** Deliberate: on a hand-arranged wall the author sized the box, so the box is the intent; in the salon the image's aspect drives the box, so cropping would be a bug.
+- Alignment snapping beats grid snapping per axis (lining up with a neighbour is more deliberate than landing on an arbitrary step). Resize snapping only anchors the edges the handle drives — snapping the fixed edge makes the box escape the cursor.
+- `?wall=preview` force-renders the manual wall for an admin without publishing; the param is inert for everyone else.
 
 ## Calendar
 Most substantial piece of recent work. Three primitives:

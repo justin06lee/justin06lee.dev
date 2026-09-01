@@ -149,6 +149,17 @@ async function doInit(): Promise<void> {
   // "terminal") so projects sharing one clump together on the salon wall.
   await ensureColumn("items", "collection", "TEXT");
 
+  // Hand-arranged projects wall. Each column holds a JSON {x,y,w,h} box in
+  // design-space units (see lib/gallery-wall.ts) — desktop is authored against
+  // a 1200-unit canvas, mobile against a 390-unit one, and the two are stored
+  // separately because a hang that reads at 1200 is not the one that reads at
+  // 390. NULL means "not placed": the item falls back to auto-placement, so a
+  // newly added project still appears without the wall having to be re-edited.
+  // `wall_image` overrides the README-scraped hero (this is where a GIF goes).
+  await ensureColumn("items", "wall_desktop", "TEXT");
+  await ensureColumn("items", "wall_mobile", "TEXT");
+  await ensureColumn("items", "wall_image", "TEXT");
+
   // Parallel tracks. `track` lanes concurrent activity — working out while a
   // build runs, studying while socialising — so two things happening at once
   // are two rows, not a lie about one of them. Pre-existing rows default to
@@ -221,6 +232,12 @@ export type DbItem = {
   sort_order: number;
   pinned: number;
   collection: string | null;
+  /** JSON {x,y,w,h} in 1200-unit design space; null when not hand-placed. */
+  wall_desktop: string | null;
+  /** JSON {x,y,w,h} in 390-unit design space; null when not hand-placed. */
+  wall_mobile: string | null;
+  /** Overrides the README-scraped hero image (e.g. an uploaded GIF). */
+  wall_image: string | null;
 };
 
 export type DbCalendarTask = {
