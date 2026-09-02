@@ -4,10 +4,13 @@
 // of an off-station tube, and the crack of the sync letting go when the
 // glass is hovered. The clip's own sound stays on its <video> element (its
 // volume is set to the same level) so it plays wherever media does; the two
-// synthesised sounds need Web Audio, and Web Audio needs a gesture before it
-// will run, so the context is only built on `wake()`, called from the first
-// pointer or key the page sees. Until then the set is silent, which is what
-// a browser would insist on anyway.
+// synthesised sounds need Web Audio. The context is built at once, so that
+// on a page the browser already trusts (a return visit, a site interacted
+// with before) the set is heard from the first frame; where the browser
+// insists on a gesture first the context sits suspended, and `wake()`, called
+// from every pointer or key the page sees, resumes it. A glitch fired while
+// it is suspended is dropped rather than queued: a burst that arrived with
+// the first click, out of nowhere, was worse than none.
 
 export type Speaker = {
   /** Build or resume the audio context. Call from a user gesture. */
@@ -23,7 +26,7 @@ export type Speaker = {
 
 /** The hiss at full static, and the burst's peak, as gains on the master. */
 const STATIC_GAIN = 0.22;
-const GLITCH_GAIN = 0.36;
+const GLITCH_GAIN = 0.5;
 /** The speaker's band: where a small driver in a plastic case actually speaks. */
 const BAND_HZ = 2400;
 const BAND_Q = 0.6;
@@ -82,7 +85,13 @@ export function createSpeaker(): Speaker {
       if (ctx && hiss) hiss.gain.setTargetAtTime(staticAmount * STATIC_GAIN, ctx.currentTime, 0.03);
     },
     glitch() {
-      if (!ctx || !master || !noise || ctx.state !== "running") return;
+      if (!ctx || !master || !noise) return;
+      if (ctx.state !== "running") {
+        // Suspended by policy, or interrupted (iOS does that for a call):
+        // ask again, but don't schedule into a stopped clock.
+        ctx.resume().catch(() => {});
+        return;
+      }
       const t = ctx.currentTime;
       // The bars: a burst of the noise with its band dragged from the top of
       // the speaker's range to the bottom over the length of the glitch.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Grain } from "@/components/chrome/grain";
@@ -67,7 +67,18 @@ const BURST_MS = 320;
 const GLITCH_MS = 260;
 const SHAKE_MS = 340;
 /** How often the clip's colour is re-read for the room light. */
-const TINT_MS = 400;
+const TINT_MS = 600;
+/**
+ * Frame budget. When frames run longer than this on average the tube draws
+ * at a smaller scale (down to MIN_RENDER_SCALE of device pixels) rather than
+ * stutter: the effect is scanlines and grain, and reads the same a little
+ * soft, while a dropped frame reads as a broken set.
+ */
+const SLOW_FRAME_MS = 24;
+const MIN_RENDER_SCALE = 0.75;
+/** The clip dips under a glitch so the burst is heard, then comes back. */
+const DUCK_MS = 320;
+const DUCK_LEVEL = 0.3;
 /** A press that travels less than this is a click, not a turn of the knob. */
 const CLICK_TRAVEL_DEG = 6;
 /**
@@ -134,18 +145,35 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const [still, setStill] = useState(false);
   const [tint, setTint] = useState<[number, number, number] | null>(null);
   const [videoReady, setVideoReady] = useState(false);
-  const [videoTint, setVideoTint] = useState<[number, number, number] | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const setRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
   const capRef = useRef<HTMLSpanElement>(null);
   const speaker = useRef<Speaker | null>(null);
-  // How loud the room hears the set right now (the scroll falloff).
+  // How loud the room hears the set right now (the scroll falloff), and the
+  // dip under a glitch; the clip's volume is their product.
   const level = useRef(1);
+  const duck = useRef(1);
+  const duckTimer = useRef<number | null>(null);
   const wheelCarry = useRef(0);
+  // The colour the clip is throwing, and what the glow was last computed
+  // from. The room's colour is written straight to a CSS variable from the
+  // draw loop, never through state: a re-render every sample re-diffed the
+  // whole set for one property.
+  const videoTint = useRef<[number, number, number] | null>(null);
+  const glowInputs = useRef({ snowing: false, showingVideo: false, hover: false, hasClip: false, tint: null as [number, number, number] | null });
+  // Render scale (a cap on device pixels) and the frame-time average that
+  // lowers it; `resizeRef` is how the loop asks the mount effect to re-size.
+  const renderScale = useRef(2);
+  const frameMs = useRef(16);
+  const lastFrameAt = useRef(0);
+  const lastDropAt = useRef(0);
+  const resizeRef = useRef<(() => void) | null>(null);
+  const lastStatic = useRef(-1);
   const renderer = useRef<CrtRenderer | null>(null);
   const raf = useRef<number | null>(null);
   const visible = useRef(true);
@@ -184,6 +212,39 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const showingVideo = hasClip && videoReady && !hover;
   const hasClipRef = useRef(hasClip);
   hasClipRef.current = hasClip;
+  glowInputs.current = { snowing, showingVideo, hover, hasClip, tint };
+
+  /**
+   * The colour the set throws into the room, written to the stage's CSS
+   * variable: the clip's when the clip shows, otherwise the picture's, grey
+   * for static, inverted for the inverted hover.
+   */
+  const applyGlow = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const g = glowInputs.current;
+    const colour = g.snowing
+      ? STATIC_TINT
+      : g.showingVideo && videoTint.current
+        ? videoTint.current
+        : !g.tint
+          ? STATIC_TINT
+          : g.hover && !g.hasClip
+            ? invertTint(g.tint)
+            : g.tint;
+    stage.style.setProperty("--crt-glow", lightColour(colour));
+  }, []);
+
+  // Before paint, so the room is never a frame without its colour.
+  useLayoutEffect(() => {
+    applyGlow();
+  }, [snowing, showingVideo, hover, hasClip, tint, applyGlow]);
+
+  /** The clip's volume: how loud the room hears the set, dipped under a glitch. */
+  const applyVolume = useCallback(() => {
+    const v = videoRef.current;
+    if (v) v.volume = level.current * duck.current;
+  }, []);
 
   /** Turn the cap to `deg` without a render. */
   const rotateCap = (deg: number) => {
@@ -222,11 +283,19 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       if (now - lastTintAt.current > TINT_MS) {
         lastTintAt.current = now;
         const colour = sourceTint(v);
-        if (colour) setVideoTint((prev) => (prev && prev.every((c, i) => c === colour[i]) ? prev : colour));
+        const prev = videoTint.current;
+        if (colour && !(prev && prev.every((c, i) => c === colour[i]))) {
+          videoTint.current = colour;
+          applyGlow();
+        }
       }
     }
     // What the speaker hisses: the static on the glass, fading with the raster.
-    speaker.current?.setStatic(Math.max(burst, snow.current) * power);
+    const hiss = Math.max(burst, snow.current) * power;
+    if (Math.abs(hiss - lastStatic.current) > 0.005 || (hiss === 0) !== (lastStatic.current === 0)) {
+      lastStatic.current = hiss;
+      speaker.current?.setStatic(hiss);
+    }
     r.render({
       time: (now - start.current) / 1000,
       power,
@@ -237,12 +306,24 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     });
     // Whether another frame is worth drawing.
     return power > 0 && (!reduced.current || p < 1 || burst > 0 || glitch > 0);
-  }, []);
+  }, [applyGlow]);
 
   const loop = useCallback(() => {
     raf.current = null;
     if (!visible.current) return;
-    const again = draw(performance.now());
+    const now = performance.now();
+    // Frame time, smoothed; a gap over a quarter second is a hidden tab or
+    // a stalled machine, not a slow frame, and is left out.
+    const dt = now - lastFrameAt.current;
+    lastFrameAt.current = now;
+    if (dt > 0 && dt < 250) frameMs.current += (dt - frameMs.current) * 0.05;
+    if (frameMs.current > SLOW_FRAME_MS && renderScale.current > MIN_RENDER_SCALE && now - lastDropAt.current > 2000) {
+      renderScale.current = Math.max(MIN_RENDER_SCALE, renderScale.current * 0.75);
+      lastDropAt.current = now;
+      frameMs.current = 16;
+      resizeRef.current?.();
+    }
+    const again = draw(now);
     if (again) raf.current = requestAnimationFrame(loop);
   }, [draw]);
 
@@ -271,12 +352,14 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     };
     media.addEventListener("change", onMedia);
 
+    renderScale.current = Math.min(2, window.devicePixelRatio || 1);
     const resize = () => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const scale = Math.min(renderScale.current, window.devicePixelRatio || 1);
       const rect = screen.getBoundingClientRect();
-      r.resize(rect.width * dpr, rect.height * dpr);
+      r.resize(rect.width * scale, rect.height * scale);
       kick();
     };
+    resizeRef.current = resize;
     const ro = new ResizeObserver(resize);
     ro.observe(screen);
     resize();
@@ -287,10 +370,12 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     });
     io.observe(screen);
 
-    // The speaker wakes on the page's first gesture, which is also when a
-    // browser lets a clip be heard; the same gesture unmutes a clip that had
+    // The speaker is built now, so a page the browser already trusts is heard
+    // at once, and woken again on every gesture, which is when a browser that
+    // insisted on one lets it run; the same gesture unmutes a clip that had
     // to start silent.
     speaker.current = createSpeaker();
+    speaker.current.wake();
     const wake = () => {
       speaker.current?.wake();
       const v = videoRef.current;
@@ -317,8 +402,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       const heard = Math.pow(Math.max(0, 1 - away), 1.5);
       level.current = heard;
       speaker.current?.setLevel(heard);
-      const v = videoRef.current;
-      if (v) v.volume = heard;
+      applyVolume();
     };
     const onScroll = () => {
       if (measuring === null) measuring = requestAnimationFrame(measure);
@@ -335,6 +419,8 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       raf.current = null;
       if (measuring !== null) cancelAnimationFrame(measuring);
       if (shakeTimer.current !== null) window.clearTimeout(shakeTimer.current);
+      if (duckTimer.current !== null) window.clearTimeout(duckTimer.current);
+      resizeRef.current = null;
       document.removeEventListener("pointerdown", wake, { capture: true });
       document.removeEventListener("keydown", wake, { capture: true });
       window.removeEventListener("scroll", onScroll);
@@ -344,7 +430,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       r.destroy();
       renderer.current = null;
     };
-  }, [kick]);
+  }, [kick, applyVolume]);
 
   // Load the channel's picture; a change of channel also fires the static.
   useEffect(() => {
@@ -386,13 +472,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
    * (the `wake` listener above) turns the sound on.
    */
   const playVideo = useCallback((v: HTMLVideoElement) => {
-    v.volume = level.current;
+    applyVolume();
     v.muted = false;
     v.play().catch(() => {
       v.muted = true;
       v.play().catch(() => {});
     });
-  }, []);
+  }, [applyVolume]);
 
   // The channel's clip. It plays whenever the set is on, hovered or not: the
   // picture over it during a hover is another source on the same glass, not
@@ -401,7 +487,8 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     const v = videoRef.current;
     if (!v) return;
     setVideoReady(false);
-    setVideoTint(null);
+    videoTint.current = null;
+    applyGlow();
     lastVideoTime.current = -1;
     const src = current?.video;
     if (!src || still) {
@@ -413,7 +500,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     v.src = src;
     v.load();
     if (wantsOn.current) playVideo(v);
-  }, [current?.video, still, playVideo]);
+  }, [current?.video, still, playVideo, applyGlow]);
 
   // Tell the shader which source to draw, and the loop whether to feed it.
   useEffect(() => {
@@ -569,6 +656,14 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const kickSet = () => {
     timeline.current.glitchAt = performance.now();
     speaker.current?.glitch();
+    // The clip dips under the burst, so the burst is what is heard.
+    duck.current = DUCK_LEVEL;
+    applyVolume();
+    if (duckTimer.current !== null) window.clearTimeout(duckTimer.current);
+    duckTimer.current = window.setTimeout(() => {
+      duck.current = 1;
+      applyVolume();
+    }, DUCK_MS);
     setShaking(true);
     if (shakeTimer.current !== null) window.clearTimeout(shakeTimer.current);
     shakeTimer.current = window.setTimeout(() => setShaking(false), SHAKE_MS);
@@ -603,17 +698,12 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   if (count === 0) return null;
 
   const screenLabel = on ? `open ${current.title}` : "switch on";
-  const glow = lightColour(
-    snowing ? STATIC_TINT
-    : showingVideo && videoTint ? videoTint
-    : !tint ? STATIC_TINT
-    : hover && !hasClip ? invertTint(tint)
-    : tint,
-  );
-  const stageStyle = { "--crt-glow": glow, "--crt-lit": on ? 1 : 0 } as CSSProperties;
+  // --crt-glow is written by applyGlow, not here.
+  const stageStyle = { "--crt-lit": on ? 1 : 0 } as CSSProperties;
 
   return (
     <div
+      ref={stageRef}
       role="group"
       aria-label={ariaLabel}
       className={cn("crt-stage relative mx-auto w-full max-w-[480px]", shaking && "crt-stage--kick", className)}
@@ -664,7 +754,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
             className="pointer-events-none absolute inset-0 z-10 h-full w-full select-none"
           />
           {/* The glass lighting the plastic round it; masked to the cabinet. */}
-          <div aria-hidden className="crt-bezel-light absolute inset-0 z-[11]" />
+          <div aria-hidden className="crt-bezel-light absolute z-[11]" />
 
           {/* The glass as a link, over the bezel so it can be clicked. */}
           {on && current.href ? (
@@ -846,14 +936,25 @@ const CSS = `
 
 /* What the tube throws into the room. Colour rides on currentColor so a
    change of channel fades the light rather than cutting it. */
+/* The three lights are painted at a quarter (the plastic at half) of their
+   size and scaled up by the compositor: they are soft gradients, so the
+   upscale is invisible, and a colour change (every clip sample, eased over
+   700ms) then repaints a few thousand pixels instead of a few million.
+   Painted full size, the room light alone was two megapixels of radial
+   gradient re-rasterised on every frame of every transition. transform-origin
+   is the box's own corner so the percentages below stay the full-size ones
+   divided by the scale. */
 .crt-room, .crt-floor, .crt-bezel-light {
   pointer-events: none;
   color: rgb(var(--crt-glow));
   transition: color 700ms ease, opacity 600ms ease;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 .crt-room {
   position: absolute;
-  left: -50%; right: -50%; top: -45%; bottom: -30%;
+  left: -50%; top: -45%; width: 50%; height: 43.75%;
+  transform: scale(4);
   opacity: var(--crt-lit);
   background: radial-gradient(ellipse 42% 40% at 50% 44%,
     color-mix(in srgb, currentColor 78%, transparent) 0%,
@@ -870,7 +971,8 @@ const CSS = `
    the set. */
 .crt-floor {
   position: absolute;
-  left: -50%; right: -50%; top: 72%; height: 66%;
+  left: -50%; top: 72%; width: 50%; height: 16.5%;
+  transform: scale(4);
   opacity: var(--crt-lit);
   background:
     radial-gradient(ellipse 24% 24% at 50% 42%,
@@ -886,6 +988,8 @@ const CSS = `
   animation: crt-breathe 5s ease-in-out infinite 1.3s;
 }
 .crt-bezel-light {
+  left: 0; top: 0; width: 50%; height: 50%;
+  transform: scale(2);
   opacity: calc(var(--crt-lit) * 0.5);
   mix-blend-mode: screen;
   background: radial-gradient(ellipse 44% 40% at 51% 49%,
