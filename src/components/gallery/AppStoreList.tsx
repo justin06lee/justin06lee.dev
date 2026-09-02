@@ -12,7 +12,10 @@ import type { AppCard } from "@/lib/app-store";
 
 export const APPSTORE_CSS = `
 .appstore {
-  font-family: var(--font-poppins), sans-serif;
+  /* The one place on the site that isn't Poppins: this is the App Store, and
+     the App Store is set in the platform's own face. The stack lands on SF on
+     Apple devices, Segoe on Windows, Roboto on Android. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
 }
