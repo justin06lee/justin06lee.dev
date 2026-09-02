@@ -6,12 +6,14 @@ The picture on justin06lee.dev's CRT plays a video from each project's repo,
 and the audio should sound like it is leaving a plastic speaker the size of
 a coaster, not a pair of studio monitors. This does that:
 
-  1. high-pass at 250 Hz: the cabinet had no bass to give
-  2. low-pass at 6.5 kHz: nor any air on top; a little muffled, like it was
-  3. a gentle boost between 1 and 3 kHz: the boxy, tinny resonance of a
-     small driver in a plastic case
-  4. a very quiet bed of hiss and the odd crackle, so silence is never
-     digital silence
+  1. high-pass at 300 Hz: the cabinet had no bass to give
+  2. low-pass at 4.8 kHz: nor any air on top; muffled, like it was
+  3. a boost between 1.2 and 2.8 kHz: the boxy, tinny resonance of a small
+     driver in a plastic case
+  4. saturation and an 8-bit crush: the amplifier was a few cents' worth of
+     transistors driven too hard, and the grit is most of what "old" means
+  5. a quiet bed of hiss, the odd crackle, and a mains hum, so silence is
+     never digital silence
 
 Usage
 
@@ -67,16 +69,21 @@ INPUT = "input.mp4"
 OUTPUT = "output.mp4"
 
 # ── the sound ───────────────────────────────────────────────────────────────
-HIGH_PASS_HZ = 250
-LOW_PASS_HZ = 6500
+HIGH_PASS_HZ = 300
+LOW_PASS_HZ = 4800
 FILTER_ORDER = 4          # butterworth order: 4 is ~24 dB/octave, a real cut, not a tilt
-MID_LOW_HZ = 1000
-MID_HIGH_HZ = 3000
-MID_BOOST_DB = 3.0        # "slightly": 3 dB is clearly boxy without being a telephone
-HISS_DBFS = -52           # the bed of static; -52 dBFS is audible in silence and gone under speech
-CRACKLES_PER_MINUTE = 30  # the odd pop, like a tired speaker cone
-CRACKLE_DBFS = -34
-HEADROOM_DB = 1.0         # normalise to this much below full scale after the boosts
+MID_LOW_HZ = 1200
+MID_HIGH_HZ = 2800
+MID_BOOST_DB = 5.0        # clearly boxy; 3 was polite, 8 is a telephone
+DRIVE = 2.6               # tanh saturation: 1 is clean, 4 is a fuzz pedal
+BITS = 8                  # word length after the crush; 16 leaves it untouched
+DRIVE_HEADROOM_DB = 3.0   # level into the drive, so a quiet clip and a loud one get the same grit
+HISS_DBFS = -46           # the bed of static: audible in the quiet, under everything else
+CRACKLES_PER_MINUTE = 60  # pops, like a tired speaker cone
+CRACKLE_DBFS = -30
+HUM_HZ = 120              # mains hum, second harmonic: a small speaker can't voice 60
+HUM_DBFS = -44
+HEADROOM_DB = 1.0         # normalise to this much below full scale at the end
 
 # ── the picture, for video outputs ─────────────────────────────────────────
 VIDEO_HEIGHT = 360
@@ -89,7 +96,7 @@ AUDIO_CODEC_FOR_EXT = {".mp3": "mp3", ".m4a": "aac", ".aac": "aac", ".ogg": "lib
 
 def retro(seg: AudioSegment, texture: bool = True) -> AudioSegment:
     """The whole treatment, in order. Mono in, mono out: the set had one speaker."""
-    seg = seg.set_channels(1)
+    seg = seg.set_channels(1).set_sample_width(2)
 
     seg = seg.high_pass_filter(HIGH_PASS_HZ, order=FILTER_ORDER)
     seg = seg.low_pass_filter(LOW_PASS_HZ, order=FILTER_ORDER)
@@ -102,11 +109,57 @@ def retro(seg: AudioSegment, texture: bool = True) -> AudioSegment:
     copy_gain = 20 * math.log10(10 ** (MID_BOOST_DB / 20) - 1)
     seg = seg.overlay(band.apply_gain(copy_gain))
 
+    # The amplifier. Drive is set against a fixed level so every clip gets the
+    # same grit; the crush and the drive both put fizz above the band, which
+    # the speaker still can't voice, so the low-pass comes round again.
+    seg = normalize(seg, headroom=DRIVE_HEADROOM_DB)
+    seg = saturate(seg, DRIVE)
+    seg = crush(seg, BITS)
+    seg = seg.low_pass_filter(LOW_PASS_HZ, order=2)
+
     if texture:
         seg = seg.overlay(hiss(len(seg), seg.frame_rate))
         seg = seg.overlay(crackle(len(seg), seg.frame_rate))
+        seg = seg.overlay(hum(len(seg), seg.frame_rate))
 
     return normalize(seg, headroom=HEADROOM_DB)
+
+
+def _samples(seg: AudioSegment) -> np.ndarray:
+    """The segment as floats in [-1, 1]."""
+    arr = np.array(seg.get_array_of_samples(), dtype=np.float64)
+    return arr / float(1 << (8 * seg.sample_width - 1))
+
+
+def _from_samples(samples: np.ndarray, like: AudioSegment) -> AudioSegment:
+    """Floats in [-1, 1] back into a segment shaped like `like`."""
+    scale = float((1 << (8 * like.sample_width - 1)) - 1)
+    dtype = {1: "<i1", 2: "<i2", 4: "<i4"}[like.sample_width]
+    return like._spawn((np.clip(samples, -1.0, 1.0) * scale).astype(dtype).tobytes())
+
+
+def saturate(seg: AudioSegment, drive: float) -> AudioSegment:
+    """Soft clipping: a tanh curve, scaled so full scale still lands on full scale."""
+    return _from_samples(np.tanh(drive * _samples(seg)) / math.tanh(drive), seg)
+
+
+def crush(seg: AudioSegment, bits: int) -> AudioSegment:
+    """Requantise to `bits` with triangular dither, the grain of a cheap converter."""
+    x = _samples(seg)
+    q = float(1 << (bits - 1))
+    rng = np.random.default_rng(3)
+    dither = (rng.uniform(-0.5, 0.5, x.shape) + rng.uniform(-0.5, 0.5, x.shape)) / q
+    return _from_samples(np.round((x + dither) * q) / q, seg)
+
+
+def hum(duration_ms: int, rate: int) -> AudioSegment:
+    """Mains hum with its next two harmonics, breathing slightly, as a supply that isn't quite steady does."""
+    n = int(rate * duration_ms / 1000)
+    t = np.arange(n) / rate
+    wave = np.sin(2 * np.pi * HUM_HZ * t) + 0.4 * np.sin(2 * np.pi * 2 * HUM_HZ * t) + 0.2 * np.sin(2 * np.pi * 3 * HUM_HZ * t)
+    wave *= 1 + 0.12 * np.sin(2 * np.pi * 0.7 * t)
+    seg = _mono(wave / np.max(np.abs(wave)), rate)
+    return seg.apply_gain(HUM_DBFS - seg.dBFS)
 
 
 def _mono(samples: np.ndarray, rate: int) -> AudioSegment:
