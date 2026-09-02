@@ -37,13 +37,21 @@ export type CrtMonitorProps = {
  *   - the hole spans x 14.9%–87.4%, y 17.2%–82.4%, tapering toward the
  *     bottom; the canvas sits behind it with a margin, and the photo's alpha
  *     does the masking
- *   - the bezel's bottom band (y 86%–97%) is where the controls are laid
- *     over the plastic; the power button sits on the LED slot the photo
- *     already has, at x 82.1%, y 91.8%
+ *   - the bezel's bottom band (y 84%–98%) carries the two controls, one at
+ *     each end of the plastic: the knob at x 19.6% and the power button on
+ *     the LED slot the photo already has at x 82.1%, both at y 91.8%. The
+ *     band runs 9.4%–92.4% across at that height, so the two sit the same
+ *     distance in from its ends
+ *   - the band is not square to the camera: the front is convex and the set
+ *     was shot from a little above, so its bottom edge climbs about 6° from
+ *     the middle out to either end, and each end recedes. `--tilt` on the two
+ *     controls (a 2D rotate by that slope, then a perspective turn away) is
+ *     what stops them looking pasted on. Re-cutting the photo means
+ *     re-measuring all of these
  */
 const BEZEL_ASPECT = "1200 / 991";
 const SCREEN = { left: "12.5%", top: "15%", width: "77%", height: "69.5%" };
-const CONTROLS = { left: "16%", right: "26%", top: "86%", bottom: "3.5%" };
+const KNOB = { left: "19.6%", top: "91.8%" };
 const POWER = { left: "82.1%", top: "91.8%" };
 
 // Switch-on / switch-off, the static burst on a channel change, the hover
@@ -52,7 +60,7 @@ const POWER_MS = 420;
 const BURST_MS = 320;
 const GLITCH_MS = 260;
 const SHAKE_MS = 340;
-const OSD_MS = 1800;
+const OSD_MS = 2400;
 /** A press that travels less than this is a click, not a turn of the knob. */
 const DRAG_THRESHOLD_DEG = 6;
 /** What static throws on the wall. */
@@ -65,16 +73,16 @@ const pad = (n: number) => String(n + 1).padStart(2, "0");
  * The terminal pieces, playing on one small old monitor in a dark room.
  *
  * The knob on the bezel is a rotary channel selector: drag it round, click
- * it to step on one, or use the arrow keys once it has focus; the printed
- * channel names beside it are also buttons. It turns all the way round, so
- * the last channel clicks straight on to the first. Between two detents the
- * set is off-station and shows static; land on one and it shows that
- * project. The glass is a link to the project — a real anchor, so
- * middle-click and "open in new tab" behave — and hovering it kicks the set:
- * a burst of colour bars, a shake, then the picture with its colours
- * inverted until the pointer leaves. Power switches the set off with the
- * raster collapse a tube actually did, and clicking the dark glass turns it
- * back on.
+ * it to step on one, or use the arrow keys once it has focus. It turns all
+ * the way round, so the last channel clicks straight on to the first.
+ * Between two detents the set is off-station and shows static; land on one
+ * and it shows that project, named for a moment by the on-screen display
+ * (nothing is printed on the bezel). The glass is a link to the project — a
+ * real anchor, so middle-click and "open in new tab" behave — and hovering
+ * it kicks the set: a burst of colour bars, a shake, then the picture with
+ * its colours inverted until the pointer leaves. Power switches the set off
+ * with the raster collapse a tube actually did, and clicking the dark glass
+ * turns it back on.
  *
  * The set lights the room: a glow behind it, light on the bezel's plastic,
  * and a pool on the floor in front, all in the colour the picture throws
@@ -217,17 +225,17 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     timeline.current.burstAt = performance.now();
     kick();
     if (!current?.src) {
-      r.setImage(null, 0, 0);
+      r.setPicture(null);
       setTint(null);
       return;
     }
     loadPicture(current.src).then((pic) => {
       if (cancelled || !renderer.current) return;
       if (pic) {
-        renderer.current.setImage(pic.source, pic.width, pic.height);
+        renderer.current.setPicture(pic);
         setTint(pic.tint);
       } else {
-        renderer.current.setImage(null, 0, 0);
+        renderer.current.setPicture(null);
         setTint(null);
       }
       kick();
@@ -366,7 +374,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     <div
       role="group"
       aria-label={ariaLabel}
-      className={cn("crt-stage relative mx-auto w-full max-w-[480px] pb-[40%]", shaking && "crt-stage--kick", className)}
+      className={cn("crt-stage relative mx-auto w-full max-w-[480px]", shaking && "crt-stage--kick", className)}
       style={stageStyle}
     >
       <style precedence="default" href="crt-monitor">{CSS}</style>
@@ -430,80 +438,48 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
             />
           )}
 
-          {/* The controls, printed on the bezel's bottom band. */}
+          {/* The channel knob, at the left end of the bezel's bottom band. */}
           <div
-            className="absolute z-20 flex flex-wrap items-center justify-center gap-x-[3.2cqw] gap-y-[0.6cqw]"
-            style={CONTROLS}
+            ref={knobRef}
+            tabIndex={0}
+            role="slider"
+            aria-label="channel"
+            aria-valuemin={0}
+            aria-valuemax={Math.max(0, count - 1)}
+            aria-valuenow={channel}
+            aria-valuetext={current.title}
+            aria-orientation="horizontal"
+            onPointerDown={onKnobPointerDown}
+            onPointerMove={onKnobPointerMove}
+            onPointerUp={onKnobPointerUp}
+            onPointerCancel={onKnobPointerUp}
+            onKeyDown={onKnobKeyDown}
+            className={cn(
+              "crt-knob absolute z-20 size-[max(28px,6.8cqw)] touch-none select-none rounded-full outline-none",
+              "focus-visible:ring-[0.3cqw] focus-visible:ring-black/40",
+            )}
+            style={KNOB}
           >
-            <div className="relative flex items-center gap-[1.6cqw]">
-              <span className="crt-print text-[max(9px,1.4cqw)]">channel</span>
-              <div
-                ref={knobRef}
-                tabIndex={0}
-                role="slider"
-                aria-label="channel"
-                aria-valuemin={0}
-                aria-valuemax={Math.max(0, count - 1)}
-                aria-valuenow={channel}
-                aria-valuetext={current.title}
-                aria-orientation="horizontal"
-                onPointerDown={onKnobPointerDown}
-                onPointerMove={onKnobPointerMove}
-                onPointerUp={onKnobPointerUp}
-                onPointerCancel={onKnobPointerUp}
-                onKeyDown={onKnobKeyDown}
-                className={cn(
-                  "crt-knob relative size-[max(28px,6.8cqw)] shrink-0 touch-none select-none rounded-full outline-none",
-                  "focus-visible:ring-[0.3cqw] focus-visible:ring-black/40",
-                )}
-              >
-                <div
-                  aria-hidden
-                  className={cn(
-                    "crt-knob-cap absolute inset-0 rounded-full",
-                    !dragging && "transition-transform duration-[260ms] ease-[cubic-bezier(0.2,0.9,0.3,1.15)] motion-reduce:transition-none",
-                  )}
-                  style={{ transform: `rotate(${angle}deg)` }}
-                >
-                  <span className="absolute left-1/2 top-[9%] h-[30%] w-[8%] -translate-x-1/2 rounded-full bg-[#3f3b35]" />
-                </div>
-              </div>
+            <div
+              aria-hidden
+              className={cn(
+                "crt-knob-cap absolute inset-0 rounded-full",
+                !dragging && "transition-transform duration-[260ms] ease-[cubic-bezier(0.2,0.9,0.3,1.15)] motion-reduce:transition-none",
+              )}
+              style={{ transform: `rotate(${angle}deg)` }}
+            >
+              <span className="absolute left-1/2 top-[9%] h-[30%] w-[8%] -translate-x-1/2 rounded-full bg-[#3f3b35]" />
             </div>
-
-            <ol className="flex flex-wrap items-center gap-x-[2.2cqw] gap-y-[0.4cqw]" aria-label="channels">
-              {channels.map((c, i) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => turnTo(angleForChannel(angleRef.current, i, count))}
-                    aria-current={i === channel && !snowing ? "true" : undefined}
-                    className={cn(
-                      "crt-print flex items-center gap-[0.7cqw] text-[max(9px,1.4cqw)] outline-none transition-opacity",
-                      i === channel && !snowing ? "opacity-100" : "opacity-45 hover:opacity-80 focus-visible:opacity-80",
-                    )}
-                  >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "size-[max(4px,0.8cqw)] rounded-full",
-                        i === channel && !snowing ? "bg-[#3f3b35]" : "border border-[#3f3b35]",
-                      )}
-                    />
-                    {c.title}
-                  </button>
-                </li>
-              ))}
-            </ol>
           </div>
 
-          {/* The power button, on the LED slot. */}
+          {/* The power button, on the LED slot at the right end. */}
           <button
             type="button"
             onClick={() => setPower(!on)}
             aria-pressed={on}
             aria-label={on ? "switch off" : "switch on"}
             className={cn(
-              "crt-power absolute z-20 flex size-[max(22px,5.4cqw)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full outline-none",
+              "crt-power absolute z-20 flex size-[max(22px,5.4cqw)] items-center justify-center rounded-full outline-none",
               "focus-visible:ring-[0.3cqw] focus-visible:ring-black/40",
               on && "crt-power--on",
             )}
@@ -516,6 +492,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
         {/* The floor: the set's shadow, and the light it throws in front. */}
         <div aria-hidden className="crt-floor" />
       </div>
+
+      {/* Room below for the pool of light on the floor: the pool's bottom is
+          38% of the set's height past its foot, and the set is 991/1200 of
+          this width tall. A percentage padding resolves against the containing
+          block's width, so it lives on a child of the stage — on the stage
+          itself it measured the section and reserved three times this. */}
+      <div aria-hidden className="pt-[31%]" />
     </div>
   );
 }
@@ -609,35 +592,43 @@ const CSS = `
 }
 .crt-room {
   position: absolute;
-  left: -50%; right: -50%; top: -45%; bottom: -16%;
+  left: -50%; right: -50%; top: -45%; bottom: -30%;
   opacity: var(--crt-lit);
-  background: radial-gradient(ellipse 42% 38% at 50% 46%,
+  background: radial-gradient(ellipse 42% 40% at 50% 44%,
     color-mix(in srgb, currentColor 78%, transparent) 0%,
     color-mix(in srgb, currentColor 32%, transparent) 38%,
     color-mix(in srgb, currentColor 8%, transparent) 62%,
     transparent 76%);
   animation: crt-breathe 5s ease-in-out infinite;
 }
+/* The pool on the floor is a lobe centred on the set's foot (42% down this
+   box is the set's 100%). It has no top edge: the mask fades it in over the
+   set's lower quarter, where the wall's glow is still fading out, so the two
+   lights meet without a seam. The old lobe started at the band with its
+   centre two points below its own top, and drew a hard line either side of
+   the set. */
 .crt-floor {
   position: absolute;
-  left: -50%; right: -50%; top: 90%; height: 56%;
+  left: -50%; right: -50%; top: 72%; height: 66%;
   opacity: var(--crt-lit);
   background:
-    radial-gradient(ellipse 28% 30% at 50% 5%,
+    radial-gradient(ellipse 24% 24% at 50% 42%,
       color-mix(in srgb, currentColor 70%, white) 0%,
       transparent 100%),
-    radial-gradient(ellipse 50% 70% at 50% 4%,
+    radial-gradient(ellipse 50% 58% at 50% 42%,
       color-mix(in srgb, currentColor 92%, transparent) 0%,
       color-mix(in srgb, currentColor 55%, transparent) 30%,
       color-mix(in srgb, currentColor 22%, transparent) 58%,
-      transparent 82%);
+      transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 42%);
+  mask-image: linear-gradient(to bottom, transparent, #000 42%);
   animation: crt-breathe 5s ease-in-out infinite 1.3s;
 }
 /* The set stands on the floor: a contact shadow under its foot. */
 .crt-floor::before {
   content: "";
   position: absolute;
-  left: 32%; right: 32%; top: 2%; height: 7%;
+  left: 32%; right: 32%; top: 40%; height: 5%;
   background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 45%, transparent 70%);
 }
 .crt-bezel-light {
@@ -658,18 +649,20 @@ const CSS = `
   animation: crt-flash ${GLITCH_MS}ms linear;
 }
 
-/* The lettering printed on the plastic: small caps, letterspaced, ink grey. */
-.crt-print {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: #4a463f;
-  line-height: 1;
-  white-space: nowrap;
-}
+/* Both controls sit on the tilted band. translate centres each on its
+   measured point and --tilt turns it to the plastic: the 2D rotate is the
+   band's slope there, the perspective turn is the end of the case receding.
+   The offset stays in the translate property and the turn in transform so
+   :active can add to one without touching the other — a transform that
+   restated the offset on top of the utility's translate once jumped the
+   power button half its width on every press. */
+.crt-knob, .crt-power { translate: -50% -50%; }
 /* A moulded knob in the same beige as the case: a short cylinder seen from
    a little above, so its side shows under the cap. The side and the drop
    shadow live on the base, which never turns; only the cap rotates. */
 .crt-knob {
+  --tilt: rotate(6deg) perspective(180px) rotateX(14deg) rotateY(-22deg);
+  transform: var(--tilt);
   background: #b3ad9f;
   box-shadow:
     0 1px 0 #a39d8f,
@@ -699,6 +692,8 @@ const CSS = `
 /* The power button: a round push button in the same plastic, with its
    symbol lit green while the set is on. */
 .crt-power {
+  --tilt: rotate(-6deg) perspective(180px) rotateX(14deg) rotateY(22deg);
+  transform: var(--tilt);
   color: #4a463f;
   background: radial-gradient(circle at 50% 32%, #e8e3d8 0%, #d1cbbe 55%, #b7b1a3 100%);
   box-shadow:
@@ -708,8 +703,10 @@ const CSS = `
     inset 0 1px 0 rgba(255,255,255,0.8);
   transition: color 300ms, transform 80ms, box-shadow 80ms;
 }
+/* Pressed: the cap sinks into the case, so its side shortens and it shrinks a
+   touch, along the same tilt. */
 .crt-power:active {
-  transform: translate(-50%, -50%) translateY(1px);
+  transform: var(--tilt) scale(0.95);
   box-shadow: 0 1px 0 #a39d8f, 0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.6);
 }
 .crt-power--on {
