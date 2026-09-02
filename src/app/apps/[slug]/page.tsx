@@ -63,7 +63,7 @@ export default async function AppPage({ params }: { params: Promise<{ slug: stri
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar />
-      <main className="appstore mx-auto max-w-[980px] px-5 pb-24 pt-10">
+      <main className="appstore mx-auto max-w-[980px] px-5 pb-24 pt-24">
         <style precedence="default" href="appstore">{APPSTORE_CSS}</style>
 
         <Link
