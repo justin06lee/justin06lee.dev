@@ -7,8 +7,11 @@ import { Navbar as ChromeNavbar, type NavbarProps } from "@/components/chrome/na
 import { Rainbow } from "@/components/chrome/rainbow";
 import type { Pfp } from "@/lib/site-config";
 
+// Mono on purpose, the one place in the nav: the carets are ascii, and the
+// cat page they lead to is ascii and sprites. text-sm keeps it the size of the
+// links beside it; inheriting the body's 16px made it read as a heading.
 function RainbowCat() {
-    return <Rainbow className="tracking-tight">^cat^</Rainbow>;
+    return <Rainbow className="font-mono text-sm tracking-tight">^cat^</Rainbow>;
 }
 
 function NavPfp({ pfp }: { pfp: Pfp }) {
