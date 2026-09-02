@@ -78,11 +78,11 @@ MID_BOOST_DB = 5.0        # clearly boxy; 3 was polite, 8 is a telephone
 DRIVE = 2.6               # tanh saturation: 1 is clean, 4 is a fuzz pedal
 BITS = 8                  # word length after the crush; 16 leaves it untouched
 DRIVE_HEADROOM_DB = 3.0   # level into the drive, so a quiet clip and a loud one get the same grit
-HISS_DBFS = -46           # the bed of static: audible in the quiet, under everything else
+HISS_DBFS = -52           # the bed of static: there in the quiet, gone under anything else
 CRACKLES_PER_MINUTE = 60  # pops, like a tired speaker cone
-CRACKLE_DBFS = -30
+CRACKLE_DBFS = -34
 HUM_HZ = 120              # mains hum, second harmonic: a small speaker can't voice 60
-HUM_DBFS = -44
+HUM_DBFS = -56            # felt more than heard; at -44 it sat on top of the clip
 HEADROOM_DB = 1.0         # normalise to this much below full scale at the end
 
 # ── the picture, for video outputs ─────────────────────────────────────────
