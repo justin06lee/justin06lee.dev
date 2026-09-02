@@ -84,3 +84,48 @@ export function deltaAngle(from: number, to: number): number {
   if (d < -180) d += 360;
   return d;
 }
+
+/**
+ * Share of the knob's radius round its centre inside which the pointer's
+ * angle is too unstable to follow: a pixel of travel there is a quarter turn.
+ */
+export const DEAD_ZONE = 0.28;
+/**
+ * The most one pointer sample may turn the knob. A pointer that crosses the
+ * middle between two samples reads as half a turn otherwise, and the knob
+ * spun.
+ */
+export const MAX_TURN_DEG = 40;
+/** Wheel travel per detent, in pixels. */
+export const WHEEL_PX_PER_DETENT = 80;
+
+/**
+ * One pointer sample of a drag: how far to turn the knob, and the angle to
+ * measure the next sample from. Inside the dead zone nothing turns, but the
+ * reference angle still follows the pointer, so leaving the zone doesn't
+ * jump the knob to wherever the pointer went in the meantime.
+ */
+export function pointerTurn(
+  last: number,
+  cx: number,
+  cy: number,
+  radius: number,
+  px: number,
+  py: number,
+): { last: number; delta: number } {
+  const at = pointerAngle(cx, cy, px, py);
+  if (Math.hypot(px - cx, py - cy) < radius * DEAD_ZONE) return { last: at, delta: 0 };
+  const delta = Math.max(-MAX_TURN_DEG, Math.min(MAX_TURN_DEG, deltaAngle(last, at)));
+  return { last: at, delta };
+}
+
+/**
+ * Wheel travel into detents: `carry` is the travel left over from the last
+ * call, so a slow wheel still adds up to a step. Positive steps are
+ * clockwise (scrolling down, as a wheel turns a knob when you roll it).
+ */
+export function wheelDetents(carry: number, deltaY: number): { carry: number; steps: number } {
+  const total = carry + deltaY;
+  const steps = Math.trunc(total / WHEEL_PX_PER_DETENT);
+  return { carry: total - steps * WHEEL_PX_PER_DETENT, steps };
+}

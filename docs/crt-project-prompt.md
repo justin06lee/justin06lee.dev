@@ -8,7 +8,7 @@ below is the prompt to hand an assistant working in the project's repo. it does 
 
 - the readme's first non-badge image is the project's picture. its filename routes the project to a hang: `sprite`, `pixel`, `tui` or `terminal` in the name puts it on the crt, `panel` on the manga wall, `icon` or `logo` in the app store. an item's `collection` set in `/me` wins over the filename.
 - an svg picture is drawn at the glass's size, and if it animates with css it is sampled into one loop of frames and played.
-- `assets/crt.mp4`, if the repo has one, plays on the glass with sound, and when it ends the set tunes to the next project. hovering shows the picture instead, with a glitch each way; the clip plays on underneath. browsers only allow sound after a click, so the clip starts silent and the first click or key on the page turns it up.
+- `assets/crt.mp4`, if the repo has one, plays on the glass with sound, and when it ends the set tunes to the next project. hovering shows the picture instead, with a glitch each way; the clip plays on underneath. the sound comes from the set: it fades as the set scrolls out of view. browsers only allow sound after a click, so the set is silent until the first click or key on the page.
 - the site checks a repo about once an hour, so a new file shows up on the next check.
 
 ## the prompt
@@ -40,7 +40,7 @@ You are preparing this repository to appear on the CRT monitor in the projects g
    brew install ffmpeg   # or apt install ffmpeg
    /tmp/retro/bin/python /tmp/retro-tv-audio.py recording.mp4 assets/crt.mp4
    ```
-   That writes H.264 (yuv420p, 360p, `+faststart`) with mono AAC at 96k, with the sound high-passed at 250 Hz, low-passed at 6.5 kHz, boosted a little between 1 and 3 kHz, and given a very quiet bed of hiss and crackle. Keep the file under about 15 MB (shorten the recording or pass `--height 240` if it isn't). Commit the file directly, **not through Git LFS**: the site streams it from raw.githubusercontent.com, and an LFS pointer does not stream. If the script can't be fetched, reproduce those parameters with pydub and ffmpeg by hand; the numbers above are the contract.
+   That writes H.264 (yuv420p, 360p, `+faststart`) with mono AAC at 96k, with the sound high-passed at 300 Hz, low-passed at 4.8 kHz, lifted 5 dB between 1.2 and 2.8 kHz, driven into a tanh curve and requantised to 8 bits, and given a quiet bed of hiss, crackle and 120 Hz hum. Keep the file under about 15 MB (shorten the recording or pass `--height 240` if it isn't). Commit the file directly, **not through Git LFS**: the site streams it from raw.githubusercontent.com, and an LFS pointer does not stream. If the script can't be fetched, reproduce those parameters with pydub and ffmpeg by hand; the numbers above are the contract.
 
 4. **Commit and push on `master`.** Use conventional commits (`feat(assets): add the crt sprite and clip for justin06lee.dev`). The site re-reads the repo about once an hour; the project appears on the next read.
 

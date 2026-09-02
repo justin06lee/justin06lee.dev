@@ -5,14 +5,15 @@ import { Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Grain } from "@/components/chrome/grain";
 import { createCrtRenderer, loadPicture, sourceTint, type CrtRenderer } from "./crt-gl";
+import { createSpeaker, type Speaker } from "./crt-audio";
 import {
   angleForChannel,
   channelAt,
-  deltaAngle,
   detentStep,
-  pointerAngle,
+  pointerTurn,
   snapAngle,
   staticAmount,
+  wheelDetents,
 } from "./crt-dial";
 
 export type CrtChannel = {
@@ -46,9 +47,12 @@ export type CrtMonitorProps = {
  *     distance in from its ends
  *   - the band is not square to the camera: the front is convex and the set
  *     was shot from a little above, so its bottom edge climbs about 6° from
- *     the middle out to either end, and each end recedes. `--tilt` on the two
- *     controls (a 2D rotate by that slope, then a perspective turn away) is
- *     what stops them looking pasted on. Re-cutting the photo means
+ *     the middle out to either end, and each end recedes. Each control is a
+ *     short cylinder (a cap over a stack of discs) turned to the plastic by
+ *     `--tilt`: a 2D rotate by the band's slope there, then a perspective
+ *     turn so the top of its side and the side facing the middle of the set
+ *     show — the left of the power button, the right of the knob — as they
+ *     would from where the camera stood. Re-cutting the photo means
  *     re-measuring all of these
  */
 const BEZEL_ASPECT = "1200 / 991";
@@ -65,7 +69,19 @@ const SHAKE_MS = 340;
 /** How often the clip's colour is re-read for the room light. */
 const TINT_MS = 400;
 /** A press that travels less than this is a click, not a turn of the knob. */
-const DRAG_THRESHOLD_DEG = 6;
+const CLICK_TRAVEL_DEG = 6;
+/**
+ * The sound comes from the set, not the page. It is heard in full while the
+ * set's middle is within this share of the viewport's height of the
+ * viewport's middle, and then falls off over the next FALLOFF_VIEWPORTS
+ * of height to nothing. Short on purpose: the store is the last hang, so at
+ * the foot of the page the set is barely a viewport away, and that has to be
+ * far enough to have walked out of the room.
+ */
+const HEARD_VIEWPORTS = 0.25;
+const FALLOFF_VIEWPORTS = 0.5;
+/** The discs behind each control's cap that make its side, deepest last. */
+const SIDE_LAYERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 /** What static throws on the wall. */
 const STATIC_TINT: [number, number, number] = [200, 200, 200];
 
@@ -111,7 +127,6 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   // The knob's angle is the one source of truth for the channel: unbounded
   // degrees, never wrapped, so the dial keeps the turns it has done.
   const [angle, setAngleState] = useState(0);
-  const [dragging, setDragging] = useState(false);
   const [on, setOn] = useState(true);
   const [hover, setHover] = useState(false);
   const [shaking, setShaking] = useState(false);
@@ -124,7 +139,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
+  const setRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
+  const capRef = useRef<HTMLSpanElement>(null);
+  const speaker = useRef<Speaker | null>(null);
+  // How loud the room hears the set right now (the scroll falloff).
+  const level = useRef(1);
+  const wheelCarry = useRef(0);
   const renderer = useRef<CrtRenderer | null>(null);
   const raf = useRef<number | null>(null);
   const visible = useRef(true);
@@ -140,10 +161,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const uploadVideo = useRef(false);
   const lastVideoTime = useRef(-1);
   const lastTintAt = useRef(0);
-  const unmute = useRef<(() => void) | null>(null);
   const wantsOn = useRef(true);
   const angleRef = useRef(0);
-  const drag = useRef<{ pointerId: number; last: number; moved: number } | null>(null);
+  // The angle React last rendered from. During a drag the cap turns on its
+  // own (a style write, not a render) and state only follows when the channel
+  // or the static would change, so a 120Hz pointer doesn't re-render the set.
+  const shownAngle = useRef(0);
+  const drag = useRef<{ pointerId: number; last: number; moved: number; from: number; cx: number; cy: number; radius: number } | null>(null);
   const shakeTimer = useRef<number | null>(null);
   // The shader gets time since mount, not performance.now(): a float32 uniform
   // holding hours of milliseconds loses the fine bits every hash and sine
@@ -161,8 +185,16 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const hasClipRef = useRef(hasClip);
   hasClipRef.current = hasClip;
 
+  /** Turn the cap to `deg` without a render. */
+  const rotateCap = (deg: number) => {
+    const cap = capRef.current;
+    if (cap) cap.style.transform = `translateZ(0) rotate(${deg}deg)`;
+  };
+
   const setAngle = useCallback((next: number) => {
     angleRef.current = next;
+    shownAngle.current = next;
+    rotateCap(next);
     setAngleState(next);
   }, []);
 
@@ -193,6 +225,8 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
         if (colour) setVideoTint((prev) => (prev && prev.every((c, i) => c === colour[i]) ? prev : colour));
       }
     }
+    // What the speaker hisses: the static on the glass, fading with the raster.
+    speaker.current?.setStatic(Math.max(burst, snow.current) * power);
     r.render({
       time: (now - start.current) / 1000,
       power,
@@ -253,18 +287,60 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     });
     io.observe(screen);
 
+    // The speaker wakes on the page's first gesture, which is also when a
+    // browser lets a clip be heard; the same gesture unmutes a clip that had
+    // to start silent.
+    speaker.current = createSpeaker();
+    const wake = () => {
+      speaker.current?.wake();
+      const v = videoRef.current;
+      if (v) v.muted = false;
+    };
+    document.addEventListener("pointerdown", wake, { capture: true, passive: true });
+    document.addEventListener("keydown", wake, { capture: true, passive: true });
+
+    // The sound comes from the set: full while it is near the middle of the
+    // view, then falling off with how far its middle has gone, to nothing.
+    let measuring: number | null = null;
+    const measure = () => {
+      measuring = null;
+      const set = setRef.current;
+      if (!set) return;
+      const rect = set.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      const cy = rect.top + rect.height / 2;
+      const cx = rect.left + rect.width / 2;
+      const dy = Math.max(0, Math.abs(cy - vh / 2) - HEARD_VIEWPORTS * vh);
+      const dx = Math.max(0, Math.abs(cx - vw / 2) - vw / 2);
+      const away = Math.hypot(dx, dy) / (FALLOFF_VIEWPORTS * vh);
+      const heard = Math.pow(Math.max(0, 1 - away), 1.5);
+      level.current = heard;
+      speaker.current?.setLevel(heard);
+      const v = videoRef.current;
+      if (v) v.volume = heard;
+    };
+    const onScroll = () => {
+      if (measuring === null) measuring = requestAnimationFrame(measure);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    measure();
+
     return () => {
       media.removeEventListener("change", onMedia);
       ro.disconnect();
       io.disconnect();
       if (raf.current !== null) cancelAnimationFrame(raf.current);
       raf.current = null;
+      if (measuring !== null) cancelAnimationFrame(measuring);
       if (shakeTimer.current !== null) window.clearTimeout(shakeTimer.current);
-      if (unmute.current) {
-        document.removeEventListener("pointerdown", unmute.current, { capture: true });
-        document.removeEventListener("keydown", unmute.current, { capture: true });
-        unmute.current = null;
-      }
+      document.removeEventListener("pointerdown", wake, { capture: true });
+      document.removeEventListener("keydown", wake, { capture: true });
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      speaker.current?.destroy();
+      speaker.current = null;
       r.destroy();
       renderer.current = null;
     };
@@ -306,24 +382,15 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
 
   /**
    * Start the clip with sound. Browsers refuse that until the page has had a
-   * gesture, so on refusal it starts silent and the first click or key
-   * anywhere turns the sound on — once armed, that covers every later clip
-   * too (the handler reads the current element, not the one it was armed
-   * for).
+   * gesture, so on refusal it starts silent; the page's first pointer or key
+   * (the `wake` listener above) turns the sound on.
    */
   const playVideo = useCallback((v: HTMLVideoElement) => {
+    v.volume = level.current;
     v.muted = false;
     v.play().catch(() => {
       v.muted = true;
       v.play().catch(() => {});
-      if (unmute.current) return;
-      const handler = () => {
-        const el = videoRef.current;
-        if (el) el.muted = false;
-      };
-      unmute.current = handler;
-      document.addEventListener("pointerdown", handler, { once: true, capture: true });
-      document.addEventListener("keydown", handler, { once: true, capture: true });
     });
   }, []);
 
@@ -407,40 +474,79 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const onKnobPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const knob = knobRef.current;
     if (!knob || count === 0) return;
+    // The knob's box is untransformed (the tilt is on the cylinder inside
+    // it), so its centre is the true centre, measured once: the cabinet
+    // shakes and the cap turns during a drag, and a centre re-read every
+    // sample wandered with them.
     const rect = knob.getBoundingClientRect();
-    const at = pointerAngle(rect.left + rect.width / 2, rect.top + rect.height / 2, e.clientX, e.clientY);
-    drag.current = { pointerId: e.pointerId, last: at, moved: 0 };
-    knob.setPointerCapture(e.pointerId);
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const at = pointerTurn(0, cx, cy, rect.width / 2, e.clientX, e.clientY).last;
+    drag.current = { pointerId: e.pointerId, last: at, moved: 0, from: angleRef.current, cx, cy, radius: rect.width / 2 };
+    // Capture keeps the turn going when the pointer leaves the small knob;
+    // a pointer that has already gone (or a synthetic one) throws, and the
+    // drag still works without it.
+    try {
+      knob.setPointerCapture(e.pointerId);
+    } catch {}
+    const cap = capRef.current;
+    if (cap) cap.style.transition = "none";
   };
 
   const onKnobPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
-    const knob = knobRef.current;
-    if (!d || !knob || d.pointerId !== e.pointerId) return;
-    const rect = knob.getBoundingClientRect();
-    const at = pointerAngle(rect.left + rect.width / 2, rect.top + rect.height / 2, e.clientX, e.clientY);
-    const delta = deltaAngle(d.last, at);
-    d.last = at;
-    d.moved += Math.abs(delta);
-    if (d.moved < DRAG_THRESHOLD_DEG) return;
-    if (!dragging) setDragging(true);
-    setAngle(angleRef.current + delta);
+    if (!d || d.pointerId !== e.pointerId) return;
+    const turn = pointerTurn(d.last, d.cx, d.cy, d.radius, e.clientX, e.clientY);
+    d.last = turn.last;
+    if (turn.delta === 0) return;
+    d.moved += Math.abs(turn.delta);
+    // Follow the pointer one to one, in the DOM; render only when the set
+    // would change what it shows.
+    const next = angleRef.current + turn.delta;
+    angleRef.current = next;
+    rotateCap(next);
+    snow.current = staticAmount(next, count);
+    kick();
+    const shown = shownAngle.current;
+    if (channelAt(next, count) !== channelAt(shown, count) || staticAmount(next, count) > 0.5 !== staticAmount(shown, count) > 0.5) {
+      shownAngle.current = next;
+      setAngleState(next);
+    }
   };
 
   const onKnobPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || d.pointerId !== e.pointerId) return;
     drag.current = null;
-    knobRef.current?.releasePointerCapture(e.pointerId);
-    setDragging(false);
-    if (d.moved >= DRAG_THRESHOLD_DEG) {
+    try {
+      knobRef.current?.releasePointerCapture(e.pointerId);
+    } catch {}
+    const cap = capRef.current;
+    if (cap) cap.style.transition = "";
+    if (d.moved >= CLICK_TRAVEL_DEG) {
       // Let go: the knob falls into the nearest detent.
       setAngle(snapAngle(angleRef.current, count));
     } else {
-      // A plain press clicks the knob round one stop.
-      step(1);
+      // A plain press clicks the knob round one stop from where it started.
+      turnTo(d.from + detentStep(count));
     }
   };
+
+  // The wheel turns the knob too, a detent at a time. Attached by hand so it
+  // can be non-passive: rolling a dial should not also scroll the page.
+  useEffect(() => {
+    const knob = knobRef.current;
+    if (!knob) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      const { carry, steps } = wheelDetents(wheelCarry.current, px);
+      wheelCarry.current = carry;
+      if (steps !== 0) turnTo(angleRef.current + steps * detentStep(count));
+    };
+    knob.addEventListener("wheel", onWheel, { passive: false });
+    return () => knob.removeEventListener("wheel", onWheel);
+  }, [count, turnTo]);
 
   const onKnobKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "ArrowRight" || e.key === "ArrowUp") {
@@ -462,6 +568,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   // click, and a glitch before every open would be in the way.
   const kickSet = () => {
     timeline.current.glitchAt = performance.now();
+    speaker.current?.glitch();
     setShaking(true);
     if (shakeTimer.current !== null) window.clearTimeout(shakeTimer.current);
     shakeTimer.current = window.setTimeout(() => setShaking(false), SHAKE_MS);
@@ -518,7 +625,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
         {/* The room: what the lit tube throws on the wall behind the set. */}
         <div aria-hidden className="crt-room" />
 
-        <div className={cn("crt-set relative z-[1] w-full @container", shaking && "crt-shake")} style={{ aspectRatio: BEZEL_ASPECT }}>
+        <div ref={setRef} className={cn("crt-set relative z-[1] w-full @container", shaking && "crt-shake")} style={{ aspectRatio: BEZEL_ASPECT }}>
           {/* The glass: a canvas behind the hole in the bezel. */}
           <div ref={screenRef} className="absolute overflow-hidden bg-black" style={SCREEN}>
             {/* The clip. The shader reads it as a texture, so with WebGL it is
@@ -583,7 +690,8 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
             />
           )}
 
-          {/* The channel knob, at the left end of the bezel's bottom band. */}
+          {/* The channel knob, at the left end of the bezel's bottom band: a
+              cylinder whose cap turns. */}
           <div
             ref={knobRef}
             tabIndex={0}
@@ -605,16 +713,14 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
             )}
             style={KNOB}
           >
-            <div
-              aria-hidden
-              className={cn(
-                "crt-knob-cap absolute inset-0 rounded-full",
-                !dragging && "transition-transform duration-[260ms] ease-[cubic-bezier(0.2,0.9,0.3,1.15)] motion-reduce:transition-none",
-              )}
-              style={{ transform: `rotate(${angle}deg)` }}
-            >
-              <span className="absolute left-1/2 top-[9%] h-[30%] w-[8%] -translate-x-1/2 rounded-full bg-[#3f3b35]" />
-            </div>
+            <span aria-hidden className="crt-cyl">
+              {SIDE_LAYERS.map((i) => (
+                <span key={i} className={cn("crt-cyl-side", i === SIDE_LAYERS.length && "crt-cyl-foot")} style={{ "--i": i } as CSSProperties} />
+              ))}
+              <span ref={capRef} className="crt-cyl-cap crt-knob-cap" style={{ transform: `translateZ(0) rotate(${angle}deg)` }}>
+                <span className="absolute left-1/2 top-[9%] h-[30%] w-[8%] -translate-x-1/2 rounded-full bg-[#3f3b35]" />
+              </span>
+            </span>
           </div>
 
           {/* The power button, on the LED slot at the right end. */}
@@ -624,13 +730,20 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
             aria-pressed={on}
             aria-label={on ? "switch off" : "switch on"}
             className={cn(
-              "crt-power absolute z-20 flex size-[max(22px,5.4cqw)] items-center justify-center rounded-full outline-none",
+              "crt-power absolute z-20 size-[max(22px,5.4cqw)] rounded-full outline-none",
               "focus-visible:ring-[0.3cqw] focus-visible:ring-black/40",
               on && "crt-power--on",
             )}
             style={POWER}
           >
-            <Power aria-hidden strokeWidth={2.75} className="size-[52%]" />
+            <span aria-hidden className="crt-cyl">
+              {SIDE_LAYERS.map((i) => (
+                <span key={i} className={cn("crt-cyl-side", i === SIDE_LAYERS.length && "crt-cyl-foot")} style={{ "--i": i } as CSSProperties} />
+              ))}
+              <span className="crt-cyl-cap crt-power-cap flex items-center justify-center">
+                <Power strokeWidth={2.75} className="size-[52%]" />
+              </span>
+            </span>
           </button>
         </div>
 
@@ -638,12 +751,15 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
         <div aria-hidden className="crt-floor" />
       </div>
 
-      {/* Room below for the pool of light on the floor: the pool's bottom is
-          38% of the set's height past its foot, and the set is 991/1200 of
-          this width tall. A percentage padding resolves against the containing
-          block's width, so it lives on a child of the stage — on the stage
-          itself it measured the section and reserved three times this. */}
-      <div aria-hidden className="pt-[31%]" />
+      {/* Room below for the pool of light on the floor: the pool is bright
+          for about 27% of the set's height past its foot (its box runs to
+          38%, but the last of that is a tail on black), and the set is
+          991/1200 of this width tall. A percentage padding resolves against
+          the containing block's width, so it lives on a child of the stage —
+          on the stage itself it measured the section and reserved three times
+          this. Sized so the dark between the pool and the next hang matches
+          the dark between the label and the set. */}
+      <div aria-hidden className="pt-[22%]" />
     </div>
   );
 }
@@ -787,37 +903,63 @@ const CSS = `
   animation: crt-flash ${GLITCH_MS}ms linear;
 }
 
-/* Both controls sit on the tilted band. translate centres each on its
-   measured point and --tilt turns it to the plastic: the 2D rotate is the
-   band's slope there, the perspective turn is the end of the case receding.
-   The offset stays in the translate property and the turn in transform so
-   :active can add to one without touching the other — a transform that
-   restated the offset on top of the utility's translate once jumped the
-   power button half its width on every press. */
+/* Each control is a short cylinder: a cap, and behind it a stack of discs a
+   step apart that reads as its side once the stack is turned. translate
+   centres the control on its measured point; --tilt, on the cylinder, turns
+   it to the plastic: the 2D rotate is the band's slope there, then the
+   perspective turn. The camera stood above the set and in front of its
+   middle, so what shows of a side is its top and the edge facing the middle:
+   the left of the power button, the right of the knob. (rotateX is negative
+   because the camera is above: the top of a face on a vertical surface is
+   the near edge, so the discs behind the cap peek out above it, not below.)
+   Nothing 3D sits on the control element itself, so its box stays the plain
+   circle the pointer maths measure. */
 .crt-knob, .crt-power { translate: -50% -50%; }
-/* A moulded knob in the same beige as the case: a short cylinder seen from
-   a little above, so its side shows under the cap. The side and the drop
-   shadow live on the base, which never turns; only the cap rotates. */
-.crt-knob {
-  --tilt: rotate(6deg) perspective(180px) rotateX(14deg) rotateY(-22deg);
+.crt-cyl {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
   transform: var(--tilt);
-  background: #b3ad9f;
-  box-shadow:
-    0 1px 0 #a39d8f,
-    0 2px 0 #9a9486,
-    0 3px 0 #8f897c,
-    0 4px 4px rgba(0,0,0,0.5),
-    0 0 0 1px rgba(0,0,0,0.12);
-  cursor: grab;
 }
+.crt-knob .crt-cyl {
+  --tilt: rotate(6deg) perspective(140px) rotateX(-18deg) rotateY(-32deg);
+  --step: 0.2cqw;
+}
+.crt-power .crt-cyl {
+  --tilt: rotate(-6deg) perspective(140px) rotateX(-18deg) rotateY(32deg);
+  --step: 0.16cqw;
+}
+.crt-cyl-side, .crt-cyl-cap {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+/* The side: the same plastic as the case, lit from the glass above it, so
+   the top of the wall (which is what shows) is paler than the rest. */
+.crt-cyl-side {
+  background: linear-gradient(to bottom, #d3cdbf 0%, #b0aa9c 45%, #857f71 100%);
+  transform: translateZ(calc(var(--i) * -1 * var(--step)));
+}
+.crt-cyl-foot {
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.35);
+}
+.crt-cyl-cap {
+  transform: translateZ(0);
+  transition: transform 90ms;
+}
+.crt-knob { cursor: grab; }
 .crt-knob:active { cursor: grabbing; }
+/* The knob's cap: a shallow dome, with grip ridges round the rim, that
+   turns; the snap into a detent is a firm 220ms with no overshoot — a
+   rotary switch clicks, it doesn't wobble. During a drag the transition is
+   taken off so the cap follows the pointer exactly. */
 .crt-knob-cap {
   background: radial-gradient(circle at 50% 32%, #ece7dc 0%, #d6d0c3 48%, #bcb6a8 100%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.85),
     inset 0 -2px 3px rgba(0,0,0,0.2);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-/* Grip ridges round the rim of the cap. */
 .crt-knob-cap::before {
   content: "";
   position: absolute;
@@ -827,27 +969,18 @@ const CSS = `
   -webkit-mask-image: radial-gradient(circle, transparent 64%, #000 67%);
   mask-image: radial-gradient(circle, transparent 64%, #000 67%);
 }
-/* The power button: a round push button in the same plastic, with its
-   symbol lit green while the set is on. */
-.crt-power {
-  --tilt: rotate(-6deg) perspective(180px) rotateX(14deg) rotateY(22deg);
-  transform: var(--tilt);
+/* The power button's cap, with its symbol lit green while the set is on;
+   pressing sinks the cap into the case. */
+.crt-power-cap {
   color: #4a463f;
   background: radial-gradient(circle at 50% 32%, #e8e3d8 0%, #d1cbbe 55%, #b7b1a3 100%);
-  box-shadow:
-    0 1px 0 #a39d8f,
-    0 2px 0 #9a9486,
-    0 3px 3px rgba(0,0,0,0.45),
-    inset 0 1px 0 rgba(255,255,255,0.8);
-  transition: color 300ms, transform 80ms, box-shadow 80ms;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 2px rgba(0,0,0,0.15);
+  transition: transform 90ms, color 300ms, filter 300ms;
 }
-/* Pressed: the cap sinks into the case, so its side shortens and it shrinks a
-   touch, along the same tilt. */
-.crt-power:active {
-  transform: var(--tilt) scale(0.95);
-  box-shadow: 0 1px 0 #a39d8f, 0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.6);
+.crt-power:active .crt-power-cap {
+  transform: translateZ(calc(-3 * var(--step)));
 }
-.crt-power--on {
+.crt-power--on .crt-power-cap {
   color: #2fd36a;
   filter: drop-shadow(0 0 3px rgba(60,230,110,0.9));
 }
