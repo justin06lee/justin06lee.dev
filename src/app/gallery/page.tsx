@@ -141,8 +141,7 @@ type Sections = {
 
 /**
  * Sorts the pieces into their hangs and gathers what each hang needs beyond
- * the image: the monitor wants the description for its plate, and the store
- * wants screenshots and an "open" target. The icon already resolved for the
+ * the image: the store wants screenshots and an "open" target. The icon already resolved for the
  * wall is handed through so the store never measures it twice.
  */
 async function buildSections(
@@ -175,7 +174,6 @@ async function buildSections(
     const terminal: CrtChannel[] = grouped.terminal.map((piece) => ({
         id: piece.id,
         title: piece.title,
-        description: itemById.get(piece.id)?.description,
         src: piece.src,
         href: piece.href,
     }));
@@ -200,7 +198,7 @@ function ThemedSections({ sections, seed }: { sections: Sections; seed: number }
                         gets the site's mono section label. */}
                     {theme !== "icons" && (
                         <div className="mb-4 flex items-baseline gap-3">
-                            <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/70">
+                            <h2 className="text-[11px] uppercase tracking-[0.22em] text-white/70">
                                 {THEME_META[theme].title}
                             </h2>
                             <p className="truncate text-xs text-white/35">{THEME_META[theme].subtitle}</p>

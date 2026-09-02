@@ -1,36 +1,69 @@
 // Geometry for the CRT's channel dial, kept pure so the detent maths can be
 // tested without pointer events or a canvas.
+//
+// The dial is a rotary channel selector the way old sets had one: it turns
+// all the way round, with one detent per channel spread evenly over the full
+// circle, so the last channel clicks straight on to the first. The knob's
+// angle is a single unbounded number of degrees — it never wraps — and the
+// channel is read off it. Between two detents the set is off-station and
+// shows static; `staticAmount` says how much.
 
-/** Widest the knob will sweep end to end, in degrees. */
-export const DIAL_SWEEP = 270;
-/** Widest gap between two detents — two channels should read as a switch, not a half turn. */
-export const DIAL_MAX_STEP = 60;
+/** The angle of the picture that is shown around a detent, as a share of the step. */
+const HOLD_SHARE = 0.22;
+/** How quickly the static comes in past the hold, in degrees (capped for tight steps). */
+const RAMP_DEG = 6;
 
-/** Degrees between neighbouring detents for `count` channels. */
+/** Degrees between neighbouring detents for `count` channels; a full turn each for one. */
 export function detentStep(count: number): number {
-  if (count <= 1) return 0;
-  return Math.min(DIAL_MAX_STEP, DIAL_SWEEP / (count - 1));
+  return 360 / Math.max(1, count);
 }
 
-/** The knob angle at which channel `index` sits; detents are centred on 12 o'clock. */
-export function detentAngle(index: number, count: number): number {
-  const step = detentStep(count);
-  return -((count - 1) * step) / 2 + index * step;
-}
-
-/** The channel whose detent is nearest to a free-spinning `angle`. */
+/** The detent (any integer, unbounded) nearest to `angle`. */
 export function nearestDetent(angle: number, count: number): number {
-  if (count <= 1) return 0;
-  const step = detentStep(count);
-  const start = detentAngle(0, count);
-  const index = Math.round((angle - start) / step);
-  return Math.min(count - 1, Math.max(0, index));
+  return Math.round(angle / detentStep(count));
 }
 
-/** The furthest the knob may be dragged either way. */
-export function clampAngle(angle: number, count: number): number {
-  const limit = -detentAngle(0, count);
-  return Math.min(limit, Math.max(-limit, angle));
+/** The knob angle of the detent nearest to `angle`. */
+export function snapAngle(angle: number, count: number): number {
+  return nearestDetent(angle, count) * detentStep(count);
+}
+
+/** The channel the set is tuned to at `angle`, wrapping in both directions. */
+export function channelAt(angle: number, count: number): number {
+  if (count <= 0) return 0;
+  return (((nearestDetent(angle, count) % count) + count) % count);
+}
+
+/**
+ * 0 on a detent, 1 well off-station. The picture holds for a share of the
+ * step either side of the detent, then static ramps in over a few degrees,
+ * so a knob that is nudged doesn't flash and one that is turned does.
+ */
+export function staticAmount(angle: number, count: number): number {
+  if (count <= 1) return 0;
+  const step = detentStep(count);
+  const distance = Math.abs(angle - snapAngle(angle, count));
+  const hold = step * HOLD_SHARE;
+  const ramp = Math.min(RAMP_DEG, step * 0.1);
+  const t = (distance - hold) / ramp;
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * The angle to turn to from `angle` to land on channel `index`, taking the
+ * shorter way round (clockwise when the two are equal, so a two-channel set
+ * always advances).
+ */
+export function angleForChannel(angle: number, index: number, count: number): number {
+  if (count <= 0) return angle;
+  const step = detentStep(count);
+  const detent = nearestDetent(angle, count);
+  const current = channelAt(angle, count);
+  let delta = (((index - current) % count) + count) % count;
+  if (delta > count / 2) delta -= count;
+  return (detent + delta) * step;
 }
 
 /**
@@ -50,10 +83,4 @@ export function deltaAngle(from: number, to: number): number {
   if (d > 180) d -= 360;
   if (d < -180) d += 360;
   return d;
-}
-
-/** Next / previous channel, wrapping. */
-export function stepChannel(index: number, delta: number, count: number): number {
-  if (count <= 0) return 0;
-  return (((index + delta) % count) + count) % count;
 }
