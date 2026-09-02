@@ -211,7 +211,11 @@ export type CrtFrame = {
 };
 
 export type CrtRenderer = {
-  setImage(source: TexImageSource | null, width: number, height: number): void;
+  /**
+   * Show a picture: one frame for a still, or several spread evenly over
+   * `period` seconds for an animated one. `null` clears the glass.
+   */
+  setPicture(picture: { frames: TexImageSource[]; width: number; height: number; period: number } | null): void;
   resize(width: number, height: number): void;
   render(frame: CrtFrame): void;
   destroy(): void;
@@ -284,14 +288,33 @@ export function createCrtRenderer(
   gl.enableVertexAttribArray(aPos);
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const makeTexture = () => {
+    const t = gl.createTexture();
+    if (!t) return null;
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return t;
+  };
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  // A 1x1 black texture stands in while there is no picture, so the sampler
+  // is never unbound.
+  const blank = makeTexture();
+  if (!blank) return null;
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+  // One texture per frame of the picture. An animated picture is a handful of
+  // frames swapped by time rather than one atlas: an atlas of thirty frames
+  // outgrows the guaranteed texture size on phones, and a bind per frame is
+  // free.
+  let frames: WebGLTexture[] = [];
+  let period = 0;
+  const dropFrames = () => {
+    for (const t of frames) gl.deleteTexture(t);
+    frames = [];
+    period = 0;
+  };
 
   const u = {
     res: gl.getUniformLocation(program, "uRes"),
@@ -318,18 +341,23 @@ export function createCrtRenderer(
   };
 
   return {
-    setImage(source, w, h) {
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      if (source && w > 0 && h > 0) {
+    setPicture(picture) {
+      dropFrames();
+      hasTex = 0;
+      if (picture && picture.width > 0 && picture.height > 0 && picture.frames.length > 0) {
         try {
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+          for (const source of picture.frames) {
+            const t = makeTexture();
+            if (!t) throw new Error("no texture");
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+            frames.push(t);
+          }
           hasTex = 1;
-          texAspect = w / h;
+          texAspect = picture.width / picture.height;
+          period = frames.length > 1 ? picture.period : 0;
         } catch {
-          hasTex = 0;
+          dropFrames();
         }
-      } else {
-        hasTex = 0;
       }
       updateSpan();
     },
@@ -342,6 +370,9 @@ export function createCrtRenderer(
       updateSpan();
     },
     render(frame) {
+      const n = frames.length;
+      const i = n > 1 && period > 0 ? Math.floor((frame.time / period) * n) % n : 0;
+      gl.bindTexture(gl.TEXTURE_2D, frames[i] ?? blank);
       gl.uniform2f(u.res, width, height);
       gl.uniform1f(u.time, frame.time);
       gl.uniform1f(u.power, frame.power);
@@ -353,7 +384,8 @@ export function createCrtRenderer(
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
     destroy() {
-      gl.deleteTexture(texture);
+      dropFrames();
+      gl.deleteTexture(blank);
       gl.deleteBuffer(quad);
       gl.deleteProgram(program);
       gl.deleteShader(vs);
@@ -364,51 +396,256 @@ export function createCrtRenderer(
 }
 
 export type CrtPicture = {
-  source: HTMLCanvasElement;
+  /** One canvas for a still; several, evenly spaced through `period`, for an animated SVG. */
+  frames: HTMLCanvasElement[];
   width: number;
   height: number;
+  /** Seconds one loop of the frames takes; 0 for a still. */
+  period: number;
   /** The colour the picture throws into the room: its bright pixels' mean, 0–255. */
   tint: [number, number, number];
 };
 
+/** Frames per second an animated picture is sampled at, and how many at most: they all sit on the GPU at once. */
+const FRAME_RATE = 10;
+const MIN_FRAMES = 6;
+const MAX_FRAMES = 30;
+/** Animated frames are rasterised smaller than a still, since there are up to MAX_FRAMES of them. */
+const ANIMATED_EDGE = 640;
+
 /**
- * Loads a picture for the tube. SVG pixel art is rasterised onto a canvas
- * first — an `<img>` of an SVG with no intrinsic size uploads as nothing, and
- * even one with a size uploads at that size, which for a 64px sprite is far
- * too little to survive the curvature. Cross-origin images need the CORS
- * header to be readable by WebGL; GitHub raw content sends it.
+ * Loads a picture for the tube.
+ *
+ * SVGs are fetched as text and rasterised onto a canvas at the size the
+ * glass wants, not the size the file claims: an `<img>` of an SVG with no
+ * width and height reports the 300x150 default, and uploading that made a
+ * 630-unit sprite a blur. An SVG that animates (CSS `animation` or SMIL) is
+ * sampled into frames: drawing an `<img>` to a canvas always renders time
+ * zero of its animations, so each frame is the same document with every
+ * delay shifted back by that frame's time (`shiftAnimations`), which puts
+ * the moment we want at time zero. The shader then swaps frames by the
+ * clock. Under prefers-reduced-motion one frame is taken, and a fetch that
+ * fails for any reason (no CORS, blocked by the CSP) falls back to the
+ * plain image path below.
+ *
+ * Cross-origin images need the CORS header to be readable by WebGL; GitHub
+ * raw content sends it.
  */
-export function loadPicture(src: string, maxEdge = 1024): Promise<CrtPicture | null> {
+export async function loadPicture(src: string, maxEdge = 1024): Promise<CrtPicture | null> {
+  if (isSvgUrl(src)) {
+    const svg = await loadSvgPicture(src, maxEdge);
+    if (svg) return svg;
+  }
+  const img = await loadImage(src);
+  if (!img) return null;
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return null;
+  const scale = Math.min(1, maxEdge / Math.max(iw, ih));
+  const frame = rasterise(img, Math.max(1, Math.round(iw * scale)), Math.max(1, Math.round(ih * scale)));
+  if (!frame) return null;
+  return { frames: [frame], width: frame.width, height: frame.height, period: 0, tint: pictureTint(frame) };
+}
+
+function isSvgUrl(src: string): boolean {
+  try {
+    return new URL(src, typeof location === "undefined" ? "http://localhost" : location.href).pathname.toLowerCase().endsWith(".svg");
+  } catch {
+    return false;
+  }
+}
+
+async function loadSvgPicture(src: string, maxEdge: number): Promise<CrtPicture | null> {
+  let text: string;
+  try {
+    const res = await fetch(src, { mode: "cors" });
+    if (!res.ok) return null;
+    text = await res.text();
+  } catch {
+    return null;
+  }
+  const size = svgSize(text);
+  if (!size) return null;
+  const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const period = reduced ? 0 : animationPeriod(text);
+  const n = period > 0 ? frameCount(period) : 1;
+  const edge = n > 1 ? Math.min(maxEdge, ANIMATED_EDGE) : maxEdge;
+  const scale = edge / Math.max(size.width, size.height);
+  const w = Math.max(1, Math.round(size.width * scale));
+  const h = Math.max(1, Math.round(size.height * scale));
+  const frames = await Promise.all(
+    Array.from({ length: n }, (_, i) => rasteriseSvg(n > 1 ? shiftAnimations(text, (i / n) * period) : text, w, h)),
+  );
+  if (frames.some((f) => f === null)) return null;
+  const ready = frames as HTMLCanvasElement[];
+  return { frames: ready, width: w, height: h, period, tint: pictureTint(ready[0]) };
+}
+
+/** How many frames to sample one loop of an animation into. */
+export function frameCount(period: number): number {
+  return Math.min(MAX_FRAMES, Math.max(MIN_FRAMES, Math.round(period * FRAME_RATE)));
+}
+
+/**
+ * The size an SVG draws at: its width/height when it has them in plain
+ * units, else its viewBox. Null when neither is usable.
+ */
+export function svgSize(svg: string): { width: number; height: number } | null {
+  const open = svg.match(/<svg\b[^>]*>/i)?.[0];
+  if (!open) return null;
+  const attr = (name: string) => {
+    const m = open.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+    return m ? m[2].trim() : null;
+  };
+  const num = (v: string | null) => {
+    const m = v?.match(/^(\d*\.?\d+)(px)?$/);
+    return m ? parseFloat(m[1]) : null;
+  };
+  const w = num(attr("width"));
+  const h = num(attr("height"));
+  if (w && h) return { width: w, height: h };
+  const vb = attr("viewBox")?.split(/[\s,]+/).map(Number);
+  if (vb && vb.length === 4 && vb[2] > 0 && vb[3] > 0) return { width: vb[2], height: vb[3] };
+  return null;
+}
+
+const TIME = /(-?\d*\.?\d+)(ms|s)\b/g;
+const seconds = (value: string, unit: string) => (unit === "ms" ? parseFloat(value) / 1000 : parseFloat(value));
+const fmt = (t: number) => `${(Math.round(t * 10000) / 10000).toString()}s`;
+
+/** Split on commas outside parentheses, so `cubic-bezier(a, b, c, d)` stays whole. */
+function splitTop(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < list.length; i++) {
+    const ch = list[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      out.push(list.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(list.slice(start));
+  return out;
+}
+
+const SHORTHAND = /(^|[\s;{])animation(\s*:\s*)([^;}]*)/g;
+const SMIL = /<(animate|animateTransform|animateMotion|set)\b([^>]*)>/g;
+
+/**
+ * How long one loop of everything animating in an SVG takes, in seconds, or
+ * 0 when nothing does. Reads CSS `animation-duration`, the duration in
+ * `animation` shorthands (its first time value), and SMIL `dur`. Several
+ * different lengths loop together at their least common multiple, unless
+ * that is impractically long, when the longest wins.
+ */
+export function animationPeriod(svg: string): number {
+  const durations: number[] = [];
+  const push = (v: string) => {
+    const m = v.trim().match(/^(-?\d*\.?\d+)(ms|s)$/);
+    if (m) durations.push(seconds(m[1], m[2]));
+  };
+  for (const m of svg.matchAll(/animation-duration\s*:\s*([^;}]*)/g)) for (const v of splitTop(m[1])) push(v);
+  for (const m of svg.matchAll(SHORTHAND)) {
+    for (const part of splitTop(m[3])) {
+      const t = part.match(TIME);
+      if (t) push(t[0]);
+    }
+  }
+  for (const m of svg.matchAll(SMIL)) {
+    const dur = m[2].match(/\bdur\s*=\s*(["'])(.*?)\1/);
+    if (dur) push(dur[2]);
+  }
+  const positive = durations.filter((d) => d > 0);
+  if (positive.length === 0) return 0;
+  // Least common multiple in centiseconds.
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const cs = positive.map((d) => Math.max(1, Math.round(d * 100)));
+  const lcm = cs.reduce((a, b) => (a * b) / gcd(a, b));
+  const longest = Math.max(...positive);
+  return lcm / 100 <= 12 ? lcm / 100 : longest;
+}
+
+/**
+ * The same SVG with every animation started `by` seconds earlier, so that
+ * time zero of the document shows the moment `by` seconds in. Delays in
+ * CSS longhands and shorthands (a shorthand with one time value has no delay
+ * yet, so one is added after the duration) and SMIL `begin` offsets are all
+ * moved; event-based SMIL begins are left alone.
+ */
+export function shiftAnimations(svg: string, by: number): string {
+  if (by === 0) return svg;
+  return svg
+    .replace(/animation-delay(\s*:\s*)([^;}]*)/g, (_m, sep: string, list: string) => {
+      const shifted = splitTop(list).map((v) => {
+        const t = v.trim().match(/^(-?\d*\.?\d+)(ms|s)$/);
+        return t ? fmt(seconds(t[1], t[2]) - by) : v.trim();
+      });
+      return `animation-delay${sep}${shifted.join(", ")}`;
+    })
+    .replace(SHORTHAND, (_m, lead: string, sep: string, decl: string) => {
+      const parts = splitTop(decl).map((part) => {
+        let seen = 0;
+        let out = part.replace(TIME, (whole, v: string, unit: string) => {
+          seen++;
+          return seen === 2 ? fmt(seconds(v, unit) - by) : whole;
+        });
+        if (seen === 1) out = out.replace(TIME, (whole) => `${whole} ${fmt(-by)}`);
+        return out;
+      });
+      return `${lead}animation${sep}${parts.join(",")}`;
+    })
+    .replace(SMIL, (_m, tag: string, attrs: string) => {
+      const begin = attrs.match(/\bbegin\s*=\s*(["'])(.*?)\1/);
+      if (!begin) {
+        // A self-closing tag keeps its slash after the new attribute.
+        const body = attrs.replace(/\s*\/\s*$/, "");
+        return `<${tag}${body} begin="${fmt(-by)}"${body === attrs ? "" : "/"}>`;
+      }
+      const t = begin[2].trim().match(/^(-?\d*\.?\d+)(ms|s)?$/);
+      if (!t) return _m;
+      return `<${tag}${attrs.replace(begin[0], `begin="${fmt(seconds(t[1], t[2] ?? "s") - by)}"`)}>`;
+    });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.decoding = "async";
-    img.onload = () => {
-      const iw = img.naturalWidth || img.width;
-      const ih = img.naturalHeight || img.height;
-      if (!iw || !ih) return resolve(null);
-      const scale = Math.min(1, maxEdge / Math.max(iw, ih));
-      const w = Math.max(1, Math.round(iw * scale));
-      const h = Math.max(1, Math.round(ih * scale));
-      const off = document.createElement("canvas");
-      off.width = w;
-      off.height = h;
-      const ctx = off.getContext("2d");
-      if (!ctx) return resolve(null);
-      ctx.imageSmoothingEnabled = false;
-      try {
-        ctx.drawImage(img, 0, 0, w, h);
-        // Reading a pixel back is the cheapest test that the canvas is not
-        // tainted; a tainted upload would throw later, out of our hands.
-        ctx.getImageData(0, 0, 1, 1);
-      } catch {
-        return resolve(null);
-      }
-      resolve({ source: off, width: w, height: h, tint: pictureTint(img) });
-    };
+    img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = src;
   });
+}
+
+function rasteriseSvg(svg: string, w: number, h: number): Promise<HTMLCanvasElement | null> {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  return loadImage(url).then((img) => {
+    URL.revokeObjectURL(url);
+    return img ? rasterise(img, w, h) : null;
+  });
+}
+
+/** Draws an image onto a fresh canvas of the given size; null if the canvas would be tainted. */
+function rasterise(img: HTMLImageElement, w: number, h: number): HTMLCanvasElement | null {
+  const off = document.createElement("canvas");
+  off.width = w;
+  off.height = h;
+  const ctx = off.getContext("2d");
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+  try {
+    ctx.drawImage(img, 0, 0, w, h);
+    // Reading a pixel back is the cheapest test that the canvas is not
+    // tainted; a tainted upload would throw later, out of our hands.
+    ctx.getImageData(0, 0, 1, 1);
+  } catch {
+    return null;
+  }
+  return off;
 }
 
 /**
@@ -416,7 +653,7 @@ export function loadPicture(src: string, maxEdge = 1024): Promise<CrtPicture | n
  * of its pixels weighted by their brightness, so a dark screenshot with a
  * teal sprite lights the room teal rather than the grey of its background.
  */
-function pictureTint(img: HTMLImageElement): [number, number, number] {
+function pictureTint(source: CanvasImageSource): [number, number, number] {
   const n = 24;
   const small = document.createElement("canvas");
   small.width = n;
@@ -424,7 +661,7 @@ function pictureTint(img: HTMLImageElement): [number, number, number] {
   const ctx = small.getContext("2d");
   if (!ctx) return [180, 180, 180];
   try {
-    ctx.drawImage(img, 0, 0, n, n);
+    ctx.drawImage(source, 0, 0, n, n);
     const px = ctx.getImageData(0, 0, n, n).data;
     let r = 0;
     let g = 0;
