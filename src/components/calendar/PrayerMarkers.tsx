@@ -21,7 +21,7 @@ export default async function PrayerMarkers({ date }: { date: string }) {
   }
   if (!prayers) {
     return (
-      <div className="absolute top-2 right-2 text-[10px] text-white/40 font-mono uppercase tracking-widest">
+      <div className="absolute top-2 right-2 text-[10px] text-white/40 uppercase tracking-widest">
         prayer times unavailable
       </div>
     );

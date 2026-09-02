@@ -11,7 +11,7 @@ export default async function CategoriesPage() {
   const categories = await listCategories();
   return (
     <main className="max-w-3xl mx-auto px-4 pt-16 pb-24">
-      <h1 className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-6">categories</h1>
+      <h1 className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-6">categories</h1>
       <CategoriesManager initial={categories} />
     </main>
   );

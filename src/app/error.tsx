@@ -21,7 +21,7 @@ export default function Error({
         <div className="min-h-screen bg-black text-white flex flex-col">
             <Navbar />
             <main className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
-                <p className="font-mono text-4xl tracking-tight sm:text-5xl">
+                <p className="text-4xl tracking-tight sm:text-5xl">
                     something broke.
                 </p>
                 <p className="max-w-md text-sm text-white/60">

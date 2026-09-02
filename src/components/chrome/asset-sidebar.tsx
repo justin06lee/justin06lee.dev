@@ -81,7 +81,7 @@ export function AssetSidebar({
               <p className="truncate text-sm font-medium text-white">
                 {asset.name}
               </p>
-              <p className="mt-1 truncate font-mono text-xs text-white/40">
+              <p className="mt-1 truncate text-xs text-white/40">
                 {asset.markdownPath}
               </p>
               <div className="mt-3 flex gap-2">

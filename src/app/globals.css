@@ -1,11 +1,5 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: "Poppins";
-  src: url("../../public/Poppins-Regular.ttf") format("truetype");
-  font-style: normal;
-}
-
 html {
   overflow: -moz-scrollbars-none;
   overflow-x: hidden;
@@ -43,14 +37,13 @@ body {
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-poppins), sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Poppins", sans-serif;
 }
 
 :root {
@@ -128,14 +121,10 @@ textarea:-webkit-autofill:focus {
 }
 
 /* @chrome:theme */
-@font-face {
-  font-family: "Poppins";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-400-normal.woff2")
-    format("woff2");
-}
+/* Poppins is loaded by next/font/local in app/layout.tsx as --font-poppins;
+   there is no @font-face here on purpose — a second one for the same family
+   won over the local file and, blocked by the CSP, dropped the body to the
+   system sans. */
 
 @theme inline {
   --color-background: var(--background);
@@ -145,7 +134,7 @@ textarea:-webkit-autofill:focus {
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
-  --font-sans: "Poppins", sans-serif;
+  --font-sans: var(--font-poppins), sans-serif;
 }
 
 :root,
@@ -159,8 +148,11 @@ textarea:-webkit-autofill:focus {
   --accent: #ffffff;
 }
 
+/* --font-poppins, not --font-sans: an @theme inline variable is inlined into
+   utilities and never emitted as a custom property, so var(--font-sans) here
+   resolved to nothing and the body fell back to the system sans. */
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-poppins), sans-serif;
 }
 /* @chrome:end */
 

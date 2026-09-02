@@ -378,7 +378,7 @@ export function WallEditor({ pieces, initialLayouts, initialMode }: WallEditorPr
               ))}
             </div>
           </div>
-          <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-widest text-white/30">
+          <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-white/30">
             {design} × {Math.round(canvasDesignHeight)} design units · {(scale * 100).toFixed(0)}% ·
             drag to move · corners keep aspect (shift frees) · arrows nudge
           </p>
@@ -400,7 +400,7 @@ export function WallEditor({ pieces, initialLayouts, initialMode }: WallEditorPr
             />
           ) : (
             <div className="text-sm text-white/40">
-              <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+              <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
                 nothing selected
               </p>
               <p>click a piece to move, resize, or swap its image.</p>
@@ -477,7 +477,7 @@ function Toolbar({
       </Button>
 
       <div className="flex items-center gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-white/40">
+        <span className="text-[10px] uppercase tracking-widest text-white/40">
           gallery shows
         </span>
         <Segmented
@@ -566,7 +566,7 @@ function PieceBox({
             className="pointer-events-none block h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center px-2 text-center font-mono text-[10px] lowercase text-white/40">
+          <div className="flex h-full w-full items-center justify-center px-2 text-center text-[10px] lowercase text-white/40">
             {piece.title}
           </div>
         )}
@@ -587,7 +587,7 @@ function PieceBox({
         ))}
 
       {selected && (
-        <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap font-mono text-[10px] lowercase text-white/70">
+        <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap text-[10px] lowercase text-white/70">
           {piece.title}
         </span>
       )}
@@ -657,19 +657,19 @@ function Inspector({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">piece</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">piece</p>
         <p className="mt-1 truncate text-sm text-white">{piece.title}</p>
       </div>
 
       {/* geometry */}
       <div>
-        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+        <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
           box · design units
         </p>
         <div className="grid grid-cols-2 gap-2">
           {(["x", "y", "w", "h"] as const).map((key) => (
             <label key={key} className="flex items-center gap-2">
-              <span className="w-3 font-mono text-xs text-white/40">{key}</span>
+              <span className="w-3 text-xs text-white/40">{key}</span>
               <Input
                 type="number"
                 value={Math.round(placement[key])}
@@ -691,7 +691,7 @@ function Inspector({
 
       {/* image source */}
       <div>
-        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+        <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
           image
         </p>
         <p className="mb-2 text-xs text-white/40">

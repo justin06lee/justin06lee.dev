@@ -136,7 +136,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
   return (
     <div className="space-y-4 text-sm">
       <section>
-        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">now playing</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">now playing</div>
         {runningActual ? (
           <div className="flex items-center justify-between border border-white/20 bg-white/5 px-3 py-2">
             <div>
@@ -161,7 +161,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
       </section>
 
       <section>
-        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">sleep</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">sleep</div>
         <button
           type="button"
           onClick={toggleSleep}
@@ -173,7 +173,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
       </section>
 
       <section>
-        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">planned today</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">planned today</div>
         {uniqueTimed.length === 0 && (
           <div className="text-xs text-white/40">no timed plans for this day</div>
         )}
@@ -208,7 +208,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
 
       {untimed.length > 0 && (
         <section>
-          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">untimed</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">untimed</div>
           <div className="space-y-1">
             {untimed.map((t) => (
               <button
@@ -237,7 +237,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
       )}
 
       <section>
-        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">activity log</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">activity log</div>
         {todayActuals.length === 0 ? (
           <div className="text-xs text-white/40">nothing logged yet</div>
         ) : (
@@ -256,7 +256,7 @@ export default function PlannedTodaySheet({ date, tasks, actuals, categories, ti
                   disabled={!onEditActual}
                   className="w-full flex items-center gap-2 border border-white/15 hover:bg-white/5 px-3 py-2 text-left disabled:cursor-default disabled:opacity-60"
                 >
-                  <span className="font-mono text-[10px] text-white/50 shrink-0 tabular-nums">{start}–{end}</span>
+                  <span className="text-[10px] text-white/50 shrink-0 tabular-nums">{start}–{end}</span>
                   <span className="flex items-center gap-2 truncate flex-1 min-w-0">
                     {a.category && (
                       <span

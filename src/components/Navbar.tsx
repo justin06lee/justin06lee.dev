@@ -8,7 +8,7 @@ import { Rainbow } from "@/components/chrome/rainbow";
 import type { Pfp } from "@/lib/site-config";
 
 function RainbowCat() {
-    return <Rainbow className="font-mono tracking-tight">^cat^</Rainbow>;
+    return <Rainbow className="tracking-tight">^cat^</Rainbow>;
 }
 
 function NavPfp({ pfp }: { pfp: Pfp }) {

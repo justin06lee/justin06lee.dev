@@ -62,7 +62,7 @@ export function Toc({ headings, label = "on this page", container, className }: 
         maxHeight: "calc(100vh - var(--sticky-header-offset, 80px) - 2rem)",
       }}
     >
-      <p className="mb-3 font-mono text-xs uppercase tracking-widest text-white/40">
+      <p className="mb-3 text-xs uppercase tracking-widest text-white/40">
         {label}
       </p>
       <ul className="space-y-0.5">

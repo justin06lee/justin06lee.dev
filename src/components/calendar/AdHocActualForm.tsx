@@ -77,7 +77,7 @@ export default function AdHocActualForm({ categories, timezone, onStarted, onCan
       className="border border-white/20 p-3 space-y-2"
     >
       <div className="flex items-center justify-between">
-        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
           {mode === "now" ? "new activity" : "backfill activity"}
         </div>
         <Segmented<"now" | "backfill">

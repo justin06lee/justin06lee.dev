@@ -43,7 +43,7 @@ export function Breadcrumb({
     <nav
       aria-label="breadcrumb"
       className={cn(
-        "flex min-w-0 items-center gap-2 text-sm font-mono tabular-nums",
+        "flex min-w-0 items-center gap-2 text-sm tabular-nums",
         className,
       )}
     >

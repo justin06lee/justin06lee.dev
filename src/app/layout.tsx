@@ -1,16 +1,29 @@
 import type { Metadata } from "next";
-// Self-hosted, version-pinned via the `geist` package instead of next/font/google.
-// next/font/google re-fetches the font from Google at build time, so an upstream
-// metrics change silently shifts the monospace glyph grid and breaks every ascii
-// render (donut aspect, art alignment) on any new build. Pinning the font in the
-// lockfile makes builds reproducible. Exposes --font-geist-sans / --font-geist-mono.
-import { GeistSans } from "geist/font/sans";
+// Both faces are self-hosted and pinned, never next/font/google: that re-fetches
+// from Google at build time, so an upstream metrics change would silently shift
+// the monospace glyph grid and break every ascii render (donut aspect, art
+// alignment) on a new build. Poppins is the site's one typeface — every piece
+// of UI text — shipped in the four weights the site uses so bold is a real cut,
+// not a synthesised one. Geist Mono survives only where the glyph grid is the
+// point: ascii art, the donut, and code. Exposes --font-poppins / --font-geist-mono.
+import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { MotionConfig } from "motion/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DialogProvider } from "@/components/Dialog";
 import { Analytics } from "@vercel/analytics/next";
+
+const poppins = localFont({
+	src: [
+		{ path: "../../public/Poppins-Regular.ttf", weight: "400", style: "normal" },
+		{ path: "../../public/Poppins-Medium.ttf", weight: "500", style: "normal" },
+		{ path: "../../public/Poppins-SemiBold.ttf", weight: "600", style: "normal" },
+		{ path: "../../public/Poppins-Bold.ttf", weight: "700", style: "normal" },
+	],
+	variable: "--font-poppins",
+	display: "swap",
+});
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://justin06lee.dev";
 
@@ -70,7 +83,7 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning className="bg-black">
-			<body className={`${GeistSans.variable} ${GeistMono.variable} antialiased bg-black text-white`}>
+			<body className={`${poppins.variable} ${GeistMono.variable} antialiased bg-black text-white`}>
 				<ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
 					<DialogProvider>
 						{/* reducedMotion="user" makes every bespoke motion/react-client

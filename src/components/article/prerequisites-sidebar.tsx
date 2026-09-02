@@ -38,7 +38,7 @@ export async function PrerequisitesSidebar({
         top: "var(--sticky-header-offset)",
       }}
     >
-      <p className="mb-3 text-xs text-white/40 font-mono uppercase tracking-widest">
+      <p className="mb-3 text-xs text-white/40 uppercase tracking-widest">
         prerequisites
       </p>
       <ul className="space-y-2">

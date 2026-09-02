@@ -92,7 +92,7 @@ export function Article({
         {(date || tags.length > 0) && (
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
             {date && (
-              <time className="font-mono tabular-nums text-white/50">{formatDate(date)}</time>
+              <time className="tabular-nums text-white/50">{formatDate(date)}</time>
             )}
             {date && tags.length > 0 && <span className="text-white/20">·</span>}
             {tags.length > 0 && (

@@ -8,7 +8,7 @@
 export default function CalendarError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 px-4 text-center">
-      <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
         something broke
       </div>
       <p className="text-sm text-white/60">the calendar hit an error.</p>

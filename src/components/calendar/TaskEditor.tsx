@@ -171,7 +171,7 @@ export default function TaskEditor({ date, task, categories, onClose }: Props) {
         aria-label={task ? "edit task" : "new task"}
       >
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-white/40">
             {task ? "edit task" : "new task"} · {date}
           </span>
           <button type="button" onClick={onClose} aria-label="close" className="text-white/60 hover:text-white">×</button>

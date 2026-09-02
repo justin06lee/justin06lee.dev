@@ -65,11 +65,11 @@ export default function PlanBlock({ task, onClick, halfLeft = false }: Props) {
     >
       <div className="absolute inset-0 overflow-hidden px-1 py-0.5 flex items-center gap-1 min-w-0">
         {task.isUncertain && (
-          <span aria-hidden="true" className="font-mono text-[10px] opacity-70 shrink-0">
+          <span aria-hidden="true" className="text-[10px] opacity-70 shrink-0">
             ~
           </span>
         )}
-        <span className="font-mono text-[10px] opacity-70 shrink-0">{timeText}</span>
+        <span className="text-[10px] opacity-70 shrink-0">{timeText}</span>
         <span className="truncate">{titleText}</span>
       </div>
       <span

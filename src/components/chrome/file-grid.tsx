@@ -242,7 +242,7 @@ export function FileGrid<T extends FileGridFile>({
   return (
     <div className={cn("relative", className)}>
       {files.length === 0 ? (
-        <div className="border border-dashed border-white/15 px-6 py-10 text-center font-mono text-xs text-white/40">
+        <div className="border border-dashed border-white/15 px-6 py-10 text-center text-xs text-white/40">
           {emptyLabel}
         </div>
       ) : (
@@ -349,7 +349,7 @@ export function FileGrid<T extends FileGridFile>({
                 }}
               >
                 <div className="space-y-2">
-                  <div className="font-mono text-xs uppercase tracking-widest text-white/50">
+                  <div className="text-xs uppercase tracking-widest text-white/50">
                     confirm delete
                   </div>
                   <div id="chrome-file-grid-title" className="text-sm text-white">

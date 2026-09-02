@@ -170,7 +170,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
               aria-labelledby="chrome-dialog-title"
             >
             <div className="space-y-2">
-              <div className="text-xs font-mono uppercase tracking-widest text-white/50">
+              <div className="text-xs uppercase tracking-widest text-white/50">
                 {state.kind === "confirm" ? "confirm" : "notice"}
               </div>
               <div id="chrome-dialog-title" className="text-sm text-white">{state.options.title}</div>

@@ -4,8 +4,7 @@ import type { AppCard } from "@/lib/app-store";
 
 /*
  * The one place on the site that is not the site's own design language. This
- * is the App Store, deliberately: San Francisco through the system font stack,
- * continuous-corner icons, grey pills with blue capitals, hairline separators
+ * is the App Store, deliberately: continuous-corner icons, grey pills with blue capitals, hairline separators
  * inset to the text, 8e8e93 secondary labels on black. Nothing here should
  * pick up the mono uppercase tracking or the 1px square borders used
  * everywhere else, and nothing elsewhere should pick this up.
@@ -13,7 +12,7 @@ import type { AppCard } from "@/lib/app-store";
 
 export const APPSTORE_CSS = `
 .appstore {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-poppins), sans-serif;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
 }
