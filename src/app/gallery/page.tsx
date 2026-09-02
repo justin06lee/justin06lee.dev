@@ -8,7 +8,8 @@ import { MangaPages, type MangaPiece } from "@/components/gallery/MangaPages";
 import { AppStore } from "@/components/gallery/AppStoreList";
 import { CrtMonitor, type CrtChannel } from "@/components/gallery/CrtMonitor";
 import { getItemsByCategory, type SiteGalleryItem } from "@/lib/items";
-import { getProjectWallPieces } from "@/lib/project-images";
+import { getProjectWallPieces, repoUrlFor } from "@/lib/project-images";
+import { getProjectVideo } from "@/lib/project-video";
 import { getAppCard, type AppCard } from "@/lib/app-store";
 import { seedWall } from "@/lib/gallery-wall";
 import { packPages } from "@/lib/manga-layout";
@@ -141,8 +142,9 @@ type Sections = {
 
 /**
  * Sorts the pieces into their hangs and gathers what each hang needs beyond
- * the image: the store wants screenshots and an "open" target. The icon already resolved for the
- * wall is handed through so the store never measures it twice.
+ * the image: the store wants screenshots and an "open" target, the set wants
+ * each channel's clip. The icon already resolved for the wall is handed
+ * through so the store never measures it twice.
  */
 async function buildSections(
     pieces: MangaPiece[],
@@ -171,12 +173,20 @@ async function buildSections(
         }),
     );
 
-    const terminal: CrtChannel[] = grouped.terminal.map((piece) => ({
-        id: piece.id,
-        title: piece.title,
-        src: piece.src,
-        href: piece.href,
-    }));
+    // Each channel's clip comes from its repo, like everything else on the
+    // set; a project without one just shows its picture.
+    const terminal: CrtChannel[] = await Promise.all(
+        grouped.terminal.map(async (piece) => {
+            const item = itemById.get(piece.id);
+            return {
+                id: piece.id,
+                title: piece.title,
+                src: piece.src,
+                href: piece.href,
+                video: item ? await getProjectVideo(repoUrlFor(item)) : null,
+            };
+        }),
+    );
 
     return { panels: grouped.panels, terminal, icons };
 }
