@@ -216,6 +216,10 @@ export type CrtRenderer = {
    * `period` seconds for an animated one. `null` clears the glass.
    */
   setPicture(picture: { frames: TexImageSource[]; width: number; height: number; period: number } | null): void;
+  /** Upload the clip's current frame. It is what the glass shows while `showVideo(true)`. */
+  setVideoFrame(video: HTMLVideoElement): void;
+  /** Which source the glass shows: the clip's last frame, or the picture. */
+  showVideo(on: boolean): void;
   resize(width: number, height: number): void;
   render(frame: CrtFrame): void;
   destroy(): void;
@@ -332,11 +336,20 @@ export function createCrtRenderer(
 
   let hasTex = 0;
   let texAspect = 1;
+  // The clip has its own texture, re-uploaded every frame it changes, so
+  // switching between it and the picture is a bind, not a reload.
+  let videoTex: WebGLTexture | null = null;
+  let videoAspect = 1;
+  let videoHas = 0;
+  let videoOn = false;
   let width = canvas.width;
   let height = canvas.height;
 
+  const showingVideo = () => videoOn && videoHas === 1 && videoTex !== null;
+
   const updateSpan = () => {
-    const [sx, sy] = pictureSpan(texAspect, width / height, geo.stretch, geo.overscan);
+    const aspect = showingVideo() ? videoAspect : texAspect;
+    const [sx, sy] = pictureSpan(aspect, width / height, geo.stretch, geo.overscan);
     gl.uniform2f(u.span, sx, sy);
   };
 
@@ -361,6 +374,30 @@ export function createCrtRenderer(
       }
       updateSpan();
     },
+    setVideoFrame(video) {
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      if (!videoTex) videoTex = makeTexture();
+      if (!videoTex) return;
+      gl.bindTexture(gl.TEXTURE_2D, videoTex);
+      try {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+      } catch {
+        // A clip served without CORS taints the upload; the picture stays.
+        videoHas = 0;
+        updateSpan();
+        return;
+      }
+      const aspect = video.videoWidth / video.videoHeight;
+      if (videoHas === 0 || aspect !== videoAspect) {
+        videoHas = 1;
+        videoAspect = aspect;
+        updateSpan();
+      }
+    },
+    showVideo(on) {
+      videoOn = on;
+      updateSpan();
+    },
     resize(w, h) {
       width = Math.max(1, Math.floor(w));
       height = Math.max(1, Math.floor(h));
@@ -370,21 +407,27 @@ export function createCrtRenderer(
       updateSpan();
     },
     render(frame) {
-      const n = frames.length;
-      const i = n > 1 && period > 0 ? Math.floor((frame.time / period) * n) % n : 0;
-      gl.bindTexture(gl.TEXTURE_2D, frames[i] ?? blank);
+      const video = showingVideo();
+      if (video) {
+        gl.bindTexture(gl.TEXTURE_2D, videoTex);
+      } else {
+        const n = frames.length;
+        const i = n > 1 && period > 0 ? Math.floor((frame.time / period) * n) % n : 0;
+        gl.bindTexture(gl.TEXTURE_2D, frames[i] ?? blank);
+      }
       gl.uniform2f(u.res, width, height);
       gl.uniform1f(u.time, frame.time);
       gl.uniform1f(u.power, frame.power);
       gl.uniform1f(u.snow, frame.snow);
       gl.uniform1f(u.glitch, frame.glitch);
       gl.uniform1f(u.invert, frame.invert);
-      gl.uniform1f(u.hasTex, hasTex);
+      gl.uniform1f(u.hasTex, video ? 1 : hasTex);
       gl.uniform1f(u.motion, frame.motion);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
     destroy() {
       dropFrames();
+      if (videoTex) gl.deleteTexture(videoTex);
       gl.deleteTexture(blank);
       gl.deleteBuffer(quad);
       gl.deleteProgram(program);
@@ -648,18 +691,26 @@ function rasterise(img: HTMLImageElement, w: number, h: number): HTMLCanvasEleme
   return off;
 }
 
-/**
- * What colour a lit screen showing this picture throws on the wall: the mean
- * of its pixels weighted by their brightness, so a dark screenshot with a
- * teal sprite lights the room teal rather than the grey of its background.
- */
+const GREY: [number, number, number] = [180, 180, 180];
+
 function pictureTint(source: CanvasImageSource): [number, number, number] {
+  return sourceTint(source) ?? GREY;
+}
+
+/**
+ * What colour a lit screen showing this throws on the wall: the mean of its
+ * pixels weighted by their brightness, so a dark screenshot with a teal
+ * sprite lights the room teal rather than the grey of its background. Works
+ * on a playing video too (its current frame); null when the source can't be
+ * read, so a caller keeps whatever colour it had.
+ */
+export function sourceTint(source: CanvasImageSource): [number, number, number] | null {
   const n = 24;
   const small = document.createElement("canvas");
   small.width = n;
   small.height = n;
   const ctx = small.getContext("2d");
-  if (!ctx) return [180, 180, 180];
+  if (!ctx) return null;
   try {
     ctx.drawImage(source, 0, 0, n, n);
     const px = ctx.getImageData(0, 0, n, n).data;
@@ -675,9 +726,9 @@ function pictureTint(source: CanvasImageSource): [number, number, number] {
       b += px[i + 2] * w;
       weight += w;
     }
-    if (weight <= 0) return [180, 180, 180];
+    if (weight <= 0) return null;
     return [Math.round(r / weight), Math.round(g / weight), Math.round(b / weight)];
   } catch {
-    return [180, 180, 180];
+    return null;
   }
 }

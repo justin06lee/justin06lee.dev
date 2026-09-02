@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         {
           key: "Content-Security-Policy",
-          value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://vitals.vercel-insights.com https://raw.githubusercontent.com; frame-ancestors 'none';",
+          value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com; media-src 'self' https://raw.githubusercontent.com; connect-src 'self' https://vitals.vercel-insights.com https://raw.githubusercontent.com; frame-ancestors 'none';",
         },
         // `self` must be a bare token; the quoted "self" is invalid
         // structured-field syntax and silently disables geolocation entirely,

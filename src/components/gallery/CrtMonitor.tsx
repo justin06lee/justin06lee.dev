@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Grain } from "@/components/chrome/grain";
-import { createCrtRenderer, loadPicture, type CrtRenderer } from "./crt-gl";
+import { createCrtRenderer, loadPicture, sourceTint, type CrtRenderer } from "./crt-gl";
 import {
   angleForChannel,
   channelAt,
@@ -20,6 +20,8 @@ export type CrtChannel = {
   title: string;
   src: string | null;
   href?: string;
+  /** A clip from the project's repo (`assets/crt.mp4`) that plays on the glass, sound and all. */
+  video?: string | null;
 };
 
 export type CrtMonitorProps = {
@@ -60,6 +62,8 @@ const POWER_MS = 420;
 const BURST_MS = 320;
 const GLITCH_MS = 260;
 const SHAKE_MS = 340;
+/** How often the clip's colour is re-read for the room light. */
+const TINT_MS = 400;
 /** A press that travels less than this is a click, not a turn of the knob. */
 const DRAG_THRESHOLD_DEG = 6;
 /** What static throws on the wall. */
@@ -76,16 +80,27 @@ const ease = (t: number) => 1 - Math.pow(1 - t, 3);
  * Between two detents the set is off-station and shows static; land on one
  * and it shows that project. Nothing is printed on the bezel and nothing is
  * written on the glass: the picture is the label, and the knob's
- * aria-valuetext carries the name for assistive tech. The glass is a link
- * to the project — a real anchor, so middle-click and "open in new tab"
- * behave — and hovering it kicks the set: a burst of colour bars, a shake,
- * then the picture with its colours inverted until the pointer leaves.
- * Power switches the set off with the raster collapse a tube actually did,
- * and clicking the dark glass turns it back on.
+ * aria-valuetext carries the name for assistive tech.
+ *
+ * A channel whose repo carries a clip (`assets/crt.mp4`) plays it, sound
+ * and all, and when the clip ends the knob steps on to the next channel by
+ * itself. Browsers only allow sound after a gesture, so a clip that can't
+ * start with sound starts silent and the first click or key anywhere on the
+ * page turns it up. Hovering the glass kicks the set — a burst of colour
+ * bars and a shake — and then shows the project's picture, as shot, until
+ * the pointer leaves, when the same kick brings the clip back. The clip
+ * never stops for a hover: it keeps playing behind the picture, so its
+ * sound carries on and no time is lost. A channel with no clip has only its
+ * picture, so there the hover shows it with its colours inverted and leaving
+ * simply restores them. The glass is a link to the project — a real anchor,
+ * so middle-click and "open in new tab" behave. Power switches the set off
+ * with the raster collapse a tube actually did (and pauses the clip), and
+ * clicking the dark glass turns it back on.
  *
  * The set lights the room: a glow behind it, light on the bezel's plastic,
- * and a pool on the floor in front, all in the colour the picture throws
- * (measured when it loads). Everything on the glass is drawn by `crt-gl`;
+ * and a pool on the floor in front, all in the colour the glass throws
+ * (measured when the picture loads, and every few hundred milliseconds
+ * from a playing clip). Everything on the glass is drawn by `crt-gl`;
  * this component only owns the cabinet, the controls, and the timeline it
  * hands the shader each frame. The loop runs only while the set is on, on
  * screen, and something is changing, and under prefers-reduced-motion it
@@ -101,9 +116,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const [hover, setHover] = useState(false);
   const [shaking, setShaking] = useState(false);
   const [glOk, setGlOk] = useState(true);
+  const [still, setStill] = useState(false);
   const [tint, setTint] = useState<[number, number, number] | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const [videoTint, setVideoTint] = useState<[number, number, number] | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
   const renderer = useRef<CrtRenderer | null>(null);
@@ -114,6 +133,14 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const timeline = useRef({ powerFrom: 1, powerTo: 1, powerAt: 0, burstAt: -Infinity, glitchAt: -Infinity });
   const snow = useRef(0);
   const invert = useRef(false);
+  const hovering = useRef(false);
+  // What the draw loop does with the clip, mirrored out of React state so a
+  // frame never re-renders: whether to upload it, when it last did, and the
+  // last colour it read off it.
+  const uploadVideo = useRef(false);
+  const lastVideoTime = useRef(-1);
+  const lastTintAt = useRef(0);
+  const unmute = useRef<(() => void) | null>(null);
   const wantsOn = useRef(true);
   const angleRef = useRef(0);
   const drag = useRef<{ pointerId: number; last: number; moved: number } | null>(null);
@@ -126,6 +153,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const channel = channelAt(angle, count);
   const current = channels[channel] ?? channels[0];
   const snowing = staticAmount(angle, count) > 0.5;
+  // A clip plays only where motion is allowed; under reduced motion the
+  // channel is its picture. `hasClip` decides what a hover does, `showingVideo`
+  // what the glass shows right now.
+  const hasClip = Boolean(current?.video) && !still;
+  const showingVideo = hasClip && videoReady && !hover;
+  const hasClipRef = useRef(hasClip);
+  hasClipRef.current = hasClip;
 
   const setAngle = useCallback((next: number) => {
     angleRef.current = next;
@@ -145,6 +179,20 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     // The bars hold at full for most of the glitch, then drop out fast.
     const g = (now - t.glitchAt) / GLITCH_MS;
     const glitch = reduced.current || g >= 1 ? 0 : g < 0.7 ? 1 : 1 - (g - 0.7) / 0.3;
+    // The clip: upload a frame when it has a new one, and every so often
+    // read its colour for the room.
+    const v = videoRef.current;
+    if (uploadVideo.current && v && v.readyState >= 2) {
+      if (v.currentTime !== lastVideoTime.current) {
+        lastVideoTime.current = v.currentTime;
+        r.setVideoFrame(v);
+      }
+      if (now - lastTintAt.current > TINT_MS) {
+        lastTintAt.current = now;
+        const colour = sourceTint(v);
+        if (colour) setVideoTint((prev) => (prev && prev.every((c, i) => c === colour[i]) ? prev : colour));
+      }
+    }
     r.render({
       time: (now - start.current) / 1000,
       power,
@@ -181,8 +229,10 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
 
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     reduced.current = media.matches;
+    setStill(media.matches);
     const onMedia = () => {
       reduced.current = media.matches;
+      setStill(media.matches);
       kick();
     };
     media.addEventListener("change", onMedia);
@@ -210,6 +260,11 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       if (raf.current !== null) cancelAnimationFrame(raf.current);
       raf.current = null;
       if (shakeTimer.current !== null) window.clearTimeout(shakeTimer.current);
+      if (unmute.current) {
+        document.removeEventListener("pointerdown", unmute.current, { capture: true });
+        document.removeEventListener("keydown", unmute.current, { capture: true });
+        unmute.current = null;
+      }
       r.destroy();
       renderer.current = null;
     };
@@ -249,6 +304,64 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     kick();
   }, [angle, count, kick]);
 
+  /**
+   * Start the clip with sound. Browsers refuse that until the page has had a
+   * gesture, so on refusal it starts silent and the first click or key
+   * anywhere turns the sound on — once armed, that covers every later clip
+   * too (the handler reads the current element, not the one it was armed
+   * for).
+   */
+  const playVideo = useCallback((v: HTMLVideoElement) => {
+    v.muted = false;
+    v.play().catch(() => {
+      v.muted = true;
+      v.play().catch(() => {});
+      if (unmute.current) return;
+      const handler = () => {
+        const el = videoRef.current;
+        if (el) el.muted = false;
+      };
+      unmute.current = handler;
+      document.addEventListener("pointerdown", handler, { once: true, capture: true });
+      document.addEventListener("keydown", handler, { once: true, capture: true });
+    });
+  }, []);
+
+  // The channel's clip. It plays whenever the set is on, hovered or not: the
+  // picture over it during a hover is another source on the same glass, not
+  // a pause, so the sound carries on and no time is lost.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setVideoReady(false);
+    setVideoTint(null);
+    lastVideoTime.current = -1;
+    const src = current?.video;
+    if (!src || still) {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+      return;
+    }
+    v.src = src;
+    v.load();
+    if (wantsOn.current) playVideo(v);
+  }, [current?.video, still, playVideo]);
+
+  // Tell the shader which source to draw, and the loop whether to feed it.
+  useEffect(() => {
+    uploadVideo.current = showingVideo;
+    renderer.current?.showVideo(showingVideo);
+    kick();
+  }, [showingVideo, kick]);
+
+  const onVideoReady = () => {
+    setVideoReady(true);
+    // The clip comes up through a little static, as a station does.
+    timeline.current.burstAt = performance.now();
+    kick();
+  };
+
   /* ── controls ─────────────────────────────────────────────────────────── */
 
   /** Turn the knob to an angle with the set's usual burst of static. */
@@ -280,9 +393,15 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       t.powerTo = next ? 1 : 0;
       t.powerAt = now;
       setOn(next);
+      // Off is off: the clip waits.
+      const v = videoRef.current;
+      if (v && v.getAttribute("src")) {
+        if (next) playVideo(v);
+        else v.pause();
+      }
       kick();
     },
-    [kick],
+    [kick, playVideo],
   );
 
   const onKnobPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -341,30 +460,49 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
 
   // Hovering the glass kicks the set. Touch has no hover — a tap is the
   // click, and a glitch before every open would be in the way.
-  const onGlassEnter = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse" || !on) return;
-    invert.current = true;
+  const kickSet = () => {
     timeline.current.glitchAt = performance.now();
-    setHover(true);
     setShaking(true);
     if (shakeTimer.current !== null) window.clearTimeout(shakeTimer.current);
     shakeTimer.current = window.setTimeout(() => setShaking(false), SHAKE_MS);
     kick();
   };
 
+  const onGlassEnter = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse" || !on) return;
+    hovering.current = true;
+    // A channel with a clip shows its picture as shot; one without has only
+    // its picture, so that one inverts.
+    invert.current = !hasClipRef.current;
+    setHover(true);
+    kickSet();
+  };
+
   const onGlassLeave = () => {
-    if (!invert.current) return;
-    // Straight back to the picture: no bars, no shake, just the colours.
+    if (!hovering.current) return;
+    hovering.current = false;
     invert.current = false;
-    timeline.current.glitchAt = -Infinity;
     setHover(false);
-    kick();
+    if (hasClipRef.current) {
+      // Back to the clip through the same kick it left by.
+      kickSet();
+    } else {
+      // Straight back to the picture: no bars, no shake, just the colours.
+      timeline.current.glitchAt = -Infinity;
+      kick();
+    }
   };
 
   if (count === 0) return null;
 
   const screenLabel = on ? `open ${current.title}` : "switch on";
-  const glow = lightColour(snowing || !tint ? STATIC_TINT : hover ? invertTint(tint) : tint);
+  const glow = lightColour(
+    snowing ? STATIC_TINT
+    : showingVideo && videoTint ? videoTint
+    : !tint ? STATIC_TINT
+    : hover && !hasClip ? invertTint(tint)
+    : tint,
+  );
   const stageStyle = { "--crt-glow": glow, "--crt-lit": on ? 1 : 0 } as CSSProperties;
 
   return (
@@ -383,10 +521,30 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
         <div className={cn("crt-set relative z-[1] w-full @container", shaking && "crt-shake")} style={{ aspectRatio: BEZEL_ASPECT }}>
           {/* The glass: a canvas behind the hole in the bezel. */}
           <div ref={screenRef} className="absolute overflow-hidden bg-black" style={SCREEN}>
+            {/* The clip. The shader reads it as a texture, so with WebGL it is
+                kept out of sight but rendered (display:none stops some browsers
+                decoding it); without WebGL it is the fallback's own picture
+                layer, under the fallback's grain. */}
+            <video
+              ref={videoRef}
+              aria-hidden
+              playsInline
+              preload="auto"
+              crossOrigin="anonymous"
+              onLoadedData={onVideoReady}
+              onEnded={() => step(1)}
+              onError={() => setVideoReady(false)}
+              className={cn(
+                "pointer-events-none absolute",
+                glOk
+                  ? "left-0 top-0 h-px w-px opacity-0"
+                  : cn("inset-0 h-full w-full object-cover transition-opacity duration-300", showingVideo && on ? "opacity-100" : "opacity-0"),
+              )}
+            />
             {glOk ? (
               <canvas ref={canvasRef} aria-hidden className="absolute inset-0 h-full w-full" />
             ) : (
-              <Fallback channel={current} on={on} snowing={snowing} inverted={hover} />
+              <Fallback channel={current} on={on} snowing={snowing} inverted={hover && !hasClip} imageHidden={showingVideo} />
             )}
           </div>
 
@@ -496,14 +654,20 @@ function Fallback({
   on,
   snowing,
   inverted,
+  imageHidden,
 }: {
   channel: CrtChannel;
   on: boolean;
   snowing: boolean;
   inverted: boolean;
+  /** The clip is showing underneath, so the picture steps aside. */
+  imageHidden: boolean;
 }) {
   return (
-    <div className={cn("crt-fallback absolute inset-0 transition-opacity duration-300", !on && "opacity-0")}>
+    <div
+      className={cn("crt-fallback absolute inset-0 transition-opacity duration-300", !on && "opacity-0")}
+      style={imageHidden ? { background: "transparent" } : undefined}
+    >
       {channel.src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -511,7 +675,11 @@ function Fallback({
           alt=""
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ imageRendering: "pixelated", filter: inverted ? "invert(1)" : undefined, opacity: snowing ? 0 : 1 }}
+          style={{
+            imageRendering: "pixelated",
+            filter: inverted ? "invert(1)" : undefined,
+            opacity: snowing || imageHidden ? 0 : 1,
+          }}
         />
       ) : (
         <span className="absolute inset-0 flex items-center justify-center text-xs lowercase text-white/40">
@@ -600,13 +768,6 @@ const CSS = `
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 42%);
   mask-image: linear-gradient(to bottom, transparent, #000 42%);
   animation: crt-breathe 5s ease-in-out infinite 1.3s;
-}
-/* The set stands on the floor: a contact shadow under its foot. */
-.crt-floor::before {
-  content: "";
-  position: absolute;
-  left: 32%; right: 32%; top: 40%; height: 5%;
-  background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 45%, transparent 70%);
 }
 .crt-bezel-light {
   opacity: calc(var(--crt-lit) * 0.5);
