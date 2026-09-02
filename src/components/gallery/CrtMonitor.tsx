@@ -54,20 +54,18 @@ const SCREEN = { left: "12.5%", top: "15%", width: "77%", height: "69.5%" };
 const KNOB = { left: "19.6%", top: "91.8%" };
 const POWER = { left: "82.1%", top: "91.8%" };
 
-// Switch-on / switch-off, the static burst on a channel change, the hover
-// glitch and the shake that goes with it, and the on-screen display, in ms.
+// Switch-on / switch-off, the static burst on a channel change, and the
+// hover glitch and the shake that goes with it, in ms.
 const POWER_MS = 420;
 const BURST_MS = 320;
 const GLITCH_MS = 260;
 const SHAKE_MS = 340;
-const OSD_MS = 2400;
 /** A press that travels less than this is a click, not a turn of the knob. */
 const DRAG_THRESHOLD_DEG = 6;
 /** What static throws on the wall. */
 const STATIC_TINT: [number, number, number] = [200, 200, 200];
 
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-const pad = (n: number) => String(n + 1).padStart(2, "0");
 
 /**
  * The terminal pieces, playing on one small old monitor in a dark room.
@@ -76,13 +74,14 @@ const pad = (n: number) => String(n + 1).padStart(2, "0");
  * it to step on one, or use the arrow keys once it has focus. It turns all
  * the way round, so the last channel clicks straight on to the first.
  * Between two detents the set is off-station and shows static; land on one
- * and it shows that project, named for a moment by the on-screen display
- * (nothing is printed on the bezel). The glass is a link to the project — a
- * real anchor, so middle-click and "open in new tab" behave — and hovering
- * it kicks the set: a burst of colour bars, a shake, then the picture with
- * its colours inverted until the pointer leaves. Power switches the set off
- * with the raster collapse a tube actually did, and clicking the dark glass
- * turns it back on.
+ * and it shows that project. Nothing is printed on the bezel and nothing is
+ * written on the glass: the picture is the label, and the knob's
+ * aria-valuetext carries the name for assistive tech. The glass is a link
+ * to the project — a real anchor, so middle-click and "open in new tab"
+ * behave — and hovering it kicks the set: a burst of colour bars, a shake,
+ * then the picture with its colours inverted until the pointer leaves.
+ * Power switches the set off with the raster collapse a tube actually did,
+ * and clicking the dark glass turns it back on.
  *
  * The set lights the room: a glow behind it, light on the bezel's plastic,
  * and a pool on the floor in front, all in the colour the picture throws
@@ -99,7 +98,6 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const [angle, setAngleState] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [on, setOn] = useState(true);
-  const [lit, setLit] = useState(0);
   const [hover, setHover] = useState(false);
   const [shaking, setShaking] = useState(false);
   const [glOk, setGlOk] = useState(true);
@@ -282,7 +280,6 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       t.powerTo = next ? 1 : 0;
       t.powerAt = now;
       setOn(next);
-      if (next) setLit((n) => n + 1);
       kick();
     },
     [kick],
@@ -390,16 +387,6 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
               <canvas ref={canvasRef} aria-hidden className="absolute inset-0 h-full w-full" />
             ) : (
               <Fallback channel={current} on={on} snowing={snowing} inverted={hover} />
-            )}
-            {on && !snowing && (
-              <div
-                key={`${channel}:${lit}`}
-                aria-hidden
-                className="crt-osd pointer-events-none absolute left-[9%] top-[8%] text-[max(9px,1.6cqw)] uppercase tracking-[0.3em] text-white/85"
-              >
-                ch {pad(channel)}
-                <span className="ml-[1em] normal-case tracking-[0.12em] text-white/60">{current.title}</span>
-              </div>
             )}
           </div>
 
@@ -547,12 +534,6 @@ function invertTint([r, g, b]: [number, number, number]): [number, number, numbe
 }
 
 const CSS = `
-@keyframes crt-osd {
-  0% { opacity: 0; }
-  8% { opacity: 1; }
-  75% { opacity: 1; }
-  100% { opacity: 0; }
-}
 @keyframes crt-shake {
   0% { transform: translate(0, 0); }
   15% { transform: translate(-1.5px, 1px) rotate(-0.15deg); }
@@ -574,10 +555,6 @@ const CSS = `
   52% { filter: brightness(0.97); }
   71% { filter: brightness(1.03); }
   100% { filter: brightness(1); }
-}
-.crt-osd {
-  animation: crt-osd ${OSD_MS}ms steps(12) forwards;
-  text-shadow: 0 0 6px rgba(255,255,255,0.7);
 }
 .crt-glass { cursor: pointer; }
 .crt-glass:focus-visible { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.6); }
@@ -719,7 +696,6 @@ const CSS = `
     #050606;
 }
 @media (prefers-reduced-motion: reduce) {
-  .crt-osd { animation-duration: 0.01ms; opacity: 1; }
   .crt-shake, .crt-room, .crt-floor, .crt-stage--kick .crt-room, .crt-stage--kick .crt-floor { animation: none; }
 }
 `;
