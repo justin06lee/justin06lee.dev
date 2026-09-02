@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  angleForChannel,
-  channelAt,
-  deltaAngle,
-  detentStep,
-  nearestDetent,
-  pointerAngle,
-  snapAngle,
-  staticAmount,
-} from "./crt-dial";
+import { MAX_TURN_DEG, angleForChannel, channelAt, deltaAngle, detentStep, nearestDetent, pointerAngle, pointerTurn, snapAngle, staticAmount, wheelDetents } from "./crt-dial";
 
 describe("detents", () => {
   it("spreads the channels over the whole circle", () => {
@@ -102,5 +93,42 @@ describe("deltaAngle", () => {
     expect(deltaAngle(170, -170)).toBe(20);
     expect(deltaAngle(-170, 170)).toBe(-20);
     expect(deltaAngle(10, 30)).toBe(20);
+  });
+});
+
+describe("pointerTurn", () => {
+  it("follows the pointer round the knob", () => {
+    // From 12 o'clock to 3 o'clock, radius 50, pointer on the rim.
+    expect(pointerTurn(0, 100, 100, 50, 150, 100)).toEqual({ last: 90, delta: 90 > MAX_TURN_DEG ? MAX_TURN_DEG : 90 });
+    expect(pointerTurn(80, 100, 100, 50, 150, 100).delta).toBeCloseTo(10);
+  });
+
+  it("does not turn inside the dead zone, but keeps its bearings", () => {
+    const r = pointerTurn(0, 100, 100, 50, 100 + 5, 100 - 5);
+    expect(r.delta).toBe(0);
+    expect(r.last).toBeCloseTo(45);
+  });
+
+  it("clamps a jump across the middle", () => {
+    expect(pointerTurn(0, 100, 100, 50, 100, 150).delta).toBe(MAX_TURN_DEG);
+    expect(pointerTurn(0, 100, 100, 50, 100 - 1, 150).delta).toBe(-MAX_TURN_DEG);
+  });
+
+  it("crosses the seam behind the knob without a full turn", () => {
+    // From 170° to -170° is 20° clockwise, not 340° the other way.
+    const at = pointerTurn(170, 0, 0, 10, Math.sin((-170 * Math.PI) / 180) * 10, -Math.cos((-170 * Math.PI) / 180) * 10);
+    expect(at.delta).toBeCloseTo(20);
+  });
+});
+
+describe("wheelDetents", () => {
+  it("adds slow travel up to a step", () => {
+    const a = wheelDetents(0, 50);
+    expect(a).toEqual({ carry: 50, steps: 0 });
+    expect(wheelDetents(a.carry, 50)).toEqual({ carry: 20, steps: 1 });
+  });
+
+  it("steps the other way for the other direction, and several at once", () => {
+    expect(wheelDetents(0, -170)).toEqual({ carry: -10, steps: -2 });
   });
 });
