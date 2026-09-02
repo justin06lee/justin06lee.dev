@@ -6,6 +6,7 @@ import { parsePlacement, type Placement } from "./gallery-wall";
 // optional collection, and the hand-arranged wall needs each piece's stored
 // box + image override, so the query carries all of it alongside.
 export type SiteGalleryItem = GalleryItem & {
+  category: string;
   collection: string | null;
   wallDesktop: Placement | null;
   wallMobile: Placement | null;
@@ -18,9 +19,20 @@ export async function getItemsByCategory(category: string): Promise<SiteGalleryI
     sql: "SELECT * FROM items WHERE category = ? ORDER BY pinned DESC, sort_order ASC, year DESC",
     args: [category],
   });
+  return (result.rows as unknown as DbItem[]).map(toSiteItem);
+}
 
-  return (result.rows as unknown as DbItem[]).map((row) => ({
+export async function getItemById(id: string): Promise<SiteGalleryItem | null> {
+  await initDb();
+  const result = await db.execute({ sql: "SELECT * FROM items WHERE id = ?", args: [id] });
+  const row = result.rows[0] as unknown as DbItem | undefined;
+  return row ? toSiteItem(row) : null;
+}
+
+function toSiteItem(row: DbItem): SiteGalleryItem {
+  return {
     id: row.id,
+    category: row.category,
     title: row.title,
     description: row.description,
     year: row.year,
@@ -34,5 +46,5 @@ export async function getItemsByCategory(category: string): Promise<SiteGalleryI
     wallDesktop: parsePlacement(row.wall_desktop),
     wallMobile: parsePlacement(row.wall_mobile),
     wallImage: row.wall_image ?? null,
-  }));
+  };
 }

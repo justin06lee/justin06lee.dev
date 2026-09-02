@@ -18,8 +18,11 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
-      // Vendored Claude skills tree — not application source, don't lint it.
+      // Vendored agent skill trees — not application source, don't lint them.
       ".claude/**",
+      ".agents/**",
+      ".gemini/**",
+      ".opencode/**",
     ],
   },
   {

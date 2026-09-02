@@ -3,11 +3,13 @@ import Navbar from "@/components/Navbar";
 import { ItemGallery } from "@/components/ItemGallery";
 import { GalleryTabs, type GalleryTab } from "@/components/GalleryTabs";
 import { ProjectWall, type WallPiece } from "@/components/gallery/ProjectWall";
+import Link from "next/link";
 import { MangaPages, type MangaPiece } from "@/components/gallery/MangaPages";
-import { IconGrid } from "@/components/gallery/IconGrid";
-import { TerminalStrip } from "@/components/gallery/TerminalStrip";
-import { getItemsByCategory } from "@/lib/items";
+import { AppStore } from "@/components/gallery/AppStoreList";
+import { CrtMonitor, type CrtChannel } from "@/components/gallery/CrtMonitor";
+import { getItemsByCategory, type SiteGalleryItem } from "@/lib/items";
 import { getProjectWallPieces } from "@/lib/project-images";
+import { getAppCard, type AppCard } from "@/lib/app-store";
 import { seedWall } from "@/lib/gallery-wall";
 import { packPages } from "@/lib/manga-layout";
 import { GALLERY_THEMES, THEME_META, classifyTheme, type GalleryTheme } from "@/lib/gallery-themes";
@@ -84,7 +86,7 @@ export default async function GalleryPage({
     const manual = config.wallMode === "manual" || (wantsPreview && (await isAdminServer()));
 
     const resolved = await getProjectWallPieces(items);
-    const collectionById = new Map(items.map((i) => [i.id, i.collection]));
+    const itemById = new Map(items.map((i) => [i.id, i]));
 
     const pieces: MangaPiece[] = resolved.map((piece) => ({
         id: piece.id,
@@ -111,8 +113,7 @@ export default async function GalleryPage({
                     <ProjectWall pieces={buildWallPieces(resolved, items)} ariaLabel="projects" />
                 ) : (
                     <ThemedSections
-                        pieces={pieces}
-                        collectionById={collectionById}
+                        sections={await buildSections(pieces, itemById)}
                         seed={resolveSeed(firstParam(rawSeed))}
                     />
                 )}
@@ -132,51 +133,93 @@ function resolveSeed(raw: string | undefined): number {
     return Math.floor(Math.random() * 2 ** 31);
 }
 
-function ThemedSections({
-    pieces,
-    collectionById,
-    seed,
-}: {
-    pieces: MangaPiece[];
-    collectionById: Map<string, string | null>;
-    seed: number;
-}) {
+type Sections = {
+    panels: MangaPiece[];
+    terminal: CrtChannel[];
+    icons: AppCard[];
+};
+
+/**
+ * Sorts the pieces into their hangs and gathers what each hang needs beyond
+ * the image: the monitor wants the description for its plate, and the store
+ * wants screenshots and an "open" target. The icon already resolved for the
+ * wall is handed through so the store never measures it twice.
+ */
+async function buildSections(
+    pieces: MangaPiece[],
+    itemById: Map<string, SiteGalleryItem>,
+): Promise<Sections> {
     const grouped: Record<GalleryTheme, MangaPiece[]> = { panels: [], terminal: [], icons: [] };
     for (const piece of pieces) {
-        const theme = classifyTheme({
-            id: piece.id,
-            collection: collectionById.get(piece.id),
-            src: piece.src,
-            width: piece.width,
-            height: piece.height,
-        });
-        grouped[theme].push(piece);
+        const item = itemById.get(piece.id);
+        grouped[
+            classifyTheme({
+                id: piece.id,
+                collection: item?.collection,
+                src: piece.src,
+                width: piece.width,
+                height: piece.height,
+            })
+        ].push(piece);
     }
 
+    const icons = await Promise.all(
+        grouped.icons.flatMap((piece) => {
+            const item = itemById.get(piece.id);
+            if (!item) return [];
+            const icon = piece.src ? { src: piece.src, width: piece.width, height: piece.height } : null;
+            return [getAppCard(item, icon)];
+        }),
+    );
+
+    const terminal: CrtChannel[] = grouped.terminal.map((piece) => ({
+        id: piece.id,
+        title: piece.title,
+        description: itemById.get(piece.id)?.description,
+        src: piece.src,
+        href: piece.href,
+    }));
+
+    return { panels: grouped.panels, terminal, icons };
+}
+
+function ThemedSections({ sections, seed }: { sections: Sections; seed: number }) {
     // Offset the seed per section so two sections of the same size don't deal
     // themselves into identical row rhythms.
-    const sections = GALLERY_THEMES.map((theme, index) => ({
+    const visible = GALLERY_THEMES.map((theme, index) => ({
         theme,
-        items: grouped[theme],
+        count: sections[theme].length,
         seed: seed + index * 7919,
-    })).filter((s) => s.items.length > 0);
+    })).filter((s) => s.count > 0);
 
     return (
         <div className="flex flex-col gap-16">
-            {sections.map(({ theme, items, seed: sectionSeed }) => (
+            {visible.map(({ theme, seed: sectionSeed }) => (
                 <section key={theme}>
-                    <div className="mb-4 flex items-baseline gap-3">
-                        <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/70">
-                            {THEME_META[theme].title}
-                        </h2>
-                        <p className="truncate text-xs text-white/35">{THEME_META[theme].subtitle}</p>
-                    </div>
+                    {/* The store brings its own large title; every other hang
+                        gets the site's mono section label. */}
+                    {theme !== "icons" && (
+                        <div className="mb-4 flex items-baseline gap-3">
+                            <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/70">
+                                {THEME_META[theme].title}
+                            </h2>
+                            <p className="truncate text-xs text-white/35">{THEME_META[theme].subtitle}</p>
+                        </div>
+                    )}
 
                     {theme === "panels" && (
-                        <MangaPages pages={packPages(items, sectionSeed)} ariaLabel="panels" />
+                        <MangaPages pages={packPages(sections.panels, sectionSeed)} ariaLabel="panels" />
                     )}
-                    {theme === "terminal" && <TerminalStrip items={items} ariaLabel="terminal" />}
-                    {theme === "icons" && <IconGrid items={items} ariaLabel="apps" />}
+                    {theme === "terminal" && <CrtMonitor channels={sections.terminal} ariaLabel="terminal" />}
+                    {theme === "icons" && (
+                        <AppStore
+                            apps={sections.icons}
+                            linkComponent={Link}
+                            ariaLabel="apps"
+                            title="Apps"
+                            subtitle={THEME_META.icons.subtitle}
+                        />
+                    )}
                 </section>
             ))}
         </div>

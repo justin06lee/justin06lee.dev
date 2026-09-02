@@ -40,6 +40,7 @@ src/
     opengraph-image.tsx, twitter-image.tsx, robots.ts, sitemap.ts, manifest.ts
 
     gallery/                      # Tabbed grid (projects | hobbies | in-development)
+    apps/[slug]/                  # App-store style product page per project
     articles/                     # GitHub-backed markdown articles
       [slug]/                     # Per-article view + parsed prerequisites
     cat/                          # Sprite-sheet petting + global pat counter
@@ -67,6 +68,8 @@ src/
     ItemGallery.tsx, GalleryTabs.tsx
     ArticleList.tsx, article/{markdown-renderer,table-of-contents,...}.tsx
     Dialog.tsx, Select.tsx, theme-provider.tsx
+    gallery/                      # MangaPages, CrtMonitor (+crt-gl, crt-dial),
+                                  # AppStoreList, ProjectWall, WallEditor
     calendar/                     # DayView, MonthView, YearView, CalendarShell,
                                   # PlanBlock, ActualBlock, ActualsEditor,
                                   # TaskEditor, NowPlayingBar, PlannedTodaySheet,
@@ -91,8 +94,11 @@ src/
     operator-content.ts           # admin: write articles/images back to GitHub
     article-draft.ts, article-sections.ts  # markdown parsing/serializing
     theme-images.ts
+    app-store.ts, app-store-parse.ts  # store listing: README screenshots, releases, repo record
+    project-images.ts, project-images-parse.ts  # hero image + site-icon resolution
 
 public/
+  crt/monitor.webp                # cut-out Macintosh Color Display bezel (transparent glass)
   ascii/ascii{1,3,4,9}.txt        # responsive ASCII swap on small screens
   cat-sprite.jpg                  # 12x10 cat sprite sheet
   Poppins-Regular.ttf             # body font
@@ -100,7 +106,7 @@ public/
 
 ## Projects gallery
 `/gallery?tab=projects` renders one of two hangs, chosen by the `wallMode` site-config key:
-- **`auto`** (default) — projects are split into **themes** and each theme gets its own layout: `panels` → composed manga pages, `terminal` → pixel-art cards, `icons` → a uniform grid.
+- **`auto`** (default) — projects are split into **themes** and each theme gets its own layout: `panels` → composed manga pages, `terminal` → one photographed CRT monitor (`CrtMonitor`), `icons` → an App Store clone (`AppStore`) with a product page per app at `/apps/[id]`.
 - **`manual`** — the hand-arranged wall from `/me/wall` (`ProjectWall` + `lib/gallery-wall.ts`).
 
 ### Themes (`lib/gallery-themes.ts`)
@@ -118,8 +124,26 @@ The material is already-composed manga panels — someone framed each one — so
 - Pages keep the tight 8px seam inside and a 48px black gutter between. Page splitting happens before layout, so it can never strand a single panel.
 - **A fresh seed per request is the point.** The gallery re-deals every load, so a newly added project lands anywhere rather than always at the bottom. `?seed=N` pins one for comparison.
 
+### CRT monitor (`components/gallery/CrtMonitor.tsx`, `crt-gl.ts`, `crt-dial.ts`)
+The terminal pieces play on a photograph of an Apple Macintosh Color Display (`public/crt/monitor.webp`, a cut-out with a transparent hole where the glass was). The glass is a WebGL canvas **behind** the photo: the photo's alpha does the masking, so the shader never knows the hole's shape. Positions in the component are shares of the photo, measured off its alpha channel — the hole spans x 14.9–87.5%, y 17.2–82.4%; the controls sit on the bezel's bottom band between the green apple and the LED slot; the LED is lit in the slot the photo already has. Re-cutting the photo means re-measuring those numbers.
+- **The shader (`crt-gl.ts`) is the effect, not CSS.** Barrel curvature, a keystone (the set was shot slightly from above, so the raster is wider at the top), aperture grille, scanlines, rolling bar, coarse and fine grain, mains flicker, chromatic fringing, and two faults: the vertical hold slipping so the picture rolls with its blanking bar every ~11s, and horizontal sync tearing a band sideways every ~5s. The picture is kept to 78% of the canvas and sat slightly high, where the hole has the most room (`CrtGeometry`).
+- **The glass is a real `<a>`** to the project (middle-click, open-in-new-tab work); when the set is off it becomes a button that switches it on.
+- **The knob is a `role="slider"`**: drag to turn, click to step, arrow keys once focused. The printed channel names beside it are also buttons. Detent geometry lives in `crt-dial.ts` and is pure — two channels read as a switch (60° apart), more spread across a 270° sweep. Controls scale with container-query units (`cqw`) with px floors for phones.
+- **The render loop runs only while the set is on, on screen, and something is changing.** Under `prefers-reduced-motion` it draws one still frame per state (no roll, tear, flicker, or collapse). No WebGL → a flat `<img>` with CSS scanlines and animated grain.
+- Pictures are rasterised through a 2D canvas before upload (`loadPicture`) because an SVG sprite uploads at its tiny intrinsic size otherwise. Cross-origin images need CORS; GitHub raw sends it.
+
+### App store (`lib/app-store.ts`, `components/gallery/AppStoreList.tsx`, `app/apps/[slug]`)
+**This is the one surface that is deliberately not in the site's design language.** It is styled as the App Store — system font stack (San Francisco where available), continuous-corner squircle icons via a CSS mask, grey pills with blue capitals, hairlines inset to the text, `#8e8e93` secondary text, `#0a84ff` links, Title Case section names. Nothing here should pick up the mono uppercase labels or 1px square borders, and nothing elsewhere should pick this up; the store's CSS is scoped under `.appstore`.
+
+Everything the store shows past the item row is **read from the project's own repo** — screenshots are the README's non-icon images, "What's New" is GitHub releases (falling back to version tags without notes), the information block is the repository record. Nothing is stored twice: add a screenshot to the README or cut a release and the page follows.
+- **One button, one word: OPEN.** It opens the site when the project has one and the source when it doesn't (`openTarget`); it never says which. Both are real anchors; the row's own link to `/apps/[id]` is a stretched overlay behind the text so nothing nests.
+- A project whose only URL is a deployed site (no repo) gets its icon from the site's `apple-touch-icon` / largest `rel=icon` (`getSiteIcon`) — this is how `thehifzproject.com` stopped being a placard.
+- `/apps/[id]` works for any project item, not just icon-theme ones; the store list only links the icon ones. Pure parsing (`readmeIntro`, `pickScreenshots`, `siteIconCandidates`, `platformsFor`) is in `app-store-parse.ts` and tested.
+
 ### Hero images (`lib/project-images.ts`)
 `probeImage` keeps `exists` separate from `dims` on purpose: a **404 means try the next README candidate**, while a 200 whose bytes can't be measured is still a good image and is kept at a default aspect. Collapsing the two is what put broken frames on the wall — a renamed asset left the dead URL rendering anyway. `heroImageCandidates` returns *all* non-badge refs so that fall-through has somewhere to go.
+
+`probeImage` fetches a **32KB byte range**, not the file: every format keeps its size in the header, and a whole-file read of a large screenshot inside the render overflowed the dev server's response stream (React serialises awaited values into its dev-only debug payload) and truncated the gallery on every cold start. A server that ignores `Range` answers 200 with the whole body and is measured the same way.
 
 The measured dimensions are what *size the panel*, so a stale measurement mis-frames the art. Two things guard that: lookups are memoised with React `cache()` (per render pass) and never a module-level Map — a Map outlives the request and pinned `toji` at a dead 599x181 while GitHub served 1234x393, cropping 5% of it off — and the image probe shares the README's 1h revalidate window, because what is really cached there is the measurement, not the bytes.
 

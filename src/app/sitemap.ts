@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { listArticleSummaries } from "@/lib/github";
+import { getItemsByCategory } from "@/lib/items";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://justin06lee.dev";
@@ -31,5 +32,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         articleRoutes = [];
     }
 
-    return [...staticRoutes, ...articleRoutes];
+    let appRoutes: MetadataRoute.Sitemap = [];
+    try {
+        appRoutes = (await getItemsByCategory("projects")).map((item) => ({
+            url: `${base}/apps/${encodeURIComponent(item.id)}`,
+            changeFrequency: "monthly" as const,
+            priority: 0.5,
+        }));
+    } catch {
+        appRoutes = [];
+    }
+
+    return [...staticRoutes, ...articleRoutes, ...appRoutes];
 }
