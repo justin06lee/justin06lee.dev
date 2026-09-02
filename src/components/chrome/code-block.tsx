@@ -93,7 +93,7 @@ export function CodeBlock({
           type="button"
           onClick={handleCopy}
           aria-label="copy code"
-          className="absolute top-2.5 right-3 select-none font-mono text-[11px] text-white/45 transition-colors hover:text-white"
+          className="absolute top-2.5 right-3 select-none text-[11px] text-white/45 transition-colors hover:text-white"
         >
           {copied ? "copied" : "copy"}
         </button>

@@ -195,7 +195,7 @@ function ArticleCard({
             {article.title}
           </h2>
           {article.publishedAt && (
-            <span className="shrink-0 font-mono text-xs tabular-nums text-white/40">
+            <span className="shrink-0 text-xs tabular-nums text-white/40">
               {formatDate(article.publishedAt)}
             </span>
           )}

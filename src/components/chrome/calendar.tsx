@@ -107,7 +107,7 @@ export function Calendar({
           >
             <ChevronLeft className="size-4" />
           </button>
-          <span className="font-mono text-sm uppercase tracking-widest text-white/70">
+          <span className="text-sm uppercase tracking-widest text-white/70">
             {MONTH_NAMES[m - 1]} {y}
           </span>
           <button
@@ -126,7 +126,7 @@ export function Calendar({
           stretches when fillHeight makes the day rows grow. */}
       <div className="grid grid-cols-7 gap-[3px]">
         {WEEKDAY_LETTERS.map((w, i) => (
-          <div key={i} className="flex h-6 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-white/40">
+          <div key={i} className="flex h-6 items-center justify-center text-[10px] uppercase tracking-widest text-white/40">
             {w}
           </div>
         ))}
@@ -180,7 +180,7 @@ export function Calendar({
               onClick={() => onSelect?.(date)}
               aria-pressed={isSelected}
               className={cn(
-                "flex size-9 flex-col items-center justify-center font-mono text-sm tabular-nums transition-colors",
+                "flex size-9 flex-col items-center justify-center text-sm tabular-nums transition-colors",
                 isSelected
                   ? "bg-white text-black"
                   : "text-white/80 hover:bg-white/10",

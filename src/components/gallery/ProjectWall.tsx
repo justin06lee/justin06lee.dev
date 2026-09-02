@@ -125,7 +125,7 @@ function Piece({
           className="block h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center px-3 text-center font-mono text-xs lowercase tracking-wide text-white/50">
+        <div className="flex h-full w-full items-center justify-center px-3 text-center text-xs lowercase tracking-wide text-white/50">
           {piece.title}
         </div>
       )}

@@ -164,7 +164,7 @@ export default function DayView({
               />
             ))}
             {renderActuals.length === 0 && (
-              <div className="absolute top-2 right-2 font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+              <div className="absolute top-2 right-2 text-[11px] uppercase tracking-[0.18em] text-white/40">
                 no actuals yet
               </div>
             )}

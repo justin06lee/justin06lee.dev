@@ -72,7 +72,7 @@ function HourGrid() {
           className="absolute left-0 right-0 flex items-start border-t border-white/5 pl-2"
           style={{ top: `${(h / 24) * 100}%`, height: `${100 / 24}%` }}
         >
-          <span className="mt-[-6px] font-mono text-[10px] text-white/40">
+          <span className="mt-[-6px] text-[10px] text-white/40">
             {String(h).padStart(2, "0")}:00
           </span>
         </div>
@@ -106,7 +106,7 @@ export function TimelineMarker({
         className={cn("h-px flex-1", color == null && "bg-white/40")}
         style={color != null ? { background: color } : undefined}
       />
-      <div className="mx-2 whitespace-nowrap font-mono text-[10px] uppercase tracking-widest text-white/70">
+      <div className="mx-2 whitespace-nowrap text-[10px] uppercase tracking-widest text-white/70">
         {label}
       </div>
     </div>
@@ -272,7 +272,7 @@ export function Timeline({
               className={cn("relative min-w-0 flex-1", ti > 0 && "border-l border-white/10")}
             >
               {t.label != null && (
-                <div className="pointer-events-none absolute left-2 top-1 z-10 font-mono text-[10px] uppercase tracking-widest text-white/40">
+                <div className="pointer-events-none absolute left-2 top-1 z-10 text-[10px] uppercase tracking-widest text-white/40">
                   {t.label}
                 </div>
               )}

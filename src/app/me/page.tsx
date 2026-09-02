@@ -165,7 +165,7 @@ function MoveMenu({
         >
           <div
             id={labelId}
-            className="px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-white/40 border-b border-white/10"
+            className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/40 border-b border-white/10"
           >
             move to
           </div>

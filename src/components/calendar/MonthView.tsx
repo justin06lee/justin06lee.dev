@@ -76,11 +76,11 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
           return (
             <>
               <div className="flex items-baseline justify-between">
-                <span className={`font-mono text-sm tabular-nums ${isToday ? "text-white font-semibold" : "text-white/80"}`}>
+                <span className={`text-sm tabular-nums ${isToday ? "text-white font-semibold" : "text-white/80"}`}>
                   {day}
                 </span>
                 {total > 0 && (
-                  <span className="font-mono text-[9px] uppercase tracking-widest text-white/40 tabular-nums">
+                  <span className="text-[9px] uppercase tracking-widest text-white/40 tabular-nums">
                     {done}/{total}
                   </span>
                 )}
@@ -96,7 +96,7 @@ export default function MonthView({ yyyymm, tasks, heatmap, today }: Props) {
                   </span>
                 ))}
                 {extra > 0 && (
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-white/40">+{extra} more</span>
+                  <span className="text-[9px] uppercase tracking-widest text-white/40">+{extra} more</span>
                 )}
               </div>
             </>

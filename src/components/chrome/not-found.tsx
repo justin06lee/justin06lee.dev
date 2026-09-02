@@ -73,7 +73,7 @@ export function NotFound({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.3 }}
-        className="font-mono text-5xl tracking-tight sm:text-6xl"
+        className="text-5xl tracking-tight sm:text-6xl"
       >
         {title}
       </motion.div>
@@ -123,7 +123,7 @@ export function NotFound({
         >
           <a
             href="https://justin06lee.dev"
-            className="font-mono text-[11px] text-white/30 transition-colors hover:text-white/60"
+            className="text-[11px] text-white/30 transition-colors hover:text-white/60"
           >
             made by justin06lee.dev
           </a>

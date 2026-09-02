@@ -44,7 +44,7 @@ export function TableOfContents({ content }: { content: string }) {
         top: "var(--sticky-header-offset)",
       }}
     >
-      <p className="mb-3 text-xs text-white/40 font-mono uppercase tracking-widest">
+      <p className="mb-3 text-xs text-white/40 uppercase tracking-widest">
         on this page
       </p>
       <ul className="space-y-0.5">

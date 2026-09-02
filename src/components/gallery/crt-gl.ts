@@ -4,9 +4,12 @@
 // RGB mask, scanlines, a slow rolling bar, phosphor snow, mains flicker, a
 // vignette, a little chromatic fringing, and the two faults every tired set
 // had — the vertical hold slipping so the picture rolls, and the horizontal
-// sync tearing a band sideways. Nothing here is faked in CSS because the
-// thing being asked for, the image itself bending with the glass, is a
-// per-pixel remap, and only a shader does that at any size without measuring.
+// sync tearing a band sideways. On top of those, three states the cabinet
+// drives: off-station static (the dial between two detents), a burst of
+// colour bars torn sideways (the hover glitch), and the picture with its
+// colours inverted (hover). Nothing here is faked in CSS because the thing
+// being asked for, the image itself bending with the glass, is a per-pixel
+// remap, and only a shader does that at any size without measuring.
 //
 // The canvas sits *behind* the cut-out bezel photo, whose transparent hole is
 // the glass. So this shader paints the whole canvas as lit tube and lets the
@@ -28,12 +31,13 @@ precision mediump float;
 #endif
 uniform sampler2D uTex;
 uniform vec2 uRes;
-uniform vec2 uFit;
-uniform vec2 uCenter;
+uniform vec2 uSpan;
 uniform float uKeystone;
 uniform float uTime;
 uniform float uPower;
-uniform float uBurst;
+uniform float uSnow;
+uniform float uGlitch;
+uniform float uInvert;
 uniform float uHasTex;
 uniform float uMotion;
 varying vec2 vUv;
@@ -58,6 +62,17 @@ float ease(float t) {
 // A gaussian-ish bump; pow() on a negative base is undefined in GLSL ES.
 float bump(float x) {
   return exp(-x * x);
+}
+
+// The seven bars of a test card, left to right.
+vec3 bar(float i) {
+  if (i < 1.0) return vec3(0.92);
+  if (i < 2.0) return vec3(0.92, 0.92, 0.10);
+  if (i < 3.0) return vec3(0.10, 0.92, 0.92);
+  if (i < 4.0) return vec3(0.10, 0.92, 0.10);
+  if (i < 5.0) return vec3(0.92, 0.10, 0.92);
+  if (i < 6.0) return vec3(0.92, 0.10, 0.10);
+  return vec3(0.10, 0.10, 0.92);
 }
 
 void main() {
@@ -87,6 +102,13 @@ void main() {
   float tearAmt = (hash(vec2(floor(uTime * 40.0), 2.0)) - 0.5) * 0.06;
   p.x += tearOn * tearAmt * step(tearY, p.y) * step(p.y, tearY + 0.18);
 
+  // The glitch shears every band of the picture sideways by its own amount,
+  // fresh every frame, and the colour bars below share the same shear so
+  // they tear with it.
+  float band = floor(uv.y * 28.0);
+  float shear = (hash(vec2(band, floor(uTime * 45.0))) - 0.5) * 0.5;
+  p.x += uGlitch * shear;
+
   // Switching off pulls the raster into a bright line, then a dot. Switching
   // on runs it backwards. uPower is 1.0 lit, 0.0 dark.
   float open = smoothstep(0.0, 1.0, uPower);
@@ -96,7 +118,9 @@ void main() {
   p.x = (p.x - 0.5) / xScale + 0.5;
   float inside = step(0.0, p.x) * step(p.x, 1.0) * step(0.0, p.y) * step(p.y, 1.0);
 
-  vec2 t = (p - uCenter) * uFit + 0.5;
+  // The picture fills the glass; uSpan is the window of the texture that the
+  // glass shows (1 on an axis means all of it).
+  vec2 t = (p - 0.5) * uSpan + 0.5;
   float onTex = step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0) * uHasTex;
 
   // A touch of colour fringing at the edges, like a tube that was never
@@ -108,6 +132,10 @@ void main() {
     texture2D(uTex, t - vec2(ca, 0.0)).b
   ) * onTex;
 
+  // Inverted colours, only where there is a picture to invert; the dark
+  // outside the raster stays dark.
+  col = mix(col, (1.0 - col) * onTex, uInvert);
+
   // The blanking bar that rides with the roll.
   col *= 1.0 - 0.92 * rolling * step(fract(uv.y + roll), 0.05);
 
@@ -115,9 +143,21 @@ void main() {
   // what makes the glass read as lit rather than as a hole.
   col += vec3(0.05, 0.055, 0.052);
 
-  // Static between channels.
-  float snow = hash(floor(uv * uRes * 0.35) + fract(uTime * 13.0));
-  col = mix(col, vec3(snow * 0.9), uBurst);
+  // Off-station static: grey snow in cells wider than they are tall, the way
+  // it smeared along the scan, with slow darker bands drifting through.
+  vec2 cell = floor(vec2(uv.x * uRes.x * 0.22, uv.y * uRes.y * 0.45));
+  float snow = hash(cell + fract(uTime * 13.0));
+  snow *= 0.75 + 0.25 * sin(uv.y * 40.0 - uTime * 7.0);
+  col = mix(col, vec3(snow * 0.95), uSnow);
+
+  // The glitch: colour bars, with the picture's shear, over a grainy floor,
+  // and the dark blocks of a test card's bottom strip.
+  float bx = fract(uv.x + shear * 0.8);
+  vec3 bars = bar(floor(bx * 7.0));
+  float blocks = step(0.5, hash(vec2(floor(bx * 9.0), band))) * 0.35;
+  bars = mix(bars, vec3(blocks), step(uv.y, 0.24));
+  bars *= 0.55 + 0.7 * hash(uv * uRes * 0.4 + fract(uTime * 17.0));
+  col = mix(col, bars, uGlitch * 0.94);
 
   // Aperture grille: alternating RGB stripes, subtle so the art stays the art.
   float m = mod(gl_FragCoord.x, 3.0);
@@ -145,11 +185,13 @@ void main() {
   float sheen = 1.0 - abs(vUv.x * 0.55 + vUv.y * 0.85 - 1.05) * 2.6;
   col += 0.03 * pow(max(sheen, 0.0), 2.0);
   float vig = 16.0 * uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);
-  col *= pow(clamp(vig, 0.0, 1.0), 0.28);
+  col *= pow(clamp(vig, 0.0, 1.0), 0.22);
   col *= inside;
 
-  // The collapse line flares as the raster squeezes into it.
+  // The collapse line flares as the raster squeezes into it, then the dot
+  // it leaves fades rather than sitting there for as long as the set is off.
   col *= 1.0 + (1.0 - open) * 2.5;
+  col *= smoothstep(0.0, 0.06, uPower);
 
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -159,7 +201,11 @@ export type CrtFrame = {
   /** 1 lit, 0 dark; in between is the switch-on / switch-off animation. */
   power: number;
   /** 1 full static, 0 clean picture. */
-  burst: number;
+  snow: number;
+  /** 1 colour bars torn sideways, 0 none. */
+  glitch: number;
+  /** 1 inverted colours, 0 as shot. */
+  invert: number;
   /** 0 freezes every animated effect (prefers-reduced-motion). */
   motion: number;
 };
@@ -172,19 +218,42 @@ export type CrtRenderer = {
 };
 
 /**
- * How the raster sits in the canvas. The canvas is a rectangle drawn behind a
- * hole that is not one — wider at the top, rounded hard at the bottom — so the
- * picture is kept to a share of the canvas and sat a little high, where the
- * hole has the most room. `keystone` is the top-to-bottom width ratio minus
- * one, read off the photo.
+ * How the picture sits in the glass. It fills it: the picture is scaled to
+ * cover the canvas, stretched off its own aspect by up to `stretch` on the
+ * long axis (an old set never showed a picture at exactly the right aspect
+ * either), and whatever still doesn't fit is cropped evenly. `overscan` > 1
+ * pushes the raster past the canvas edge the way a tube's did; with the
+ * barrel and the keystone, 1.0 already covers every pixel of the hole in
+ * the bezel photo. `keystone` is the top-to-bottom width ratio minus one,
+ * read off the photo.
  */
 export type CrtGeometry = {
-  fill: number;
-  center: [number, number];
+  stretch: number;
+  overscan: number;
   keystone: number;
 };
 
-const DEFAULT_GEOMETRY: CrtGeometry = { fill: 0.82, center: [0.5, 0.515], keystone: 0.1 };
+const DEFAULT_GEOMETRY: CrtGeometry = { stretch: 0.15, overscan: 1.0, keystone: 0.1 };
+
+/**
+ * The window of the texture the glass shows, per axis (1 = all of it), for a
+ * picture of aspect `texAspect` on a glass of aspect `screenAspect`. Kept
+ * pure so the stretch/crop split can be tested.
+ */
+export function pictureSpan(texAspect: number, screenAspect: number, stretch: number, overscan: number): [number, number] {
+  const ratio = texAspect / screenAspect;
+  let sx = 1;
+  let sy = 1;
+  if (ratio > 1) {
+    // Wider than the glass: squash it up to the tolerance, crop the rest.
+    const squash = Math.min(ratio, 1 + stretch);
+    sx = squash / ratio;
+  } else if (ratio < 1) {
+    const squash = Math.min(1 / ratio, 1 + stretch);
+    sy = squash * ratio;
+  }
+  return [sx / overscan, sy / overscan];
+}
 
 export function createCrtRenderer(
   canvas: HTMLCanvasElement,
@@ -226,16 +295,16 @@ export function createCrtRenderer(
 
   const u = {
     res: gl.getUniformLocation(program, "uRes"),
-    fit: gl.getUniformLocation(program, "uFit"),
-    center: gl.getUniformLocation(program, "uCenter"),
+    span: gl.getUniformLocation(program, "uSpan"),
     keystone: gl.getUniformLocation(program, "uKeystone"),
     time: gl.getUniformLocation(program, "uTime"),
     power: gl.getUniformLocation(program, "uPower"),
-    burst: gl.getUniformLocation(program, "uBurst"),
+    snow: gl.getUniformLocation(program, "uSnow"),
+    glitch: gl.getUniformLocation(program, "uGlitch"),
+    invert: gl.getUniformLocation(program, "uInvert"),
     hasTex: gl.getUniformLocation(program, "uHasTex"),
     motion: gl.getUniformLocation(program, "uMotion"),
   };
-  gl.uniform2f(u.center, geo.center[0], geo.center[1]);
   gl.uniform1f(u.keystone, geo.keystone);
 
   let hasTex = 0;
@@ -243,13 +312,9 @@ export function createCrtRenderer(
   let width = canvas.width;
   let height = canvas.height;
 
-  const updateFit = () => {
-    // Contain the picture inside the glass at its own aspect. uFit > 1 on an
-    // axis means the picture is narrower than the screen on that axis.
-    const screenAspect = width / height;
-    const sx = texAspect >= screenAspect ? 1 : screenAspect / texAspect;
-    const sy = texAspect >= screenAspect ? texAspect / screenAspect : 1;
-    gl.uniform2f(u.fit, sx / geo.fill, sy / geo.fill);
+  const updateSpan = () => {
+    const [sx, sy] = pictureSpan(texAspect, width / height, geo.stretch, geo.overscan);
+    gl.uniform2f(u.span, sx, sy);
   };
 
   return {
@@ -266,7 +331,7 @@ export function createCrtRenderer(
       } else {
         hasTex = 0;
       }
-      updateFit();
+      updateSpan();
     },
     resize(w, h) {
       width = Math.max(1, Math.floor(w));
@@ -274,13 +339,15 @@ export function createCrtRenderer(
       canvas.width = width;
       canvas.height = height;
       gl.viewport(0, 0, width, height);
-      updateFit();
+      updateSpan();
     },
     render(frame) {
       gl.uniform2f(u.res, width, height);
       gl.uniform1f(u.time, frame.time);
       gl.uniform1f(u.power, frame.power);
-      gl.uniform1f(u.burst, frame.burst);
+      gl.uniform1f(u.snow, frame.snow);
+      gl.uniform1f(u.glitch, frame.glitch);
+      gl.uniform1f(u.invert, frame.invert);
       gl.uniform1f(u.hasTex, hasTex);
       gl.uniform1f(u.motion, frame.motion);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -296,6 +363,14 @@ export function createCrtRenderer(
   };
 }
 
+export type CrtPicture = {
+  source: HTMLCanvasElement;
+  width: number;
+  height: number;
+  /** The colour the picture throws into the room: its bright pixels' mean, 0–255. */
+  tint: [number, number, number];
+};
+
 /**
  * Loads a picture for the tube. SVG pixel art is rasterised onto a canvas
  * first — an `<img>` of an SVG with no intrinsic size uploads as nothing, and
@@ -303,10 +378,7 @@ export function createCrtRenderer(
  * too little to survive the curvature. Cross-origin images need the CORS
  * header to be readable by WebGL; GitHub raw content sends it.
  */
-export function loadPicture(
-  src: string,
-  maxEdge = 1024,
-): Promise<{ source: HTMLCanvasElement; width: number; height: number } | null> {
+export function loadPicture(src: string, maxEdge = 1024): Promise<CrtPicture | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -332,9 +404,43 @@ export function loadPicture(
       } catch {
         return resolve(null);
       }
-      resolve({ source: off, width: w, height: h });
+      resolve({ source: off, width: w, height: h, tint: pictureTint(img) });
     };
     img.onerror = () => resolve(null);
     img.src = src;
   });
+}
+
+/**
+ * What colour a lit screen showing this picture throws on the wall: the mean
+ * of its pixels weighted by their brightness, so a dark screenshot with a
+ * teal sprite lights the room teal rather than the grey of its background.
+ */
+function pictureTint(img: HTMLImageElement): [number, number, number] {
+  const n = 24;
+  const small = document.createElement("canvas");
+  small.width = n;
+  small.height = n;
+  const ctx = small.getContext("2d");
+  if (!ctx) return [180, 180, 180];
+  try {
+    ctx.drawImage(img, 0, 0, n, n);
+    const px = ctx.getImageData(0, 0, n, n).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let weight = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const lum = (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255;
+      const w = lum * lum;
+      r += px[i] * w;
+      g += px[i + 1] * w;
+      b += px[i + 2] * w;
+      weight += w;
+    }
+    if (weight <= 0) return [180, 180, 180];
+    return [Math.round(r / weight), Math.round(g / weight), Math.round(b / weight)];
+  } catch {
+    return [180, 180, 180];
+  }
 }

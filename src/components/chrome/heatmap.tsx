@@ -109,16 +109,16 @@ export function Heatmap({
               {href ? (
                 <LinkComponent
                   href={href}
-                  className="self-start font-mono text-[11px] uppercase tracking-widest text-white/70 transition-colors hover:text-white"
+                  className="self-start text-[11px] uppercase tracking-widest text-white/70 transition-colors hover:text-white"
                 >
                   {name}
                 </LinkComponent>
               ) : (
-                <span className="self-start font-mono text-[11px] uppercase tracking-widest text-white/70">
+                <span className="self-start text-[11px] uppercase tracking-widest text-white/70">
                   {name}
                 </span>
               )}
-              <div className="grid grid-cols-7 gap-[3px] font-mono text-[9px] text-white/30">
+              <div className="grid grid-cols-7 gap-[3px] text-[9px] text-white/30">
                 {WEEKDAY_LETTERS.map((w, i) => (
                   <div key={i} className="flex h-3 items-center justify-center">{w}</div>
                 ))}
@@ -131,7 +131,7 @@ export function Heatmap({
         })}
       </div>
 
-      <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/40">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-white/40">
         <span>less</span>
         {Array.from({ length: levels }, (_, l) => (
           <span

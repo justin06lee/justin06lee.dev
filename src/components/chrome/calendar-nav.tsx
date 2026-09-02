@@ -127,7 +127,7 @@ export function CalendarNav({
             ? { href: prevHref, linkComponent, prefetch }
             : { onClick: onPrev, disabled: !onPrev })}
         />
-        <span className="px-1 font-mono tabular-nums text-white/80">
+        <span className="px-1 tabular-nums text-white/80">
           {label}
         </span>
         <Button

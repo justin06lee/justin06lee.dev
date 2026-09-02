@@ -117,7 +117,7 @@ export default function CatPage() {
                         value={pats}
                         as="div"
                         format={(n) => Math.round(n).toLocaleString()}
-                        className="font-mono text-5xl sm:text-6xl tracking-tight"
+                        className="text-5xl sm:text-6xl tracking-tight"
                     />
                     <div className="text-xs text-white/50 uppercase tracking-widest">
                         {pats === 1 ? "time bothered, globally" : "times bothered, globally"}

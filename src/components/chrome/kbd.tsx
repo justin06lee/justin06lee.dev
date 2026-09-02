@@ -16,7 +16,7 @@ export function Kbd({ size = "sm", className, children, ...rest }: KbdProps) {
     <kbd
       className={cn(
         "inline-flex select-none items-center justify-center rounded-[3px]",
-        "border border-b-2 border-white/20 bg-white/[0.06] font-mono text-white/75",
+        "border border-b-2 border-white/20 bg-white/[0.06] text-white/75",
         size === "sm" ? "h-5 min-w-5 px-1 text-[11px]" : "h-6 min-w-6 px-1.5 text-xs",
         className,
       )}

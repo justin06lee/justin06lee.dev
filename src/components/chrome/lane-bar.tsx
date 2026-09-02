@@ -95,7 +95,7 @@ export function LaneBar({
       )}
     >
       <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
+        <span className="text-[11px] uppercase tracking-[0.18em] text-white/40">
           {label}
           {lanes.length > 0 && (
             <span className="tabular-nums"> ({lanes.length})</span>

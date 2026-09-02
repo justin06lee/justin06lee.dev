@@ -129,7 +129,7 @@ export default function ActualsEditor({ actual, categories, timezone, onClose }:
         aria-modal="true"
         aria-label="edit activity"
       >
-        <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">edit activity</h3>
+        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/40">edit activity</h3>
         <div className="space-y-1">
           <label className="text-xs text-white/60">category</label>
           <CategoryPicker selectedId={categoryId} onChange={setCategoryId} categories={categories} />

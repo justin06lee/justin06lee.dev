@@ -10,7 +10,7 @@ Dark-only theme, minimal black/white aesthetic, motion-driven, ASCII flourishes.
 
 ## Commands
 - `bun run dev` — Next dev server (Turbopack)
-- `bun run build` — Production build
+- `bun run build` — Production build. **It writes into the same `.next` the dev server reads** (Next 15.5 has no separate dev output dir), so a running `bun run dev` answers 500 on every page afterwards until it is restarted.
 - `bun run start` — Start production server
 - `bun run lint` — ESLint
 - `bun run test` — Vitest run
@@ -19,7 +19,7 @@ Dark-only theme, minimal black/white aesthetic, motion-driven, ASCII flourishes.
 ## Tech Stack
 - **Framework**: Next.js 15.5 (App Router), React 19, TypeScript 5
 - **Bundler / package manager**: Turbopack, **Bun**
-- **Styling**: Tailwind CSS 4 (no shadcn). Custom CSS vars in `globals.css`. Geist sans + mono via `next/font`, Poppins for body.
+- **Styling**: Tailwind CSS 4 (no shadcn). Custom CSS vars in `globals.css`. **Poppins is the site's one typeface** — self-hosted in `public/` in four weights via `next/font/local` (`--font-poppins`, also `--font-sans`). Geist Mono (`font-mono`) survives only where the glyph grid is the point: ASCII art, the donut, code blocks, and the markdown editors. Don't put `font-mono` on UI text — labels, times, and section headings are Poppins (letterspaced uppercase where a label is wanted). There is no `@font-face` for Poppins in CSS on purpose; a second declaration for the same family once won over the local file and dropped the body to the system sans.
 - **Animation**: `motion` v12 (`motion/react-client`) — staggered fade/slide patterns
 - **Theme**: `next-themes`, dark mode forced
 - **Database**: **Turso / libSQL** via `@libsql/client` (raw SQL, no ORM)
@@ -98,10 +98,10 @@ src/
     project-images.ts, project-images-parse.ts  # hero image + site-icon resolution
 
 public/
-  crt/monitor.webp                # cut-out Macintosh Color Display bezel (transparent glass)
+  crt/monitor.webp                # cut-out Macintosh Color Display bezel (transparent glass, apple cloned out)
   ascii/ascii{1,3,4,9}.txt        # responsive ASCII swap on small screens
   cat-sprite.jpg                  # 12x10 cat sprite sheet
-  Poppins-Regular.ttf             # body font
+  Poppins-{Regular,Medium,SemiBold,Bold}.ttf  # the site's typeface, self-hosted (OG images read Regular)
 ```
 
 ## Projects gallery
@@ -125,15 +125,17 @@ The material is already-composed manga panels — someone framed each one — so
 - **A fresh seed per request is the point.** The gallery re-deals every load, so a newly added project lands anywhere rather than always at the bottom. `?seed=N` pins one for comparison.
 
 ### CRT monitor (`components/gallery/CrtMonitor.tsx`, `crt-gl.ts`, `crt-dial.ts`)
-The terminal pieces play on a photograph of an Apple Macintosh Color Display (`public/crt/monitor.webp`, a cut-out with a transparent hole where the glass was). The glass is a WebGL canvas **behind** the photo: the photo's alpha does the masking, so the shader never knows the hole's shape. Positions in the component are shares of the photo, measured off its alpha channel — the hole spans x 14.9–87.5%, y 17.2–82.4%; the controls sit on the bezel's bottom band between the green apple and the LED slot; the LED is lit in the slot the photo already has. Re-cutting the photo means re-measuring those numbers.
-- **The shader (`crt-gl.ts`) is the effect, not CSS.** Barrel curvature, a keystone (the set was shot slightly from above, so the raster is wider at the top), aperture grille, scanlines, rolling bar, coarse and fine grain, mains flicker, chromatic fringing, and two faults: the vertical hold slipping so the picture rolls with its blanking bar every ~11s, and horizontal sync tearing a band sideways every ~5s. The picture is kept to 78% of the canvas and sat slightly high, where the hole has the most room (`CrtGeometry`).
-- **The glass is a real `<a>`** to the project (middle-click, open-in-new-tab work); when the set is off it becomes a button that switches it on.
-- **The knob is a `role="slider"`**: drag to turn, click to step, arrow keys once focused. The printed channel names beside it are also buttons. Detent geometry lives in `crt-dial.ts` and is pure — two channels read as a switch (60° apart), more spread across a 270° sweep. Controls scale with container-query units (`cqw`) with px floors for phones.
-- **The render loop runs only while the set is on, on screen, and something is changing.** Under `prefers-reduced-motion` it draws one still frame per state (no roll, tear, flicker, or collapse). No WebGL → a flat `<img>` with CSS scanlines and animated grain.
+The terminal pieces play on a photograph of an Apple Macintosh Color Display (`public/crt/monitor.webp`, 1200x991, a cut-out with a transparent hole where the glass was; the apple on the bezel was cloned out). The glass is a WebGL canvas **behind** the photo: the photo's alpha does the masking, so the shader never knows the hole's shape. Positions in the component are shares of the photo, measured off its alpha channel — the hole spans x 14.9–87.4%, y 17.2–82.4% and tapers toward the bottom; the controls sit on the bezel's bottom band; the power button sits on the LED slot at x 82.1%, y 91.8%. Re-cutting the photo means re-measuring those numbers.
+- **The picture fills the glass.** `pictureSpan` covers the canvas, stretching the picture off its own aspect by up to 15% on the long axis and cropping the rest evenly, so none of the picture's own background is left showing beside black. With the barrel and the keystone, overscan 1.0 already covers every pixel of the hole — checked numerically against the alpha channel; re-check if the curve, the keystone, or the `SCREEN` box changes.
+- **The shader (`crt-gl.ts`) is the effect, not CSS.** Barrel curvature, a keystone (the set was shot slightly from above, so the raster is wider at the top), aperture grille, scanlines, rolling bar, coarse and fine grain, mains flicker, chromatic fringing, two faults (the vertical hold slipping so the picture rolls every ~11s, horizontal sync tearing a band sideways every ~5s), and three states the cabinet drives per frame: grey off-station static (`snow`), colour bars torn sideways (`glitch`), and inverted colours (`invert`).
+- **The knob is a rotary channel selector that turns all the way round.** `crt-dial.ts` is pure: one detent per channel spread over 360°, so the last channel clicks on to the first in either direction. The knob's angle is one unbounded number of degrees and the channel is read off it (`channelAt`); nothing else stores which channel is on. Dragging shows static between detents (`staticAmount`: the picture holds for 22% of a step either side of a detent, then static ramps in over a few degrees) and flips to the next project past each midpoint — clockwise is next, anticlockwise previous. Release snaps to the nearest detent; a plain click steps one clockwise; arrow keys step once it has focus; the printed channel names turn it the short way round. It is a `role="slider"`.
+- **Hovering the glass kicks the set**: ~260ms of colour bars sheared by band, a 340ms shake of the whole cabinet (CSS), then the picture with inverted colours until the pointer leaves — and leaving just restores the colours, no effect. Mouse pointers only (a tap is the click), and only while the set is on. The glass stays a real `<a>` to the project (middle-click, open-in-new-tab work); when the set is off it is a button that switches it on.
+- **The set lights the room.** `loadPicture` returns a luminance-weighted `tint` of the picture; the component lifts it toward white into `--crt-glow`, which colours a glow behind the cabinet (`.crt-room`), light on the plastic (`.crt-bezel-light`, masked with the photo itself so it never spills into the hole), and a pool on the floor in front with a contact shadow under the foot (`.crt-floor`). Static throws grey, the inverted picture throws the inverted tint, and switching off fades it all (`--crt-lit`). The stage reserves `pb-[32%]` for the pool. The set is small on purpose (`max-w-[480px]`): a little lit screen in a dark room, not a hero.
+- **The render loop runs only while the set is on, on screen, and something is changing.** Under `prefers-reduced-motion` it draws one still frame per state (no roll, tear, flicker, glitch, shake, or collapse; static and inversion still show). No WebGL → a flat `<img>` with CSS scanlines, grain for the static, and `filter: invert` on hover.
 - Pictures are rasterised through a 2D canvas before upload (`loadPicture`) because an SVG sprite uploads at its tiny intrinsic size otherwise. Cross-origin images need CORS; GitHub raw sends it.
 
 ### App store (`lib/app-store.ts`, `components/gallery/AppStoreList.tsx`, `app/apps/[slug]`)
-**This is the one surface that is deliberately not in the site's design language.** It is styled as the App Store — system font stack (San Francisco where available), continuous-corner squircle icons via a CSS mask, grey pills with blue capitals, hairlines inset to the text, `#8e8e93` secondary text, `#0a84ff` links, Title Case section names. Nothing here should pick up the mono uppercase labels or 1px square borders, and nothing elsewhere should pick this up; the store's CSS is scoped under `.appstore`.
+**This is the one surface that is deliberately not in the site's design language.** It is styled as the App Store — continuous-corner squircle icons via a CSS mask, grey pills with blue capitals, hairlines inset to the text, `#8e8e93` secondary text, `#0a84ff` links, Title Case section names. Nothing here should pick up the site's uppercase letterspaced labels or 1px square borders, and nothing elsewhere should pick this up; the store's CSS is scoped under `.appstore`. The one store trait it doesn't copy is the type: it is set in Poppins like everything else on the site.
 
 Everything the store shows past the item row is **read from the project's own repo** — screenshots are the README's non-icon images, "What's New" is GitHub releases (falling back to version tags without notes), the information block is the repository record. Nothing is stored twice: add a screenshot to the README or cut a release and the page follows.
 - **One button, one word: OPEN.** It opens the site when the project has one and the source when it doesn't (`openTarget`); it never says which. Both are real anchors; the row's own link to `/apps/[id]` is a stretched overlay behind the text so nothing nests.

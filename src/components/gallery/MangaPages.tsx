@@ -139,7 +139,7 @@ function Panel({
           className="block h-full w-full object-contain"
         />
       ) : (
-        <span className="flex h-full w-full items-center justify-center px-3 text-center font-mono text-xs lowercase tracking-wide text-white/40">
+        <span className="flex h-full w-full items-center justify-center px-3 text-center text-xs lowercase tracking-wide text-white/40">
           {item.title}
         </span>
       )}
