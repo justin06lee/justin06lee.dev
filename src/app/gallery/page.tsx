@@ -218,7 +218,9 @@ function ThemedSections({ sections, seed }: { sections: Sections; seed: number }
                     {theme === "panels" && (
                         <MangaPages pages={packPages(sections.panels, sectionSeed)} ariaLabel="panels" />
                     )}
-                    {theme === "terminal" && <CrtMonitor channels={sections.terminal} ariaLabel="terminal" />}
+                    {/* The set stands off the label by the same dark that
+                        separates its pool from the next hang. */}
+                    {theme === "terminal" && <CrtMonitor channels={sections.terminal} ariaLabel="terminal" className="mt-12" />}
                     {theme === "icons" && (
                         <AppStore
                             apps={sections.icons}
