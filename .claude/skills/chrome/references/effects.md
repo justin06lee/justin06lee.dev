@@ -340,7 +340,7 @@ the stripes are a `repeating-linear-gradient` with hard stops, so the edges stay
 **Install:** `bunx @justin06lee/chrome@latest add intro`
 **Composes:** motion (npm)
 
-a fixed inset-0 z-[100] black overlay driven by motion/react (`motion/react-client` elements plus `AnimatePresence`). an optional `hero` node enters at the 1s mark and holds on top for the whole sequence while each entry in `lines` takes a turn in a fixed-height slot beneath it: fade in from above, hold 3s, fade out downward, 1s gap, next line. every line renders absolutely into the same slot so the layout never shifts. the hero leaves with the last line, then the whole overlay fades (0.7s) and unmounts; `onComplete` fires only after the exit fade finishes, via AnimatePresence's `onExitComplete`. the timeline is fixed — you control pacing only through `speed`, which divides every duration and delay (2 = twice as fast).
+a fixed inset-0 z-[100] black overlay driven by motion/react (`motion/react-client` elements plus `AnimatePresence`). an optional `hero` node enters at the 1s mark and holds on top for the whole sequence while each entry in `lines` takes a turn in a fixed-height slot beneath it: fade in from above, hold 3s, fade out downward, 1s gap, next line. every line renders absolutely into the same slot so the layout never shifts. the hero leaves with the last line, then the whole overlay fades (0.7s) and unmounts. `onExit` fires as that fade *begins* (once, also on skip) — mount the page beneath there so it comes up under the fade and the two cross; waiting for `onComplete` leaves a black beat and then a snap. `onComplete` fires only after the exit fade finishes, via AnimatePresence's `onExitComplete`. the timeline is fixed — you control pacing only through `speed`, which divides every duration and delay (2 = twice as fast).
 
 `persistKey` is the play-once gate: after completing (or being skipped), the intro writes `localStorage[persistKey] = "true"` and will not replay on later mounts. the visibility state starts as null while the localStorage check resolves, so nothing flashes for returning visitors. omit `persistKey` to play on every mount. a skip button (default label "skip") sits at the bottom and triggers the same graceful fade-out — it never snaps.
 
@@ -350,6 +350,7 @@ body scroll is locked (`overflow: hidden`) while the overlay is visible and rest
 - `lines: ReactNode[] (required) — lines shown one at a time in a fixed slot under the hero, in order.`
 - `hero: ReactNode — optional visual rendered above the lines for the whole intro (e.g. ascii art).`
 - `speed: number = 1 — playback speed multiplier; 2 plays the sequence twice as fast.`
+- `onExit: () => void — called once when the overlay starts fading out (also on skip); mount the page beneath here so it comes up under the fade.`
 - `onComplete: () => void — called once after the overlay finishes fading out (also on skip).`
 - `skippable: boolean = true — whether to show the skip button.`
 - `skipLabel: string = 'skip' — label for the skip button.`
@@ -362,19 +363,20 @@ body scroll is locked (`overflow: hidden`) while the overlay is visible and rest
   hero={<Chrome as="div"><Donut width={44} height={20} isolate={false} /></Chrome>}
   lines={["hi.", "im justin.", "welcome."]}
   persistKey="intro-played"
-  onComplete={() => setReady(true)}
+  onExit={() => setPageShown(true)}
+  onComplete={() => setIntroDone(true)}
 />
 ```
 
 ## marquee
 
-**Role:** infinite scrolling ticker band.
+**Role:** infinite scrolling band — a ticker, or a row of pieces.
 **Install:** `bunx @justin06lee/chrome@latest add marquee`
 **Composes:** nothing beyond utils
 
-speed is specified in px/s and the duration is *derived* from the measured content width, so a short label and a long sentence travel at the same rate — a fixed duration would make them scroll at wildly different speeds. the copy count is computed from the container width rather than hardcoded to two, because content narrower than the container needs as many repeats as it takes to cover it plus one, or the band shows a hole between loops. only the first copy is exposed to assistive tech; the rest are `aria-hidden`.
+speed is specified in px/s and the duration is *derived* from the measured content width, so a short label and a long sentence travel at the same rate — a fixed duration would make them scroll at wildly different speeds. the copy count is computed from the container width rather than hardcoded to two, because content narrower than the container needs as many repeats as it takes to cover it plus one, or the band shows a hole between loops. only the first copy is real to assistive tech *and to the keyboard*: the repeats are `aria-hidden` and `inert`, because a band of links would otherwise offer every link twice (and a third time) to a tab key. pass `ariaLabel` when the band carries content worth naming and it becomes a `role="region"`.
 
-`pauseOnHover` (on by default) halts the band under the pointer. `fade` masks the left and right edges so content arrives and leaves softly. under reduced motion the animation is dropped entirely and the first copy sits still — a ticker that can't be paused is a real accessibility problem, and a static label is a legitimate reading of the same content.
+`pauseOnHover` (on by default) halts the band under the pointer *and* while anything inside it has focus, so a link you tabbed to holds still long enough to press. `fade` masks the left and right edges so content arrives and leaves softly. under reduced motion the animation is dropped and the band becomes a plain horizontal scroller holding one copy (scrollbar hidden, focusable so the keyboard can scroll it) — a ticker that can't be paused is a real accessibility problem, and content past the edge still has to be reachable, which a static first copy alone did not manage. justin06lee.dev's projects gallery drifts its composed manga pages across the screen on this, each page a link.
 
 **Key props:**
 - `children: ReactNode (required)`
@@ -382,8 +384,9 @@ speed is specified in px/s and the duration is *derived* from the measured conte
 - `reverse: boolean = false`
 - `gap: number = 32 — px between repeats.`
 - `separator: ReactNode — rendered between repeats.`
-- `pauseOnHover: boolean = true`
-- `fade: boolean = false`
+- `pauseOnHover: boolean = true — halt while the pointer is over the band, or anything inside it has focus.`
+- `fade: boolean = false — mask the left and right edges.`
+- `ariaLabel: string — accessible name (role="region") when the band carries content worth naming.`
 - `className: string`
 
 **Example:**

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Personal site for justin06lee.dev. Three surfaces share one Next.js app:
-1. **Public portfolio** — animated home, ASCII donut, scramble text, gallery, articles, a pet-the-cat page.
+1. **Public portfolio** — animated home (a first-visit intro that cross-fades into the page: see `home-client.tsx`), ASCII donut, scramble text, gallery, articles, a pet-the-cat page.
 2. **Personal calendar / time tracker** — day/month/year views, plans + "actuals" with a one-running-per-track invariant (parallel activity lanes), plan/actual overlap heatmap, prayer-time markers.
 3. **Two admin surfaces** — `/me` (item CRUD + site config) and `/desk/*` (article CMS that writes back to a GitHub repo).
 
@@ -110,9 +110,12 @@ public/
   Poppins-{Regular,Medium,SemiBold,Bold}.ttf  # the site's typeface, self-hosted (OG images read Regular)
 ```
 
+## Home intro
+`home-client.tsx` runs the home in three phases: `intro` (chrome's `Intro` overlay alone, at `speed` 2.2 so each line holds about two seconds), `revealing` (begins on the overlay's `onExit`, the moment its fade starts — this is when the navbar and `HomePage` mount, so their entrances run *under* the fade and the two cross), and `home`. What this replaced mounted the page only after the fade had finished (a black beat, then a snap), slid the navbar in on a hard-coded 16-second timer, and remounted the whole tree at the end so the navbar entered twice. `HomePage`'s entrance is one two-second cascade (`ENTER`) from the donut to the socials; the socials used to mount with no entrance at all. The `onExit` hook was added to chrome's intro for this and lives in the registry.
+
 ## Projects gallery
 `/gallery?tab=projects` renders one of two hangs, chosen by the `wallMode` site-config key:
-- **`auto`** (default) — projects are split into **themes** and each theme gets its own layout: `panels` → composed manga pages, `terminal` → one photographed CRT monitor (`CrtMonitor`), `icons` → an App Store clone (`AppStore`) with a product page per app at `/apps/[id]`.
+- **`auto`** (default) — projects are split into **themes** and each theme gets its own layout: `panels` → composed manga pages drifting across the screen as a band (`MangaStrip`, on chrome's `marquee`), `terminal` → one photographed CRT monitor (`CrtMonitor`), `icons` → an App Store clone (`AppStore`) with a product page per app at `/apps/[id]`.
 - **`manual`** — the hand-arranged wall from `/me/wall` (`ProjectWall` + `lib/gallery-wall.ts`).
 
 ### Themes (`lib/gallery-themes.ts`)
@@ -125,6 +128,7 @@ The material is already-composed manga panels — someone framed each one — so
 - **Every node's width is affine in its height (`w = m·h + c`, `c` in px carrying only gap terms).** Panel: `m = aspect, c = 0`. Row: `m = Σmᵢ, c = Σcᵢ + g(n-1)`. Stack: `m = 1/Σ(1/mᵢ), c = (Σ(cᵢ/mᵢ) - g(n-1))/Σ(1/mᵢ)`. Solving that top-down from the container width lands every panel on its own exact aspect — no crop, no dead space — at any width. **This is the load-bearing identity; changing a node type means re-deriving both terms.**
 - **What varies to absorb the images is the page's height, never a panel's shape.** A page is as tall as its panels require. Uniform page height was the thing given up, on purpose.
 - **Structure is chosen by scoring, not by rule.** Every template × a bounded set of panel assignments is solved and scored; the hard terms are the page-height band and a minimum panel edge (`minPanelSize`, 200px of the 1120 reference width — a *share* of the page, since the layout scales whole, so it holds on a phone too), and the soft ones are taste — a focal frame, a per-page drawn target height, a penalty on one flat tier of bare panels. Node geometry is invariant to the order of a node's children, so assignments are sampled rather than exhausted past n=4. ~2ms for a 12-panel wall. The edge floor is squared and weighted far above the taste terms — as a linear nudge it lost to them, and a ~130px sidecar next to a full-width band was routine — but stays finite, because a 5:1 strip sharing a tier puts the floor out of reach of every candidate and the least-bad page still has to win.
+- **The pages hang as a band, not a wall.** A wall grew downward with every project until the CRT and the store below it were never seen, so `MangaStrip` lays every page at one height (`clamp(240px, 30vw, 400px)`) and lets chrome's `marquee` drift them across the viewport, bled to its edges and faded at both ends. This is the affine relation read the other way: a page's width at the band's height is one `calc(m * height + c px)` (`pageWidthAtHeightCss`), and inside it the usual tree reproduces the page — still no measurement, no client JS. The band pauses under the pointer and under focus (the panels are links), keeps its repeats inert and out of the tab order, and under reduced motion becomes a plain horizontal scroller; those three behaviours were added to chrome's marquee for this and live in the registry, not here. `MangaPages` (the wall) stays for the tests and for anywhere a wall is wanted.
 - **Rendering is `width: calc(P% + Qpx)` per node plus `aspect-ratio` per panel.** Because the relation is affine, each child's width is affine in its parent's, so the browser reproduces the solve exactly — no measurement, no client JS, no first-paint reflow. `min-width: 0` and `flex: none` are load-bearing: a flex item's automatic minimum size is its content's, which would let a wide image refuse its solved slot. Rows use `align-items: flex-start`, never `stretch` — stretch overrides `aspect-ratio` and crops.
 - **Panels are `object-contain`, not `object-cover`.** The box is already the image's exact aspect, so the two agree when the measured dimensions are right — but when a measurement is stale or unreadable, contain shows a sliver of black and cover silently eats the art. Only one of those is recoverable.
 - Pages keep the tight 8px seam inside and a 48px black gutter between. Page splitting happens before layout, so it can never strand a single panel.

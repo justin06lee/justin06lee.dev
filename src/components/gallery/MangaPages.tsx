@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
+import { Marquee } from "@/components/chrome/marquee";
 import type { PanelFrame } from "@/lib/manga-layout";
 
 export type MangaPiece = {
@@ -54,6 +55,67 @@ export function MangaPages({
       ))}
     </div>
   );
+}
+
+export type MangaStripProps = {
+  pages: PanelFrame<MangaPiece>[];
+  /** Seam between panels inside a page, in px. Must match the packer's gap. */
+  gap?: number;
+  /** Black page-turn gutter between one page and the next, in px. */
+  pageGap?: number;
+  /** The band's height, any CSS length. Every page is laid at exactly this height. */
+  height?: string;
+  /** Drift speed, px per second. */
+  speed?: number;
+  className?: string;
+  ariaLabel?: string;
+};
+
+/**
+ * The same pages as a band that drifts across the screen, instead of a wall
+ * that grows downward with every project until nothing below it is seen.
+ *
+ * A wall gives each page the container's width and lets its height fall out;
+ * a band does the reverse. Because every node's width is affine in its height
+ * (`w = m·h + c`), a page's width at the band's height is one `calc()` —
+ * `m * height + c px` — with no measurement and no JS, and inside it the
+ * usual `calc(P% + Qpx)` tree reproduces the page exactly. The height is a
+ * CSS length rather than a number so it can be a `clamp()` of the viewport.
+ *
+ * The motion is chrome's marquee: it pauses under the pointer and under focus
+ * (the panels are links), keeps its repeats out of the tab order, and under
+ * reduced motion becomes a plain horizontal scroller.
+ */
+export function MangaStrip({
+  pages,
+  gap = 8,
+  pageGap = 48,
+  height = "clamp(240px, 30vw, 400px)",
+  speed = 32,
+  className,
+  ariaLabel,
+}: MangaStripProps) {
+  return (
+    <Marquee speed={speed} gap={pageGap} fade ariaLabel={ariaLabel} className={className}>
+      {pages.map((page, index) => (
+        <div key={index} style={{ height, width: pageWidthAtHeightCss(page, height), flex: "none" }}>
+          <Node frame={page} width="100%" gap={gap} />
+        </div>
+      ))}
+    </Marquee>
+  );
+}
+
+/**
+ * A page's width when it is laid at `height`: the affine relation read the
+ * other way round. `c` carries only gap terms, so it is exact in px.
+ */
+export function pageWidthAtHeightCss(frame: PanelFrame<MangaPiece>, height: string): string {
+  const m = round(frame.m, 5);
+  const c = round(frame.c, 3);
+  if (c === 0) return `calc(${m} * ${height})`;
+  const sign = c < 0 ? "-" : "+";
+  return `calc(${m} * ${height} ${sign} ${Math.abs(c)}px)`;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MangaPages, frameWidthCss, type MangaPiece } from "./MangaPages";
+import { MangaPages, frameWidthCss, pageWidthAtHeightCss, type MangaPiece } from "./MangaPages";
 import { packPages, type PanelFrame } from "@/lib/manga-layout";
 
 const piece = (id: string, width = 100, height = 100): MangaPiece => ({
@@ -176,5 +176,26 @@ describe("MangaPages — the emitted CSS reproduces the solve", () => {
         }
       }
     }
+  });
+});
+
+
+describe("pageWidthAtHeightCss", () => {
+  const frame = (m: number, c: number) =>
+    ({ kind: "panel", item: { id: "x", title: "x", src: null, width: 1, height: 1 }, aspect: m, percent: 100, offset: 0, m, c }) as const;
+
+  it("is the affine relation read the other way, in a single calc", () => {
+    expect(pageWidthAtHeightCss(frame(1.5, 0), "300px")).toBe("calc(1.5 * 300px)");
+    expect(pageWidthAtHeightCss(frame(2, 8), "var(--h)")).toBe("calc(2 * var(--h) + 8px)");
+    expect(pageWidthAtHeightCss(frame(0.75, -4), "40vw")).toBe("calc(0.75 * 40vw - 4px)");
+  });
+
+  it("agrees with the wall's height for the same page", () => {
+    // At container width W the wall gives height (W - c) / m; laying the page at
+    // that height must give W back.
+    const page = frame(1.6, 16);
+    const W = 800;
+    const h = (W - page.c) / page.m;
+    expect(page.m * h + page.c).toBeCloseTo(W);
   });
 });
