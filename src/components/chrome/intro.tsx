@@ -12,6 +12,12 @@ export type IntroProps = {
   hero?: React.ReactNode;
   /** Playback speed multiplier — 2 plays the sequence twice as fast. Default 1. */
   speed?: number;
+  /**
+   * Called once when the overlay starts fading out (also on skip). Mount the
+   * page beneath here so it comes up under the fade and the two cross:
+   * waiting for onComplete leaves a black beat, then a snap.
+   */
+  onExit?: () => void;
   /** Called once after the overlay finishes fading out (also on skip). */
   onComplete?: () => void;
   /** Whether to show the skip button. Defaults to true. */
@@ -44,7 +50,8 @@ const lineOut = (i: number) => lineIn(i) + FADE + LINE_HOLD;
 /**
  * Full-screen intro/splash overlay: an optional hero sits on top for the whole
  * sequence while lines cycle one at a time in a fixed slot beneath it. After
- * the last line leaves, the hero and overlay fade out (never snap), then
+ * the last line leaves, the hero and overlay fade out (never snap) — onExit
+ * fires as that fade begins, so the page beneath can come up under it — then
  * onComplete fires and it unmounts. Locks body scroll while visible. Dark-only.
  * An optional persistKey gates it to play only once via localStorage.
  */
@@ -52,6 +59,7 @@ export function Intro({
   lines,
   hero,
   speed = 1,
+  onExit,
   onComplete,
   skippable = true,
   skipLabel = "skip",
@@ -62,9 +70,11 @@ export function Intro({
   const [visible, setVisible] = useState<boolean | null>(persistKey ? null : true);
   const reduceMotion = useReducedMotion();
 
-  // Keep the latest onComplete without re-running timers when it changes.
+  // Keep the latest callbacks without re-running timers when they change.
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
 
   // localStorage gate.
   useEffect(() => {
@@ -77,8 +87,14 @@ export function Intro({
 
   // Starts the fade-out; completion settles in AnimatePresence's
   // onExitComplete so onComplete only fires once the fade has finished.
+  // onExit fires here, once: a second call (the timer landing after a skip)
+  // must not announce a second exit.
+  const exited = useRef(false);
   const beginExit = useCallback(() => {
+    if (exited.current) return;
+    exited.current = true;
     setVisible(false);
+    onExitRef.current?.();
   }, []);
 
   const handleExited = useCallback(() => {
