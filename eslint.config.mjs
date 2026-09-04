@@ -20,6 +20,7 @@ const eslintConfig = [
       "next-env.d.ts",
       // Vendored agent skill trees — not application source, don't lint them.
       ".claude/**",
+      ".cursor/**",
       ".agents/**",
       ".gemini/**",
       ".opencode/**",

@@ -4,7 +4,7 @@ import { ItemGallery } from "@/components/ItemGallery";
 import { GalleryTabs, type GalleryTab } from "@/components/GalleryTabs";
 import { ProjectWall, type WallPiece } from "@/components/gallery/ProjectWall";
 import Link from "next/link";
-import { MangaPages, type MangaPiece } from "@/components/gallery/MangaPages";
+import { MangaStrip, type MangaPiece } from "@/components/gallery/MangaPages";
 import { AppStore } from "@/components/gallery/AppStoreList";
 import { CrtMonitor, type CrtChannel } from "@/components/gallery/CrtMonitor";
 import { getItemsByCategory, type SiteGalleryItem } from "@/lib/items";
@@ -215,8 +215,17 @@ function ThemedSections({ sections, seed }: { sections: Sections; seed: number }
                         </div>
                     )}
 
+                    {/* A band, not a wall: bled to the viewport's edges (the main
+                        is centred and padded, so the offset is half the difference
+                        between the viewport and the column) and faded at both
+                        ends, so the pages arrive and leave rather than appearing
+                        cut. */}
                     {theme === "panels" && (
-                        <MangaPages pages={packPages(sections.panels, sectionSeed)} ariaLabel="panels" />
+                        <MangaStrip
+                            pages={packPages(sections.panels, sectionSeed)}
+                            ariaLabel="panels"
+                            className="relative left-1/2 w-screen -translate-x-1/2"
+                        />
                     )}
                     {/* The set stands off the label by the same dark that
                         separates its pool from the next hang. */}

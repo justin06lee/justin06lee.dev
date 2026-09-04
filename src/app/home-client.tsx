@@ -9,8 +9,25 @@ import { Intro as ChromeIntro } from "@/components/chrome/intro";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { SiteConfig } from "@/lib/site-config";
 
+/**
+ * The home page in three phases. `intro` is the overlay alone; `revealing`
+ * begins the moment the overlay starts to fade, and is when the navbar and
+ * the page mount so their entrances run *under* the fade and the two cross;
+ * `home` is the page on its own. What this replaced mounted the page only
+ * after the fade had finished (a black beat, then a snap), slid the navbar in
+ * on a hard-coded 16-second timer that had nothing to do with when the intro
+ * actually ended, and remounted the whole tree at the end, so the navbar
+ * entered twice. Replaying the intro (the nav's "intro") goes back to `intro`
+ * with a fresh key on the overlay; the page and navbar unmount beneath it and
+ * enter again when it lifts.
+ */
+type Phase = "intro" | "revealing" | "home";
+
+/** How much faster than the chrome intro's own timeline: about two seconds a line. */
+const INTRO_SPEED = 2.2;
+
 export default function HomeClient({ config }: { config: SiteConfig }) {
-  const [hasPlayed, setHasPlayed] = useState<null | boolean>(null);
+  const [phase, setPhase] = useState<Phase | null>(null);
   const [introCycle, setIntroCycle] = useState(0);
 
   const sp = useSearchParams();
@@ -18,15 +35,13 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
   const shouldReplay = sp.get("intro") === "1";
 
   useEffect(() => {
-    const did =
-      typeof window !== "undefined" &&
-      localStorage.getItem("did_anim") === "true";
-    setHasPlayed(did);
+    const did = typeof window !== "undefined" && localStorage.getItem("did_anim") === "true";
+    setPhase(did ? "home" : "intro");
   }, []);
 
   useEffect(() => {
     if (shouldReplay) {
-      setHasPlayed(false);
+      setPhase("intro");
       setIntroCycle((c) => c + 1);
       window.dispatchEvent(new Event("replay-intro"));
       router.replace("/", { scroll: false });
@@ -35,35 +50,38 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
 
   useEffect(() => {
     const onReplay = () => {
-      setHasPlayed(false);
+      setPhase("intro");
       setIntroCycle((c) => c + 1);
     };
     window.addEventListener("replay-intro", onReplay);
     return () => window.removeEventListener("replay-intro", onReplay);
   }, []);
 
-  if (hasPlayed === null) return null;
+  // Undetermined until localStorage has been read, so a return visit never
+  // flashes the intro and a first visit never flashes the page.
+  if (phase === null) return null;
+
+  const pageShown = phase !== "intro";
 
   return (
     <div className="w-screen flex justify-center text-center bg-black text-white">
-      <div className="min-h-screen flex flex-col" key={introCycle}>
+      <div className="min-h-screen flex flex-col">
         {/* The navbar animates itself in via `entrance`. It must: it is
             position:fixed, so an animating wrapper's transform would become its
-            containing block and render it at the wrapper's width — which here
-            is a shrink-to-fit column, so the bar sat narrow and centered until
-            the tween ended and motion wrote `transform: none`, then snapped
-            out to full width. On a first visit it waits out the 16s intro. */}
-        <Navbar pfp={config.pfp} entrance={{ duration: 1, delay: hasPlayed ? 0 : 16 }} />
+            containing block and render it at the wrapper's width. It mounts
+            with the page, so its slide is part of the same reveal. */}
+        {pageShown && <Navbar pfp={config.pfp} entrance={{ duration: 0.8, delay: 0.1 }} />}
 
-        {hasPlayed && <HomePage config={config} />}
+        {pageShown && <HomePage config={config} />}
 
-        {!hasPlayed && (
+        {phase === "intro" && (
           <Intro
+            key={introCycle}
             config={config}
+            onExit={() => setPhase("revealing")}
             onDone={() => {
               localStorage.setItem("did_anim", "true");
-              setHasPlayed(true);
-              setIntroCycle((c) => c + 1);
+              setPhase("home");
             }}
           />
         )}
@@ -72,7 +90,7 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
   );
 }
 
-function Intro({ config, onDone }: { config: SiteConfig; onDone: () => void }) {
+function Intro({ config, onExit, onDone }: { config: SiteConfig; onExit: () => void; onDone: () => void }) {
   const justinStep = (
     <span className="inline-flex items-center gap-1.5">
       <span>im justin.</span>
@@ -106,7 +124,9 @@ function Intro({ config, onDone }: { config: SiteConfig; onDone: () => void }) {
         </div>
       }
       lines={["hi.", justinStep, "welcome to my website."]}
+      speed={INTRO_SPEED}
       skipLabel="skip"
+      onExit={onExit}
       onComplete={onDone}
     />
   );
