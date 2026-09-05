@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
 import { Intro as ChromeIntro } from "@/components/chrome/intro";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import type { SiteConfig } from "@/lib/site-config";
 
 /**
@@ -31,7 +31,6 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
   const [introCycle, setIntroCycle] = useState(0);
 
   const sp = useSearchParams();
-  const router = useRouter();
   const shouldReplay = sp.get("intro") === "1";
 
   useEffect(() => {
@@ -39,14 +38,18 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
     setPhase(did ? "home" : "intro");
   }, []);
 
+  // Arriving from another page with ?intro=1: play it, then drop the param.
   useEffect(() => {
-    if (shouldReplay) {
-      setPhase("intro");
-      setIntroCycle((c) => c + 1);
-      window.dispatchEvent(new Event("replay-intro"));
-      router.replace("/", { scroll: false });
-    }
-  }, [shouldReplay, router]);
+    if (!shouldReplay) return;
+    setPhase("intro");
+    setIntroCycle((c) => c + 1);
+    // history.replaceState, not router.replace: this route is force-dynamic, so
+    // a replace refetches it from the server, and when that response finally
+    // commits, the Suspense boundary above swaps in its null fallback — the
+    // whole tree unmounts and the entrance replays, seconds after the intro
+    // finished. Rewriting the URL in place is all that was ever wanted.
+    window.history.replaceState(null, "", "/");
+  }, [shouldReplay]);
 
   useEffect(() => {
     const onReplay = () => {
