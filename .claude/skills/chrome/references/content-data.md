@@ -415,6 +415,36 @@ for multi-field logins pass `fields` (e.g. email + password); each entry sets na
 />
 ```
 
+## pane
+
+**Role:** a window onto content taller than the room you want to give it — the pane scrolls, not the page.
+**Install:** `bunx @justin06lee/chrome@latest add pane`
+**Composes:** nothing beyond utils
+
+this is what a section becomes when it would otherwise push everything below it off the end of the document: a wall of images that grows every time you ship something, a log, a list with no natural end. give it a `maxHeight` (any CSS length — `min(85vh, 900px)` is a fine answer) and it bounds how much you see at once while leaving the content exactly as handed to it. content shorter than `maxHeight` is left alone and the pane doesn't scroll at all.
+
+**the scrollbar is on by default and it *is* the affordance.** a bounded box whose content is silently cut reads as a broken layout rather than a window, and unlike `shelf` there are no arrows here to say otherwise. the rules are written against a class precisely so they outrank an app-wide `*::-webkit-scrollbar { display: none }` — a site that has gone scrollbar-free everywhere is exactly the site that needs this one back. `scrollbar={false}` opts out when something else in the layout already says "there's more".
+
+**scroll chaining is deliberately left alone.** `overscroll-behavior: contain` looks like the tidy choice and traps the reader: at the end of the pane the page has to keep moving, or a pane in the middle of a document becomes a wall you can't get past. if you reach for that property, you are building a modal scroller, which is a different thing.
+
+**the edge is faded only where the content actually continues**, measured with a `ResizeObserver` on the track and its children plus a scroll listener, never assumed — a permanent top fade lies about there being something above, and the same content overflows on a laptop and doesn't on a tall monitor. there is a pixel of slack in the comparison, because sub-pixel layout means `scrollTop` rarely lands exactly on the maximum and a fade that never clears looks broken. for the same reason the pane is a tab stop *only while it overflows*: a focusable box that cannot scroll is a dead stop in the tab order. pass `ariaLabel` and it becomes a named `role="region"`, which is what makes it findable to a screen reader once it is focusable.
+
+vs siblings: `shelf` is the horizontal errand — a row of cards you skim, sized *by* the shelf and paged by arrows — where the point is that there's more off the side of the screen; a pane keeps its content untouched and only limits how much of it is on screen. `sheet` and `dialog` are overlays that take the whole screen's attention; a pane stays in the flow of the page. `collapsible-prose` hides overflow behind a "read more" toggle rather than letting you scroll it, so reach for that when the content is text you want summarised and this when the content is a body you want to browse.
+
+**Key props:**
+- `children: ReactNode` — required
+- `maxHeight: string = '70vh'` — tallest the pane may grow, as any CSS length; shorter content is left alone and does not scroll.
+- `scrollbar: boolean = true` — show a thin scrollbar. off leaves the pane scrollable but unmarked.
+- `ariaLabel: string` — accessible name; given one, the pane becomes a named region.
+- `className: string`
+
+**Example:**
+```tsx
+<Pane maxHeight="min(85vh, 960px)" ariaLabel="panels">
+  <MangaPages pages={pages} />
+</Pane>
+```
+
 ## prose
 
 **Role:** markdown renderer with the full pipeline — GFM, KaTeX math, heading slugs, highlighted code.

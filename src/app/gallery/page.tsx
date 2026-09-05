@@ -4,7 +4,8 @@ import { ItemGallery } from "@/components/ItemGallery";
 import { GalleryTabs, type GalleryTab } from "@/components/GalleryTabs";
 import { ProjectWall, type WallPiece } from "@/components/gallery/ProjectWall";
 import Link from "next/link";
-import { MangaStrip, type MangaPiece } from "@/components/gallery/MangaPages";
+import { MangaPages, type MangaPiece } from "@/components/gallery/MangaPages";
+import { Pane } from "@/components/chrome/pane";
 import { AppStore } from "@/components/gallery/AppStoreList";
 import { CrtMonitor, type CrtChannel } from "@/components/gallery/CrtMonitor";
 import { getItemsByCategory, type SiteGalleryItem } from "@/lib/items";
@@ -215,17 +216,16 @@ function ThemedSections({ sections, seed }: { sections: Sections; seed: number }
                         </div>
                     )}
 
-                    {/* A band, not a wall: bled to the viewport's edges (the main
-                        is centred and padded, so the offset is half the difference
-                        between the viewport and the column) and faded at both
-                        ends, so the pages arrive and leave rather than appearing
-                        cut. */}
+                    {/* The wall is hung inside a window with its own scrollbar.
+                        Left to itself it grows a page taller with every project
+                        until the set and the store below it are never reached;
+                        bounded, it stays one screen tall however many projects
+                        there are. The pane carries the accessible name, so the
+                        wall inside it doesn't repeat it. */}
                     {theme === "panels" && (
-                        <MangaStrip
-                            pages={packPages(sections.panels, sectionSeed)}
-                            ariaLabel="panels"
-                            className="relative left-1/2 w-screen -translate-x-1/2"
-                        />
+                        <Pane maxHeight="min(85vh, 960px)" ariaLabel="panels">
+                            <MangaPages pages={packPages(sections.panels, sectionSeed)} />
+                        </Pane>
                     )}
                     {/* The set stands off the label by the same dark that
                         separates its pool from the next hang. */}
