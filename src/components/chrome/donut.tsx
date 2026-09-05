@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { DonutConfig } from "./donut-frames";
-import { acquireBake, releaseBake } from "./donut-cache";
+import { acquireBake, releaseBake, frameString } from "./donut-cache";
 
 export interface DonutProps {
   width?: number;
@@ -124,6 +124,15 @@ export function Donut({
     const handle = acquireBake(cfg);
     const N = handle.N;
 
+    // Paint one frame now, before the first rAF, so the element is never
+    // empty. The bake — worker or main-thread — takes hundreds of milliseconds
+    // to land, and the loop below deliberately waits for it, so without this
+    // the <pre> has no content for that whole window: a donut placed inside an
+    // entrance animation fades in as an empty box and the art appears
+    // afterwards at full opacity, as a pop. One frame computed here is cheap
+    // and happens once per mount.
+    pre.textContent = frameString(handle, 0);
+
     const frameBudget = isLowEnd ? 33 : 0; // ~30fps on low-end, vsync otherwise
     let lastFrameTime = 0;
     let fi = 0;
@@ -133,13 +142,12 @@ export function Donut({
         rafId = requestAnimationFrame(frame);
         return;
       }
-
-      // Play ONLY precomputed frames. Never compute a frame live on the main
-      // thread during playback — that's what makes the spin stutter while the
-      // bake is still landing (or if the worker fails to load). If the next
-      // frame isn't baked yet, hold on the current one until it arrives. Once
-      // baked, steady-state is a pure array read (`frames[fi]`) with zero math,
-      // so the browser just flips through the strings as fast as vsync allows.
+      // Play ONLY precomputed frames. Computing a frame live during playback
+      // is what makes the spin stutter while the bake is still landing (or if
+      // the worker never loads). If the next frame isn't baked yet, hold —
+      // the element keeps showing the frame above, so the donut is *still*
+      // before it spins rather than absent before it appears. Once baked,
+      // steady-state is a pure array read with zero math.
       const s = handle.frames[fi];
       if (s === undefined) {
         rafId = requestAnimationFrame(frame);

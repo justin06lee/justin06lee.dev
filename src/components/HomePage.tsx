@@ -11,37 +11,39 @@ import { Scramble } from "@/components/chrome/scramble";
 import { Ascii } from "@/components/chrome/ascii";
 import type { SiteConfig } from "@/lib/site-config";
 
+/**
+ * Breakpoint to donut scale. Hoisted and ordered widest-first so the scale can
+ * be resolved in one pass, synchronously.
+ */
+const DONUT_SCALES = [
+    { query: "(min-width:1536px)", scale: 1.0 },
+    { query: "(min-width:1280px)", scale: 0.75 },
+    { query: "(min-width:1024px)", scale: 0.6 },
+] as const;
+const BASE_DONUT_SCALE = 0.4;
+
+function currentDonutScale(): number {
+    return DONUT_SCALES.find(({ query }) => window.matchMedia(query).matches)?.scale ?? BASE_DONUT_SCALE;
+}
+
 function useBreakpointScale() {
-    const [s, setS] = useState(1);
+    // Resolved before the first paint, not one render after it. The donut's
+    // grid is derived from this, and a scale that arrives late bakes a
+    // full-size donut, throws it away, and bakes the real one — two bakes at
+    // exactly the moment the page is animating in, when the first frame is
+    // what the entrance has to fade. Guarded for the server, where matchMedia
+    // doesn't exist; nothing renders differently there (the donut's <pre> is
+    // filled by an effect), so there is no markup to mismatch.
+    const [s, setS] = useState(() => (typeof window === "undefined" ? 1 : currentDonutScale()));
+
     useEffect(() => {
-        const mqs = [
-            { mq: window.matchMedia("(min-width:1536px)"), key: "2xl" },
-            { mq: window.matchMedia("(min-width:1280px)"), key: "xl" },
-            { mq: window.matchMedia("(min-width:1024px)"), key: "lg" },
-            { mq: window.matchMedia("(min-width:768px)"), key: "md" },
-            { mq: window.matchMedia("(min-width:640px)"), key: "sm" },
-            { mq: window.matchMedia("(min-width:400px)"), key: "xs" },
-        ];
-
-        const scaleByKey = {
-            "2xl": 1.0,
-            xl: 0.75,
-            lg: 0.6,
-            md: 0.4,
-            sm: 0.4,
-            xs: 0.4,
-            base: 0.4,
-        } as const;
-
-        const compute = () => {
-            const match = mqs.find(({ mq }) => mq.matches)?.key ?? "base";
-            setS(scaleByKey[match as keyof typeof scaleByKey] ?? scaleByKey.base);
-        };
-
-        mqs.forEach(({ mq }) => mq.addEventListener("change", compute));
+        const mqs = DONUT_SCALES.map(({ query }) => window.matchMedia(query));
+        const compute = () => setS(currentDonutScale());
+        mqs.forEach((mq) => mq.addEventListener("change", compute));
         compute();
-        return () => mqs.forEach(({ mq }) => mq.removeEventListener("change", compute));
+        return () => mqs.forEach((mq) => mq.removeEventListener("change", compute));
     }, []);
+
     return s;
 }
 
