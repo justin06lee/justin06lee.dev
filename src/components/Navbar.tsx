@@ -54,6 +54,15 @@ export default function Navbar({
     }, [pfp]);
 
     const playIntro = () => {
+        // The intro is a client-side animation, so on the home page replay it
+        // where it stands. Routing to /?intro=1 and back round-trips a
+        // force-dynamic route through the server for no reason, and when that
+        // navigation commits it takes the whole tree with it: the page blinks
+        // out and re-enters, long after the intro has finished.
+        if (window.location.pathname === "/") {
+            window.dispatchEvent(new Event("replay-intro"));
+            return;
+        }
         router.push("/?intro=1", { scroll: false });
     };
 
