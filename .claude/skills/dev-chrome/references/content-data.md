@@ -415,6 +415,36 @@ for multi-field logins pass `fields` (e.g. email + password); each entry sets na
 />
 ```
 
+## pane
+
+**Role:** a window onto content taller than the room you want to give it — the pane scrolls, not the page.
+**Install:** `bunx @justin06lee/chrome@latest add pane`
+**Composes:** nothing beyond utils
+
+this is what a section becomes when it would otherwise push everything below it off the end of the document: a wall of images that grows every time you ship something, a log, a list with no natural end. give it a `maxHeight` (any CSS length — `min(85vh, 900px)` is a fine answer) and it bounds how much you see at once while leaving the content exactly as handed to it. content shorter than `maxHeight` is left alone and the pane doesn't scroll at all.
+
+**the scrollbar is on by default and it *is* the affordance.** a bounded box whose content is silently cut reads as a broken layout rather than a window, and unlike `shelf` there are no arrows here to say otherwise. the rules are written against a class precisely so they outrank an app-wide `*::-webkit-scrollbar { display: none }` — a site that has gone scrollbar-free everywhere is exactly the site that needs this one back. `scrollbar={false}` opts out when something else in the layout already says "there's more".
+
+**scroll chaining is deliberately left alone.** `overscroll-behavior: contain` looks like the tidy choice and traps the reader: at the end of the pane the page has to keep moving, or a pane in the middle of a document becomes a wall you can't get past. if you reach for that property, you are building a modal scroller, which is a different thing.
+
+**the edge is faded only where the content actually continues**, measured with a `ResizeObserver` on the track and its children plus a scroll listener, never assumed — a permanent top fade lies about there being something above, and the same content overflows on a laptop and doesn't on a tall monitor. there is a pixel of slack in the comparison, because sub-pixel layout means `scrollTop` rarely lands exactly on the maximum and a fade that never clears looks broken. for the same reason the pane is a tab stop *only while it overflows*: a focusable box that cannot scroll is a dead stop in the tab order. pass `ariaLabel` and it becomes a named `role="region"`, which is what makes it findable to a screen reader once it is focusable.
+
+vs siblings: `shelf` is the horizontal errand — a row of cards you skim, sized *by* the shelf and paged by arrows — where the point is that there's more off the side of the screen; a pane keeps its content untouched and only limits how much of it is on screen. `sheet` and `dialog` are overlays that take the whole screen's attention; a pane stays in the flow of the page. `collapsible-prose` hides overflow behind a "read more" toggle rather than letting you scroll it, so reach for that when the content is text you want summarised and this when the content is a body you want to browse.
+
+**Key props:**
+- `children: ReactNode` — required
+- `maxHeight: string = '70vh'` — tallest the pane may grow, as any CSS length; shorter content is left alone and does not scroll.
+- `scrollbar: boolean = true` — show a thin scrollbar. off leaves the pane scrollable but unmarked.
+- `ariaLabel: string` — accessible name; given one, the pane becomes a named region.
+- `className: string`
+
+**Example:**
+```tsx
+<Pane maxHeight="min(85vh, 960px)" ariaLabel="panels">
+  <MangaPages pages={pages} />
+</Pane>
+```
+
 ## prose
 
 **Role:** markdown renderer with the full pipeline — GFM, KaTeX math, heading slugs, highlighted code.
@@ -443,6 +473,51 @@ vs siblings: prose is the renderer; `article` is the page layout that typically 
 **Example:**
 ```tsx
 <Prose>{`# hello\n\nmarkdown with $e^{i\\pi} + 1 = 0$ and \`\`\`ts\ncode\n\`\`\``}</Prose>
+```
+
+## salon
+
+**Role:** a salon hang — a wall of images shown at their own aspect ratios, packed into justified rows that fill the width.
+**Install:** `bunx @justin06lee/chrome@latest add salon`
+**Composes:** nothing beyond utils
+
+the pieces keep their real proportions — a tall poster next to a wide banner next to a square — and the varied hang is the point. rows are justified to span the container with the row height kept near `targetRowHeight` — the effective minimum piece size — so the wall reads full rather than ragged and pieces never shrink away to fit. each row closes on whichever side (including the next piece, or deferring it to the next row) lands closer to the target height. each rendered box already has the piece's aspect ratio, and every `<img>` is given intrinsic `width`/`height` plus `object-contain`, so the whole piece always shows — it fills edge to edge, and any ratio mismatch (a viewBox-only SVG with no intrinsic size, a stale dimension) letterboxes instead of cropping. `width`/`height` are intrinsic *ratios*, not render sizes — `{ width: 16, height: 9 }` packs identically to `{ width: 1600, height: 900 }`.
+
+the packing geometry is extracted to a separate `salon-layout.ts` (shipped alongside the component) so it can be tested without a DOM, and it is: `justifyRows(items, containerWidth, gap, targetHeight)` is the whole algorithm, with tests covering gap accounting, full-row fill, the with/without-the-piece close choice, and the trailing-row cap. pieces with a non-positive or non-finite aspect ratio are skipped rather than throwing.
+
+the trailing leftover row is the one that can't always fill: it justifies like the rest when it nearly does on its own, but is otherwise capped at `targetRowHeight * 1.3` so a stray piece sits at a sane size instead of stretching across the whole width — the single deliberate exception, and never a crop.
+
+width is measured with a `ResizeObserver` so the hang reflows on resize, via `useIsomorphicLayoutEffect` (real `useLayoutEffect` on the client, `useEffect` on the server to dodge the SSR warning). the first, pre-measurement paint uses `assumedWidth` (1040) so the server and initial-client markup agree before the observer fires — set it near your real container width for server-rendered walls, or the first frame packs rows for the wrong width and visibly reflows on mount.
+
+each piece is a bordered box that brightens on hover/focus. a `title` renders as a gradient placard that fades in over the piece on hover/focus (snapped, not faded, under `prefers-reduced-motion`); a piece with no `src` renders that title as a centered typographic placard instead, so a wall can mix images and text plates. linking follows the house rule: internal hrefs route through `linkComponent` (falls back to a plain `<a>`), while external ones — flagged `external` or any `http(s)` href — always stay a plain `<a>` opening in a new tab with `rel="noopener noreferrer"`; a piece with no href renders as a plain div. the wall is a `role="group"` named by `ariaLabel`, and each linked piece takes its accessible name from `alt` (or a string `title`).
+
+vs siblings: `gallery` is the uniform, searchable, sortable card grid — every project the same card sized to a column, and it brings its own page heading and margins; `shelf` is one horizontal row you skim, stacked with other rows; `showcase` is a single framed demo preview. salon is none of those — many pieces at their real proportions, packed into a justified multi-row wall — so reach for it when the images *are* the content and their shapes carry meaning. `stack` (in `references/effects.md`) is the fanned pile rather than a laid-out wall.
+
+**Key props:**
+- `items: SalonItem[]` — required — the pieces to hang, each at its own aspect ratio: { src?: string; width: number; height: number; href?: string; alt?: string; title?: ReactNode; external?: boolean }[]. width/height are intrinsic pixels that set the aspect ratio, not the render size; omit src to render a typographic placard in the slot; a title shows as a placard on hover/focus; external (or an http(s) href) opens in a new tab as a plain <a>.
+- `targetRowHeight: number = 260` — target row height rows are justified around; the effective minimum piece size.
+- `gap: number = 12` — gap between pieces and rows in px.
+- `maxWidth: number` — container max width in px. unbounded by default (fills its parent).
+- `assumedWidth: number = 1040` — assumed width for the first (server) render, before the container is measured.
+- `linkComponent: React.ElementType` — router link for internal hrefs (e.g. next/link). defaults to a plain <a>; external hrefs always stay <a>.
+- `ariaLabel: string` — accessible name for the wall region.
+- `className: string`
+
+**Example:**
+```tsx
+import Link from "next/link";
+
+<Salon
+  ariaLabel="selected works"
+  targetRowHeight={240}
+  linkComponent={Link}
+  items={[
+    { src: "/banner.jpg", width: 1600, height: 540, title: "the horizon line", href: "/work/horizon" },
+    { src: "/poster.jpg", width: 800, height: 1200, title: "monolith", alt: "tall poster" },
+    { src: "/square.jpg", width: 1000, height: 1000, title: "study in gray" },
+    { src: "/wide.jpg", width: 1920, height: 1080, title: "wide angle", href: "https://example.com", external: true },
+  ]}
+/>
 ```
 
 ## shelf

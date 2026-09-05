@@ -26,7 +26,7 @@ split across the files in `references/`:
 | `references/overlays-nav.md` | accordion, breadcrumb, combobox, command-palette, dialog, menu, navbar, pagination, select, sheet, sidebar, stepper, tabs, timezone-select, toc, tooltip |
 | `references/feedback.md` | callout, empty-state, live-badge, progress, skeleton, toast |
 | `references/effects.md` | ascii, ascii-shader, blueprint, chrome, count-up, dimension, donut, fade-in, grain, hazard, intro, marquee, not-found, pencil-rule, pfp, rainbow, scramble, sprite-scrubber, stack, stamp |
-| `references/content-data.md` | article, article-list, bar-list, chat-composer, chat-log, code-block, collapsible-prose, detail-list, docket, file-card, gallery, image-cropper, login-form, prose, salon, shelf, showcase, sparkline, stat-tile, streak |
+| `references/content-data.md` | article, article-list, bar-list, chat-composer, chat-log, code-block, collapsible-prose, detail-list, docket, file-card, gallery, image-cropper, login-form, pane, prose, salon, shelf, showcase, sparkline, stat-tile, streak |
 | `references/time-scheduling.md` | add-to-calendar, availability-grid, break-overlay, calendar, calendar-nav, clock, date-strip, heatmap, interval-picker, slot-picker, timeline, timer-ring |
 | `references/media.md` | album-art, avatar-stack, lane-bar, lyrics, now-playing-bar, playhead, sound-bars, spectrum, track-list, transport, vinyl, volume, waveform |
 | `references/editor.md` | asset-sidebar, desk, drawing-window, editor, editor-toolbar, file-grid, inline-edit, manager-table, socials |
@@ -157,7 +157,8 @@ too, or the seams show:
   `container`), `tabs` / `segmented` (in-page switching).
 - showing collections: `gallery` (searchable card grid with pinned chrome
   foil), `shelf` (horizontally scrolling row you skim — arrows appear only
-  once it genuinely overflows), `salon` (a justified image wall where the
+  once it genuinely overflows), `pane` (a bounded window onto content too
+  tall for the space — the pane scrolls, not the page), `salon` (a justified image wall where the
   pieces keep their real aspect ratios and the varied hang is the point),
   `article-list` (article previews), `manager-table` (admin rows),
   `file-card` (stacked-paper download card), `file-grid` (file browser with
