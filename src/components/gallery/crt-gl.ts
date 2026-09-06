@@ -30,8 +30,10 @@ precision highp float;
 precision mediump float;
 #endif
 uniform sampler2D uTex;
+uniform sampler2D uTex2;
 uniform vec2 uRes;
 uniform vec2 uSpan;
+uniform vec2 uSpan2;
 uniform float uKeystone;
 uniform float uTime;
 uniform float uPower;
@@ -39,6 +41,8 @@ uniform float uSnow;
 uniform float uGlitch;
 uniform float uInvert;
 uniform float uHasTex;
+uniform float uHasTex2;
+uniform float uCross;
 uniform float uMotion;
 varying vec2 vUv;
 
@@ -62,6 +66,20 @@ float ease(float t) {
 // A gaussian-ish bump; pow() on a negative base is undefined in GLSL ES.
 float bump(float x) {
   return exp(-x * x);
+}
+
+// One source on the glass: the window of the texture the glass shows, with a
+// touch of colour fringing at the edges, like a tube that was never quite
+// converged. rgb is the picture, a is whether there is one under this pixel —
+// the two mix together, so the mask has to mix with them.
+vec4 source(sampler2D tex, vec2 span, float has, vec2 p, float ca) {
+  vec2 t = (p - 0.5) * span + 0.5;
+  float on = step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0) * has;
+  return vec4(vec3(
+    texture2D(tex, t + vec2(ca, 0.0)).r,
+    texture2D(tex, t).g,
+    texture2D(tex, t - vec2(ca, 0.0)).b
+  ) * on, on);
 }
 
 // The seven bars of a test card, left to right.
@@ -118,19 +136,23 @@ void main() {
   p.x = (p.x - 0.5) / xScale + 0.5;
   float inside = step(0.0, p.x) * step(p.x, 1.0) * step(0.0, p.y) * step(p.y, 1.0);
 
-  // The picture fills the glass; uSpan is the window of the texture that the
-  // glass shows (1 on an axis means all of it).
-  vec2 t = (p - 0.5) * uSpan + 0.5;
-  float onTex = step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0) * uHasTex;
-
-  // A touch of colour fringing at the edges, like a tube that was never
-  // quite converged.
+  // The two sources dissolve into each other: uTex is the project's picture,
+  // uTex2 the clip, uCross how much of the clip shows. The dissolve happens
+  // here, before anything else — the roll, the snow, the bars, the grille and
+  // the scanlines are the tube's, and a tube showing a dissolve is still one
+  // tube. The branches are on a uniform, so they cost nothing and the two
+  // steady states stay at three texture fetches rather than six.
   float ca = 0.0026 * length(uv - 0.5);
-  vec3 col = vec3(
-    texture2D(uTex, t + vec2(ca, 0.0)).r,
-    texture2D(uTex, t).g,
-    texture2D(uTex, t - vec2(ca, 0.0)).b
-  ) * onTex;
+  vec4 s;
+  if (uCross <= 0.001) {
+    s = source(uTex, uSpan, uHasTex, p, ca);
+  } else if (uCross >= 0.999) {
+    s = source(uTex2, uSpan2, uHasTex2, p, ca);
+  } else {
+    s = mix(source(uTex, uSpan, uHasTex, p, ca), source(uTex2, uSpan2, uHasTex2, p, ca), uCross);
+  }
+  vec3 col = s.rgb;
+  float onTex = s.a;
 
   // Inverted colours, only where there is a picture to invert; the dark
   // outside the raster stays dark.
@@ -216,10 +238,15 @@ export type CrtRenderer = {
    * `period` seconds for an animated one. `null` clears the glass.
    */
   setPicture(picture: { frames: TexImageSource[]; width: number; height: number; period: number } | null): void;
-  /** Upload the clip's current frame. It is what the glass shows while `showVideo(true)`. */
+  /** Upload the clip's current frame. It is what the glass shows at mix 1. */
   setVideoFrame(video: HTMLVideoElement): void;
-  /** Which source the glass shows: the clip's last frame, or the picture. */
-  showVideo(on: boolean): void;
+  /**
+   * How much of the clip the glass shows, against the picture: 1 the clip
+   * alone, 0 the picture alone, and anything between a dissolve of the two.
+   * A hover flips it; on a touch screen, where there is no hover, scrolling
+   * the set toward the middle of the view drives it.
+   */
+  setVideoMix(amount: number): void;
   resize(width: number, height: number): void;
   render(frame: CrtFrame): void;
   destroy(): void;
@@ -274,15 +301,35 @@ export function createCrtRenderer(
   const program = gl.createProgram();
   const vs = gl.createShader(gl.VERTEX_SHADER);
   const fs = gl.createShader(gl.FRAGMENT_SHADER);
-  if (!program || !vs || !fs) return null;
-  gl.shaderSource(vs, VERT);
-  gl.compileShader(vs);
-  gl.shaderSource(fs, FRAG);
-  gl.compileShader(fs);
+  if (!program || !vs || !fs) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`crt: could not create the program (context lost: ${gl.isContextLost()})`);
+    }
+    return null;
+  }
+  // A shader that won't compile returns null here, and the component quietly
+  // falls back to a flat image — which is the right thing to ship and exactly
+  // the wrong thing to debug against, because nothing anywhere says why. The
+  // driver's log is the only thing that does, so say it in development.
+  const compile = (shader: WebGLShader, source: string, what: string) => {
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return true;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`crt: ${what} shader did not compile\n${gl.getShaderInfoLog(shader)}`);
+    }
+    return false;
+  };
+  if (!compile(vs, VERT, "vertex") || !compile(fs, FRAG, "fragment")) return null;
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`crt: program did not link\n${gl.getProgramInfoLog(program)}`);
+    }
+    return null;
+  }
   gl.useProgram(program);
 
   const quad = gl.createBuffer();
@@ -321,8 +368,11 @@ export function createCrtRenderer(
   };
 
   const u = {
+    tex: gl.getUniformLocation(program, "uTex"),
+    tex2: gl.getUniformLocation(program, "uTex2"),
     res: gl.getUniformLocation(program, "uRes"),
     span: gl.getUniformLocation(program, "uSpan"),
+    span2: gl.getUniformLocation(program, "uSpan2"),
     keystone: gl.getUniformLocation(program, "uKeystone"),
     time: gl.getUniformLocation(program, "uTime"),
     power: gl.getUniformLocation(program, "uPower"),
@@ -330,9 +380,15 @@ export function createCrtRenderer(
     glitch: gl.getUniformLocation(program, "uGlitch"),
     invert: gl.getUniformLocation(program, "uInvert"),
     hasTex: gl.getUniformLocation(program, "uHasTex"),
+    hasTex2: gl.getUniformLocation(program, "uHasTex2"),
+    cross: gl.getUniformLocation(program, "uCross"),
     motion: gl.getUniformLocation(program, "uMotion"),
   };
   gl.uniform1f(u.keystone, geo.keystone);
+  // The picture lives on unit 0 and the clip on unit 1 for the life of the
+  // renderer, so a dissolve is two binds a frame rather than a reload.
+  gl.uniform1i(u.tex, 0);
+  gl.uniform1i(u.tex2, 1);
 
   let hasTex = 0;
   let texAspect = 1;
@@ -341,16 +397,22 @@ export function createCrtRenderer(
   let videoTex: WebGLTexture | null = null;
   let videoAspect = 1;
   let videoHas = 0;
-  let videoOn = false;
+  let videoMix = 0;
   let width = canvas.width;
   let height = canvas.height;
 
-  const showingVideo = () => videoOn && videoHas === 1 && videoTex !== null;
+  // The clip can only be mixed in once there is a frame of it to mix.
+  const cross = () => (videoHas === 1 && videoTex !== null ? videoMix : 0);
 
+  // Both spans, always: the two sources have their own aspects, so each needs
+  // its own window on the glass or the dissolve would re-frame one of them
+  // as it crossed.
   const updateSpan = () => {
-    const aspect = showingVideo() ? videoAspect : texAspect;
-    const [sx, sy] = pictureSpan(aspect, width / height, geo.stretch, geo.overscan);
+    const glass = width / height;
+    const [sx, sy] = pictureSpan(texAspect, glass, geo.stretch, geo.overscan);
     gl.uniform2f(u.span, sx, sy);
+    const [vx, vy] = pictureSpan(videoAspect, glass, geo.stretch, geo.overscan);
+    gl.uniform2f(u.span2, vx, vy);
   };
 
   return {
@@ -394,9 +456,8 @@ export function createCrtRenderer(
         updateSpan();
       }
     },
-    showVideo(on) {
-      videoOn = on;
-      updateSpan();
+    setVideoMix(amount) {
+      videoMix = Math.min(1, Math.max(0, amount));
     },
     resize(w, h) {
       width = Math.max(1, Math.floor(w));
@@ -407,21 +468,24 @@ export function createCrtRenderer(
       updateSpan();
     },
     render(frame) {
-      const video = showingVideo();
-      if (video) {
-        gl.bindTexture(gl.TEXTURE_2D, videoTex);
-      } else {
-        const n = frames.length;
-        const i = n > 1 && period > 0 ? Math.floor((frame.time / period) * n) % n : 0;
-        gl.bindTexture(gl.TEXTURE_2D, frames[i] ?? blank);
-      }
+      // Unit 1 first, then unit 0, so unit 0 is the one left active: every
+      // upload outside this function binds on the active unit, and render
+      // rebinds both anyway.
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, videoTex ?? blank);
+      gl.activeTexture(gl.TEXTURE0);
+      const n = frames.length;
+      const i = n > 1 && period > 0 ? Math.floor((frame.time / period) * n) % n : 0;
+      gl.bindTexture(gl.TEXTURE_2D, frames[i] ?? blank);
       gl.uniform2f(u.res, width, height);
       gl.uniform1f(u.time, frame.time);
       gl.uniform1f(u.power, frame.power);
       gl.uniform1f(u.snow, frame.snow);
       gl.uniform1f(u.glitch, frame.glitch);
       gl.uniform1f(u.invert, frame.invert);
-      gl.uniform1f(u.hasTex, video ? 1 : hasTex);
+      gl.uniform1f(u.hasTex, hasTex);
+      gl.uniform1f(u.hasTex2, videoHas);
+      gl.uniform1f(u.cross, cross());
       gl.uniform1f(u.motion, frame.motion);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
@@ -433,7 +497,17 @@ export function createCrtRenderer(
       gl.deleteProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      // Deliberately *not* `loseContext()`. It looks like the tidy thing —
+      // hand the GPU its memory back now rather than at the next collection —
+      // but a lost context stays bound to its canvas, and `getContext` on that
+      // canvas afterwards returns the same lost one rather than a fresh one.
+      // React hands the same canvas node to a new renderer routinely (its
+      // double-invoked effects in development, and any remount that reconciles
+      // the node rather than replacing it), and every one of those got a
+      // context on which `createShader` quietly returns null — the set fell
+      // through to its flat fallback for the rest of the session, after a tab
+      // switch and back. There is one of these on a page; letting it go with
+      // the canvas is the cheaper mistake by far.
     },
   };
 }
