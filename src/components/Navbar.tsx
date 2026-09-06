@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Navbar as ChromeNavbar, type NavbarProps } from "@/components/chrome/navbar";
 import { Rainbow } from "@/components/chrome/rainbow";
+import { useIsPhone } from "@/hooks/use-phone";
 import type { Pfp } from "@/lib/site-config";
 
 // Mono on purpose, the one place in the nav: the carets are ascii, and the
@@ -40,6 +41,11 @@ export default function Navbar({
 }: { pfp?: Pfp; entrance?: NavbarProps["entrance"] } = {}) {
     const [fetchedPfp, setFetchedPfp] = useState<Pfp | undefined>(pfp);
     const router = useRouter();
+    // The home page doesn't play the intro on a phone, so the nav doesn't
+    // offer it there. Resolving after mount is free here: leftLinks only ever
+    // appear on a phone inside the hamburger panel, which isn't rendered until
+    // it is opened, so there is nothing to see removed.
+    const phone = useIsPhone();
 
     useEffect(() => {
         if (pfp) { setFetchedPfp(pfp); return; }
@@ -93,7 +99,7 @@ export default function Navbar({
         <ChromeNavbar
             brand={brand}
             entrance={entrance}
-            leftLinks={[
+            leftLinks={phone ? [] : [
                 { label: "intro", onClick: playIntro, id: "intro" },
             ]}
             links={[

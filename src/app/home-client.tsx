@@ -7,6 +7,7 @@ import HomePage from "@/components/HomePage";
 import AsciiSpinningDonut from "@/components/AsciiDonut";
 import { Intro as ChromeIntro } from "@/components/chrome/intro";
 import { useSearchParams } from "next/navigation";
+import { PHONE_QUERY } from "@/hooks/use-phone";
 import type { SiteConfig } from "@/lib/site-config";
 
 /**
@@ -35,14 +36,24 @@ export default function HomeClient({ config }: { config: SiteConfig }) {
 
   useEffect(() => {
     const did = typeof window !== "undefined" && localStorage.getItem("did_anim") === "true";
-    setPhase(did ? "home" : "intro");
+    // The intro is a desktop thing. It was composed for a screen it could
+    // hold the middle of — a donut, three lines, eight seconds — and a phone
+    // gives it a fraction of that room while putting the page the visitor
+    // actually asked for eight seconds away. The nav's "intro" goes with it
+    // below the same breakpoint, so nothing offers what isn't there.
+    const phone = window.matchMedia(PHONE_QUERY).matches;
+    setPhase(did || phone ? "home" : "intro");
   }, []);
 
   // Arriving from another page with ?intro=1: play it, then drop the param.
   useEffect(() => {
     if (!shouldReplay) return;
-    setPhase("intro");
-    setIntroCycle((c) => c + 1);
+    // Strip the param either way: a phone that arrived here from an older tab
+    // or a shared link shouldn't be left with ?intro=1 in the bar.
+    if (!window.matchMedia(PHONE_QUERY).matches) {
+      setPhase("intro");
+      setIntroCycle((c) => c + 1);
+    }
     // history.replaceState, not router.replace: this route is force-dynamic, so
     // a replace refetches it from the server, and when that response finally
     // commits, the Suspense boundary above swaps in its null fallback — the
