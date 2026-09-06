@@ -183,9 +183,11 @@ pick menu when items are actions or a small fixed choice set behind an icon/butt
 **Install:** `bunx @justin06lee/chrome@latest add navbar`
 **Composes:** lucide-react, motion (npm); nothing beyond utils from the registry (also installs its own use-navbar.ts hook)
 
-renders a `fixed inset-x-0 top-0 z-40` nav with a left cluster (brand plus the optional `leftLinks` group beside it) and, at `md` and up, a right cluster of `links` plus your `actions` node. below `md` it swaps to a hamburger that opens a right-side slide-in panel (motion tween, `AnimatePresence` exit animation) over a dimmed backdrop; the panel lists the union of leftLinks and links vertically (left first) and closes when one is tapped. a `NavLink` is `{ label: ReactNode, href?, onClick?, id? }`: with `href` it renders a plain `<a>` (framework-agnostic, no router integration and no linkComponent prop); omit `href` and give `onClick` for a `<button>` item (theme toggles, palette openers); with both, onClick runs alongside navigation. keys fold in the index, so placeholder hrefs (`"#"`) can repeat — pass `id` for stability across reorders.
+renders a `fixed inset-x-0 top-0 z-40` nav with a left cluster (brand plus the optional `leftLinks` group beside it) and, at `md` and up, a right cluster of `links` plus your `actions` node. below `md` it swaps to a hamburger that opens a right-side slide-in panel (motion tween, `AnimatePresence` exit animation) over a dimmed backdrop; the panel lists the union of leftLinks and links vertically (left first) and closes when one is tapped. a `NavLink` is `{ label: ReactNode, href?, onClick?, id? }`: with `href` it renders a plain `<a>` unless you pass `linkComponent` (external http(s) and `"#"` hrefs always stay a plain `<a>`); omit `href` and give `onClick` for a `<button>` item (theme toggles, palette openers); with both, onClick runs alongside navigation. keys fold in the index, so placeholder hrefs (`"#"`) can repeat — pass `id` for stability across reorders.
 
 behavior comes from the shipped headless `useNavbar` hook: open state for the mobile panel, outside-click and Escape close (attached to `panelRef`), and a body scroll lock while the panel is open. z-index layering inside: the nav bar is z-40, the mobile backdrop z-50, the panel z-[80] — so sheet and navbar panels share a layer and dialog (z-[100]) / command-palette (z-[110]) sit above them.
+
+**never wrap `<Navbar>` in an element that carries a `transform`** — that is the one gotcha worth the afternoon it otherwise costs. a transformed ancestor becomes the containing block for `position: fixed` descendants, so `inset-x-0` resolves against the wrapper's box instead of the viewport and the bar renders at the wrapper's width, links bunched toward the middle. it is nastiest when the wrapper is animating in: `<motion.div animate={{ y: 0 }}>` holds a real transform for the length of the tween and then writes `transform: none`, so the bar sits narrow and visibly snaps to full width when the animation lands. wrapping in `<FadeIn>` is worse — a css animation with `fill-mode: both` settles on `translate(0, 0)`, which is still not `none`, so the bar never escapes. use the `entrance` prop instead: it animates the bar row *inside* the nav, which has no fixed descendants of its own, and leaves both the `<nav>` and the mobile panel untransformed.
 
 because it is `position: fixed`, embedding it in a bounded demo/frame requires overriding with `className="relative"` (tailwind-merge lets your class win on the position utility). it does no active-link highlighting and no scroll behavior — it is the top-of-page shell; use sidebar for hierarchical in-page nav and toc for scroll-spy.
 
@@ -195,10 +197,15 @@ because it is `position: fixed`, embedding it in a bounded demo/frame requires o
 - `links: NavLink[]` — right-side items — { label: ReactNode, href?, onClick?, id? }[]; omit href (with onClick) for a `<button>` item.
 - `actions: ReactNode` — right-side desktop extras.
 - `menuLabel: string = 'menu'` — heading atop the mobile panel.
+- `linkComponent: ElementType = 'a'` — anchor component for internal hrefs; pass next/link for client-side navigation. external http(s) and `"#"` hrefs stay a plain `<a>`.
+- `entrance: boolean | { y?: number; duration?: number; delay?: number }` — fade + slide the bar in on mount. `true` is the house entrance (y: -10, 0.8s, easeInOut); an object tunes it. under `prefers-reduced-motion` it keeps the delay and duration but fades without the travel, so a bar sequenced after a splash still arrives on cue.
+- `className: string` — merges onto the `<nav>`; override `position` here to pin it inside a bounded frame.
 
 **Example:**
 ```tsx
 <Navbar
+  linkComponent={Link}
+  entrance={{ delay: 16, duration: 1 }}  // arrives after the intro finishes
   brand={<span className="text-sm text-white">justin06lee.dev</span>}
   leftLinks={[{ label: "docs", href: "/docs" }]}
   links={[
