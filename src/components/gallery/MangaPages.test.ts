@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MangaPages, frameWidthCss, type MangaPiece } from "./MangaPages";
+import { MangaPages, frameWidthCss, pageWidthCss, type MangaPiece } from "./MangaPages";
 import { packPages, type PanelFrame } from "@/lib/manga-layout";
 
 const piece = (id: string, width = 100, height = 100): MangaPiece => ({
@@ -176,5 +176,52 @@ describe("MangaPages — the emitted CSS reproduces the solve", () => {
         }
       }
     }
+  });
+});
+
+describe("MangaPages as a band", () => {
+  const H = "min(78svh, 780px)";
+
+  it("gives each page the band's height and a width solved from it", () => {
+    // The affine relation read from the other end: w = m·h + c, with h a CSS
+    // length so the band resizes with the window and nothing is measured.
+    const pages = packPages(
+      [piece("a", 1234, 393), piece("b", 686, 948), piece("c", 528, 528)],
+      3,
+      { referenceHeight: 780 },
+    );
+    const html = renderToStaticMarkup(createElement(MangaPages, { pages, pageHeight: H }));
+
+    for (const page of pages) {
+      expect(html).toContain(`width:${pageWidthCss(page, H)}`);
+    }
+    expect(html).toContain(`height:${H}`);
+    // A band lays its pages across, and no page may be squeezed to fit.
+    expect(html).toContain("flex:none");
+    expect(html).not.toContain("flex-col");
+  });
+
+  it("stacks down the page when no band height is given", () => {
+    const html = renderToStaticMarkup(
+      createElement(MangaPages, { pages: [panel("solo", 1, 100, 0)] }),
+    );
+    expect(html).toContain("flex-col");
+    expect(html).not.toContain("calc(1 * ");
+  });
+
+  it("drops the gap term from the width when a page has no seams", () => {
+    expect(pageWidthCss(panel("solo", 1.5, 100, 0), "600px")).toBe("calc(1.5 * 600px)");
+  });
+
+  it("carries the gap term in px, so seams stay 8px at any band height", () => {
+    const row: PanelFrame<MangaPiece> = {
+      kind: "row",
+      children: [panel("l", 1, 50, 0), panel("r", 1, 50, 0)],
+      percent: 100,
+      offset: 0,
+      m: 2,
+      c: 8,
+    };
+    expect(pageWidthCss(row, "min(78svh, 780px)")).toBe("calc(2 * min(78svh, 780px) + 8px)");
   });
 });

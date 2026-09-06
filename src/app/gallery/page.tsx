@@ -5,7 +5,7 @@ import { GalleryTabs, type GalleryTab } from "@/components/GalleryTabs";
 import { ProjectWall, type WallPiece } from "@/components/gallery/ProjectWall";
 import Link from "next/link";
 import { MangaPages, type MangaPiece } from "@/components/gallery/MangaPages";
-import { Pane } from "@/components/chrome/pane";
+import { Marquee } from "@/components/chrome/marquee";
 import { AppStore } from "@/components/gallery/AppStoreList";
 import { CrtMonitor, type CrtChannel } from "@/components/gallery/CrtMonitor";
 import { getItemsByCategory, type SiteGalleryItem } from "@/lib/items";
@@ -13,7 +13,7 @@ import { getProjectWallPieces, repoUrlFor } from "@/lib/project-images";
 import { getProjectVideo } from "@/lib/project-video";
 import { getAppCard, type AppCard } from "@/lib/app-store";
 import { seedWall } from "@/lib/gallery-wall";
-import { packPages } from "@/lib/manga-layout";
+import { packPages, STRIP_HEIGHT, STRIP_HEIGHT_CSS } from "@/lib/manga-layout";
 import { GALLERY_THEMES, THEME_META, classifyTheme, type GalleryTheme } from "@/lib/gallery-themes";
 import { getSiteConfig } from "@/lib/site-config";
 import { isAdminServer } from "@/lib/auth-server";
@@ -192,6 +192,11 @@ async function buildSections(
     return { panels: grouped.panels, terminal, icons };
 }
 
+/** Black page-turn gutter, between pages and between one loop and the next
+ *  alike — the seam where the band repeats has to read as another page
+ *  turn, not as a join. */
+const PAGE_GAP = 48;
+
 function ThemedSections({ sections, seed }: { sections: Sections; seed: number }) {
     // Offset the seed per section so two sections of the same size don't deal
     // themselves into identical row rhythms.
@@ -216,16 +221,22 @@ function ThemedSections({ sections, seed }: { sections: Sections; seed: number }
                         </div>
                     )}
 
-                    {/* The wall is hung inside a window with its own scrollbar.
-                        Left to itself it grows a page taller with every project
-                        until the set and the store below it are never reached;
-                        bounded, it stays one screen tall however many projects
-                        there are. The pane carries the accessible name, so the
-                        wall inside it doesn't repeat it. */}
+                    {/* The wall drifts sideways as a band, one page tall. Left
+                        to run down the screen it grows a page taller with every
+                        project until the set and the store below it are never
+                        reached; as a band it stays that one page however many
+                        projects there are, and what a new project costs is a
+                        longer loop rather than more scrolling. The band carries
+                        the accessible name, so the wall inside it doesn't repeat
+                        it, and the repeats behind the first are inert. */}
                     {theme === "panels" && (
-                        <Pane maxHeight="min(85vh, 960px)" ariaLabel="panels">
-                            <MangaPages pages={packPages(sections.panels, sectionSeed)} />
-                        </Pane>
+                        <Marquee speed={40} gap={PAGE_GAP} fade ariaLabel="panels">
+                            <MangaPages
+                                pages={packPages(sections.panels, sectionSeed, { referenceHeight: STRIP_HEIGHT })}
+                                pageHeight={STRIP_HEIGHT_CSS}
+                                pageGap={PAGE_GAP}
+                            />
+                        </Marquee>
                     )}
                     {/* The set stands off the label by the same dark that
                         separates its pool from the next hang. */}

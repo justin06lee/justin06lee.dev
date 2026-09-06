@@ -42,3 +42,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# other harnesses' local skill installs — this repo ships .claude/
+.cursor/
+.gemini/
+.agents/
+.opencode/

@@ -17,6 +17,13 @@ export type MangaPagesProps = {
   gap?: number;
   /** Black page-turn gutter between one page and the next, in px. */
   pageGap?: number;
+  /**
+   * Hang the pages as a horizontal band at this height instead of stacking
+   * them down the screen. Any CSS length — the value goes into a `calc()`, so
+   * `min(78svh, 780px)` is as valid as `720px` and the band stays responsive
+   * with no measurement.
+   */
+  pageHeight?: string;
   className?: string;
   ariaLabel?: string;
 };
@@ -33,31 +40,59 @@ export type MangaPagesProps = {
  * The consequence that matters: a panel's box is always exactly its image's
  * aspect ratio, so the art is never cropped and never letterboxed.
  *
- * The wall grows downward with every project, so the gallery hangs it inside
- * a `Pane` — a bounded window with its own scrollbar — rather than letting it
- * push the hangs below it off the end of the page.
+ * The wall grows with every project, so the gallery never lets it run down the
+ * page: `pageHeight` hangs it as a band instead, every page the same height and
+ * drifting sideways, so the hangs below it stay one screen away however many
+ * projects there are.
  */
 export function MangaPages({
   pages,
   gap = 8,
   pageGap = 48,
+  pageHeight,
   className,
   ariaLabel,
 }: MangaPagesProps) {
+  const strip = pageHeight !== undefined;
+
   return (
     <div
       role="group"
       aria-label={ariaLabel}
-      className={cn("flex w-full flex-col", className)}
+      className={cn("flex", strip ? "items-start" : "w-full flex-col", className)}
       style={{ gap: pageGap }}
     >
       {pages.map((page, index) => (
-        <div key={index} style={{ width: frameWidthCss(page), marginInline: "auto" }}>
+        <div
+          key={index}
+          style={
+            strip
+              ? { width: pageWidthCss(page, pageHeight!), height: pageHeight, flex: "none" }
+              : { width: frameWidthCss(page), marginInline: "auto" }
+          }
+        >
           <Node frame={page} width="100%" gap={gap} />
         </div>
       ))}
     </div>
   );
+}
+
+/**
+ * A page's width at a given height, as CSS: `w = m·h + c`, the same affine
+ * relation the rest of the layout runs on, only solved from the other end.
+ *
+ * `height` stays a CSS length rather than a number so the band can be sized in
+ * viewport units — the browser evaluates the multiply, and the pages resize
+ * with the window without a measurement or a re-solve. `m` is a bare number, so
+ * `calc(1.62 * min(78svh, 780px) + 8px)` is exactly what it looks like.
+ */
+export function pageWidthCss(frame: PanelFrame<MangaPiece>, height: string): string {
+  const m = round(frame.m, 6);
+  const c = round(frame.c, 3);
+  if (c === 0) return `calc(${m} * ${height})`;
+  const sign = c < 0 ? "-" : "+";
+  return `calc(${m} * ${height} ${sign} ${Math.abs(c)}px)`;
 }
 
 /**

@@ -29,10 +29,30 @@
  * is as tall as its panels require, rather than the panels being as tall as the
  * page allows.
  *
+ * A horizontal band inverts which dimension is given: every page shares the
+ * band's height and it is the *width* that varies. The geometry is untouched —
+ * one affine family, and fixing either end fixes the other — but scoring has to
+ * follow, or `minPanelSize` is measured at a size the page will never be drawn
+ * at. That is what `referenceHeight` is for.
+ *
  * Because the relation is affine, each child's width is also affine in the
  * parent's width, so the whole layout emits as `calc(P% + Qpx)` per node and
  * the browser reproduces it exactly. No measurement, no client JS, no reflow.
  */
+
+/**
+ * The height the gallery hangs its band at, twice over: the number the packer
+ * scores against and the CSS length the browser draws. One definition, because
+ * the two have to agree — the pack picks page structures for panels of a given
+ * size, and a browser drawing them at some other size makes that choice a lie.
+ *
+ * Below ~1000px of viewport the svh term wins and the whole band draws smaller
+ * than the figure scoring used. That is the same slack the layout already lives
+ * with down the page, where `minPanelSize` is a share of `referenceWidth` and a
+ * narrow window shrinks every panel together.
+ */
+export const STRIP_HEIGHT = 780;
+export const STRIP_HEIGHT_CSS = `min(78svh, ${STRIP_HEIGHT}px)`;
 
 export type Sized = { width: number; height: number };
 
@@ -250,6 +270,16 @@ export type PackOptions = {
   gap?: number;
   /** Width the scoring reasons about, in px. Geometry itself is width-free. */
   referenceWidth?: number;
+  /**
+   * Height the pages will be drawn at, in px. Set this when the wall hangs as
+   * a horizontal band, where the height is what every page shares and the
+   * *width* is what varies to absorb the images — the mirror of a page down
+   * the screen. Scoring then measures panels at the size they will really be
+   * drawn, so `minPanelSize` is a true floor rather than a share of
+   * `referenceWidth`; without it a dense page, squeezed to the band height,
+   * quietly lands 27% under the floor the packer thought it had cleared.
+   */
+  referenceHeight?: number;
   /** Page height bounds, as a fraction of the container width. */
   minPageHeight?: number;
   maxPageHeight?: number;
@@ -277,7 +307,10 @@ const DEFAULTS = {
 /** Assignments to try per template. Small n is exhaustive; larger n is sampled. */
 const ASSIGNMENT_CAP = 48;
 
-type Scoring = Required<Pick<PackOptions, "referenceWidth" | "minPageHeight" | "maxPageHeight" | "minPanelSize">>;
+type Scoring = Required<
+  Pick<PackOptions, "referenceWidth" | "minPageHeight" | "maxPageHeight" | "minPanelSize">
+> &
+  Pick<PackOptions, "referenceHeight">;
 
 /**
  * How page-like a solved page is. Lower is better; `Infinity` rejects.
@@ -291,9 +324,15 @@ type Scoring = Required<Pick<PackOptions, "referenceWidth" | "minPageHeight" | "
  * is the same size is exactly the flat look this replaced.
  */
 function scorePage<T>(root: Solved<T>, opts: Scoring, target: number, jitter: number): number {
-  const width = opts.referenceWidth;
-  const height = (width - root.c) / root.m;
+  // A page is one affine family, so fixing either dimension fixes the other:
+  // down the page the container's width is the constant, across a band it is
+  // the height. `fraction` below is the page's own aspect either way, so the
+  // band terms need no second form.
+  const strip = opts.referenceHeight !== undefined;
+  const height = strip ? opts.referenceHeight! : (opts.referenceWidth - root.c) / root.m;
+  const width = strip ? root.m * height + root.c : opts.referenceWidth;
   if (!Number.isFinite(height) || height <= 0) return Infinity;
+  if (!Number.isFinite(width) || width <= 0) return Infinity;
 
   const boxes: { w: number; h: number }[] = [];
   collectBoxes(root, width, boxes);
@@ -411,9 +450,11 @@ function layoutPage<T>(panels: Seed<T>[], gap: number, opts: Scoring, rng: () =>
   const root = best ?? build({ kind: "row", children: panels.map(() => PANEL) }, panels, { at: 0 }, gap);
 
   // A lone panel is the one case with no neighbouring art to absorb its height,
-  // so it is the one case that gets narrowed instead of run to full width.
+  // so it is the one case that gets narrowed instead of run to full width. In a
+  // band the height is already fixed, so a lone panel simply comes out narrow
+  // and there is nothing to correct.
   const height = (opts.referenceWidth - root.c) / root.m;
-  if (root.kind === "panel" && height > opts.maxPageHeight * opts.referenceWidth) {
+  if (opts.referenceHeight === undefined && root.kind === "panel" && height > opts.maxPageHeight * opts.referenceWidth) {
     return toFrame(root, opts.maxPageHeight * root.aspect * 100, 0);
   }
   return toFrame(root, 100, 0);
@@ -438,6 +479,7 @@ export function packPages<T extends Sized>(
   const rhythm = options.pageRhythm ?? DEFAULTS.pageRhythm;
   const scoring: Scoring = {
     referenceWidth: options.referenceWidth ?? DEFAULTS.referenceWidth,
+    referenceHeight: options.referenceHeight,
     minPageHeight: options.minPageHeight ?? DEFAULTS.minPageHeight,
     maxPageHeight: options.maxPageHeight ?? DEFAULTS.maxPageHeight,
     minPanelSize: options.minPanelSize ?? DEFAULTS.minPanelSize,

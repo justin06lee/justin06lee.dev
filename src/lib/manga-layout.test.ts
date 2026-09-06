@@ -6,6 +6,7 @@ import {
   packPages,
   panelsOf,
   shuffle,
+  STRIP_HEIGHT,
   type PanelFrame,
 } from "./manga-layout";
 
@@ -336,5 +337,79 @@ describe("packPages — edges", () => {
     const pages = packPages(many, 4);
     expect(Date.now() - started).toBeLessThan(2000);
     expect(allPanels(pages)).toHaveLength(60);
+  });
+});
+
+describe("packPages — as a band", () => {
+  const H = STRIP_HEIGHT;
+  /** Every page in a band is drawn at the band's height, so its width follows. */
+  const bandWidth = (page: PanelFrame<{ id: string }>) => page.m * H + page.c;
+
+  it("gives every page exactly the band's height", () => {
+    // The whole point of the band: the pages differ in width, never in height,
+    // so the hang is one page tall however many projects there are.
+    for (let seed = 0; seed < 20; seed++) {
+      for (const page of packPages(REAL, seed, { referenceHeight: H })) {
+        const boxes = measurePage(page, bandWidth(page), GAP);
+        const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+        expect(bottom, `seed ${seed}`).toBeCloseTo(H, 6);
+      }
+    }
+  });
+
+  it("still lands every panel on its own aspect", () => {
+    // Fixing the height instead of the width must not cost the one hard
+    // constraint: the art is composed, so a panel's box is its image's shape.
+    for (let seed = 0; seed < 20; seed++) {
+      for (const page of packPages(REAL, seed, { referenceHeight: H })) {
+        for (const box of measurePage(page, bandWidth(page), GAP)) {
+          const source = REAL.find((r) => r.id === box.item.id)!;
+          expect(box.w / box.h, `${box.item.id} @ seed ${seed}`).toBeCloseTo(
+            source.width / source.height,
+            4,
+          );
+        }
+      }
+    }
+  });
+
+  it("holds the panel floor at the size the band actually draws", () => {
+    // The reason `referenceHeight` exists. Scored against the 1120px page and
+    // then squeezed to the band, a dense page lands well under the floor the
+    // packer thought it had cleared; scored against the band, it doesn't.
+    let worstScoredAsPage = Infinity;
+    let worstScoredAsBand = Infinity;
+    for (let seed = 0; seed < 20; seed++) {
+      for (const page of packPages(REAL, seed)) {
+        for (const b of measurePage(page, bandWidth(page), GAP)) {
+          worstScoredAsPage = Math.min(worstScoredAsPage, b.w, b.h);
+        }
+      }
+      for (const page of packPages(REAL, seed, { referenceHeight: H })) {
+        for (const b of measurePage(page, bandWidth(page), GAP)) {
+          worstScoredAsBand = Math.min(worstScoredAsBand, b.w, b.h);
+        }
+      }
+    }
+    expect(worstScoredAsBand).toBeGreaterThan(worstScoredAsPage);
+    expect(worstScoredAsBand).toBeGreaterThan(140);
+  });
+
+  it("leaves a lone tall panel narrow rather than narrowing the page", () => {
+    // Down the page a lone slab is capped by shrinking its box. In a band the
+    // height is already the cap, so the correction would only shrink it twice.
+    const [page] = packPages([item(500, 2000, "slab")], 1, { referenceHeight: H });
+    expect(page.percent).toBe(100);
+    expect(bandWidth(page)).toBeCloseTo(H * (500 / 2000), 6);
+  });
+
+  it("keeps the band's page widths inside the same aspect band as a page", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      for (const page of packPages(REAL, seed, { referenceHeight: H })) {
+        const aspect = bandWidth(page) / H;
+        expect(aspect, `seed ${seed}`).toBeGreaterThan(0.9);
+        expect(aspect, `seed ${seed}`).toBeLessThan(3);
+      }
+    }
   });
 });
