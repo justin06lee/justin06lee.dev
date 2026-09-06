@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { Power } from "lucide-react";
+import { ArrowUpRight, Power } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Grain } from "@/components/chrome/grain";
 import { createCrtRenderer, loadPicture, sourceTint, type CrtRenderer } from "./crt-gl";
@@ -91,12 +91,38 @@ const CLICK_TRAVEL_DEG = 6;
  */
 const HEARD_VIEWPORTS = 0.25;
 const FALLOFF_VIEWPORTS = 0.5;
+/**
+ * A touch screen has no hover, so on one it is *scrolling* that asks for the
+ * project's picture: the clip dissolves into it as the set comes to the middle
+ * of the view and back out again as it leaves. Both are shares of the
+ * viewport's height — the picture is whole while the set's middle is within
+ * PICTURE_HOLD of the view's middle, and the dissolve takes DISSOLVE_SPAN
+ * either side of that. The hold is what makes it legible: without it the
+ * picture is only ever whole for the one frame the set crosses the middle.
+ */
+const PICTURE_HOLD = 0.06;
+const DISSOLVE_SPAN = 0.42;
+/**
+ * A hover can't happen here, so the affordances a pointer gets — the kick, the
+ * picture, and the fact that the glass is a link at all — have to be offered
+ * some other way. `(hover: none)` is the honest test, and the width term is
+ * there so a desktop window pulled down to a phone's size shows the same thing
+ * rather than looking broken.
+ */
+const TOUCH_QUERY = "(hover: none), (max-width: 767px)";
+/** How far the dissolve moves before the room's colour is written again. */
+const GLOW_STEP = 0.05;
 /** The discs behind each control's cap that make its side, deepest last. */
 const SIDE_LAYERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 /** What static throws on the wall. */
 const STATIC_TINT: [number, number, number] = [200, 200, 200];
 
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
+const smoothstep = (t: number) => {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
+};
 
 /**
  * The terminal pieces, playing on one small old monitor in a dark room.
@@ -145,6 +171,12 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const [still, setStill] = useState(false);
   const [tint, setTint] = useState<[number, number, number] | null>(null);
   const [videoReady, setVideoReady] = useState(false);
+  // No hover here, so the set offers the picture on scroll and an open button
+  // under the cabinet instead. Read after mount, so the markup matches.
+  const [touch, setTouch] = useState(false);
+  // Only for the no-WebGL fallback, which crosses in CSS and so needs the
+  // dissolve as a boolean; the shader gets the continuous value from a ref.
+  const [pictured, setPictured] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -174,6 +206,14 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   const lastDropAt = useRef(0);
   const resizeRef = useRef<(() => void) | null>(null);
   const lastStatic = useRef(-1);
+  // How much of the project's picture has dissolved over the clip (0 the clip,
+  // 1 the picture), the mix the shader was last given, and the mix the room
+  // was last lit from. All refs: the dissolve moves on every scroll frame, and
+  // none of it is worth a render.
+  const pictureMix = useRef(0);
+  const lastMix = useRef(-1);
+  const lastGlowMix = useRef(-1);
+  const touchRef = useRef(false);
   const renderer = useRef<CrtRenderer | null>(null);
   const raf = useRef<number | null>(null);
   const visible = useRef(true);
@@ -226,7 +266,11 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     const colour = g.snowing
       ? STATIC_TINT
       : g.showingVideo && videoTint.current
-        ? videoTint.current
+        // Mid-dissolve the room is lit by both, in the same proportion as the
+        // glass: the light and what throws it can't disagree.
+        ? g.tint
+          ? mixTint(videoTint.current, g.tint, pictureMix.current)
+          : videoTint.current
         : !g.tint
           ? STATIC_TINT
           : g.hover && !g.hasClip
@@ -272,10 +316,26 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     // The bars hold at full for most of the glitch, then drop out fast.
     const g = (now - t.glitchAt) / GLITCH_MS;
     const glitch = reduced.current || g >= 1 ? 0 : g < 0.7 ? 1 : 1 - (g - 0.7) / 0.3;
+    // The dissolve between the clip and the picture. Written when it moves,
+    // not every frame: on a still page it never moves, and on a pointer it
+    // only ever takes the two ends.
+    const mix = uploadVideo.current ? 1 - pictureMix.current : 0;
+    if (mix !== lastMix.current) {
+      lastMix.current = mix;
+      r.setVideoMix(mix);
+      // The room follows in steps rather than per frame — the lights carry a
+      // 700ms colour transition, so rewriting them every frame would restart
+      // it every frame and recalculate style for a change nobody can see.
+      if (Math.abs(mix - lastGlowMix.current) > GLOW_STEP || mix === 0 || mix === 1) {
+        lastGlowMix.current = mix;
+        applyGlow();
+      }
+    }
     // The clip: upload a frame when it has a new one, and every so often
-    // read its colour for the room.
+    // read its colour for the room. Nothing to do while it is fully dissolved
+    // away — it plays on, and its next visible frame is uploaded then.
     const v = videoRef.current;
-    if (uploadVideo.current && v && v.readyState >= 2) {
+    if (uploadVideo.current && mix > 0 && v && v.readyState >= 2) {
       if (v.currentTime !== lastVideoTime.current) {
         lastVideoTime.current = v.currentTime;
         r.setVideoFrame(v);
@@ -352,6 +412,21 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     };
     media.addEventListener("change", onMedia);
 
+    const touchMedia = window.matchMedia(TOUCH_QUERY);
+    const onTouchMedia = () => {
+      touchRef.current = touchMedia.matches;
+      setTouch(touchMedia.matches);
+      // A window dragged back over the breakpoint has a pointer again, so the
+      // scrolled-in picture has to give the glass back to the hover.
+      if (!touchMedia.matches && pictureMix.current !== 0) {
+        pictureMix.current = 0;
+        setPictured(false);
+      }
+      kick();
+    };
+    onTouchMedia();
+    touchMedia.addEventListener("change", onTouchMedia);
+
     renderScale.current = Math.min(2, window.devicePixelRatio || 1);
     const resize = () => {
       const scale = Math.min(renderScale.current, window.devicePixelRatio || 1);
@@ -403,6 +478,19 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
       level.current = heard;
       speaker.current?.setLevel(heard);
       applyVolume();
+
+      // ...and on a touch screen, so does the picture. Same measurement, its
+      // own curve: a hold at the middle wide enough to read the picture in,
+      // and a smoothstep so the dissolve starts and ends softly rather than
+      // beginning the moment the set appears.
+      const near = touchRef.current
+        ? smoothstep(1 - (Math.abs(cy - vh / 2) / vh - PICTURE_HOLD) / DISSOLVE_SPAN)
+        : 0;
+      if (near !== pictureMix.current) {
+        pictureMix.current = near;
+        setPictured(near > 0.5);
+        kick();
+      }
     };
     const onScroll = () => {
       if (measuring === null) measuring = requestAnimationFrame(measure);
@@ -413,6 +501,7 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
 
     return () => {
       media.removeEventListener("change", onMedia);
+      touchMedia.removeEventListener("change", onTouchMedia);
       ro.disconnect();
       io.disconnect();
       if (raf.current !== null) cancelAnimationFrame(raf.current);
@@ -502,10 +591,11 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
     if (wantsOn.current) playVideo(v);
   }, [current?.video, still, playVideo, applyGlow]);
 
-  // Tell the shader which source to draw, and the loop whether to feed it.
+  // Whether the clip is a source on the glass at all. How much of it shows is
+  // the dissolve, and that is the draw loop's business — it moves on scroll
+  // frames, which must not be renders.
   useEffect(() => {
     uploadVideo.current = showingVideo;
-    renderer.current?.showVideo(showingVideo);
     kick();
   }, [showingVideo, kick]);
 
@@ -698,6 +788,9 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
   if (count === 0) return null;
 
   const screenLabel = on ? `open ${current.title}` : "switch on";
+  // No shader to dissolve with, so the fallback takes the halfway point as the
+  // moment the picture wins.
+  const fallbackVideo = showingVideo && !pictured;
   // --crt-glow is written by applyGlow, not here.
   const stageStyle = { "--crt-lit": on ? 1 : 0 } as CSSProperties;
 
@@ -735,13 +828,13 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
                 "pointer-events-none absolute",
                 glOk
                   ? "left-0 top-0 h-px w-px opacity-0"
-                  : cn("inset-0 h-full w-full object-cover transition-opacity duration-300", showingVideo && on ? "opacity-100" : "opacity-0"),
+                  : cn("inset-0 h-full w-full object-cover transition-opacity duration-300", fallbackVideo && on ? "opacity-100" : "opacity-0"),
               )}
             />
             {glOk ? (
               <canvas ref={canvasRef} aria-hidden className="absolute inset-0 h-full w-full" />
             ) : (
-              <Fallback channel={current} on={on} snowing={snowing} inverted={hover && !hasClip} imageHidden={showingVideo} />
+              <Fallback channel={current} on={on} snowing={snowing} inverted={hover && !hasClip} imageHidden={fallbackVideo} />
             )}
           </div>
 
@@ -839,6 +932,28 @@ export function CrtMonitor({ channels, className, ariaLabel = "terminal" }: CrtM
 
         {/* The floor: the set's shadow, and the light it throws in front. */}
         <div aria-hidden className="crt-floor" />
+
+        {/* A pointer discovers the glass is a link by hovering it — the set
+            kicks, the picture comes up, the cursor changes. None of that
+            happens under a thumb, so on a touch screen the set gets a button
+            that says so, standing in the pool of light it throws. Absolute
+            over that pool rather than in flow: the room below is sized for the
+            light, and a button in flow would push the store down by its whole
+            height on every screen. */}
+        {touch && on && current.href && (
+          <div className="absolute inset-x-0 top-full z-[2] flex justify-center pt-[5%]">
+            <a
+              href={current.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={screenLabel}
+              className="crt-open"
+            >
+              open
+              <ArrowUpRight aria-hidden className="size-3.5" strokeWidth={2.25} />
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Room below for the pool of light on the floor: the pool is bright
@@ -907,6 +1022,20 @@ function invertTint([r, g, b]: [number, number, number]): [number, number, numbe
   return [255 - r, 255 - g, 255 - b];
 }
 
+/** `t` of the way from one tint to another, for the light mid-dissolve. */
+function mixTint(
+  from: [number, number, number],
+  to: [number, number, number],
+  t: number,
+): [number, number, number] {
+  const k = clamp01(t);
+  return [
+    Math.round(from[0] + (to[0] - from[0]) * k),
+    Math.round(from[1] + (to[1] - from[1]) * k),
+    Math.round(from[2] + (to[2] - from[2]) * k),
+  ];
+}
+
 const CSS = `
 @keyframes crt-shake {
   0% { transform: translate(0, 0); }
@@ -944,6 +1073,43 @@ const CSS = `
    gradient re-rasterised on every frame of every transition. transform-origin
    is the box's own corner so the percentages below stay the full-size ones
    divided by the scale. */
+/* The button under the set. Square, hard-edged, and lit by the set rather
+   than by the page: its border and the block it sits on are the colour the
+   glass is throwing, so it reads as a thing standing in that light rather than
+   as a control pasted over it. Uppercase is deliberate here and nowhere else
+   on the site — this is a label on a piece of hardware, and hardware is
+   labelled in capitals. Pressing it moves it onto its own shadow, which is
+   what a physical button does, and what a hover state can't say to a thumb. */
+.crt-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.95rem;
+  border: 1px solid color-mix(in srgb, rgb(var(--crt-glow)) 60%, transparent);
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 0 color-mix(in srgb, rgb(var(--crt-glow)) 30%, transparent);
+  transition:
+    transform 110ms ease,
+    box-shadow 110ms ease,
+    border-color 700ms ease;
+}
+.crt-open:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 0 color-mix(in srgb, rgb(var(--crt-glow)) 30%, transparent);
+}
+.crt-open:focus-visible {
+  outline: 1px solid #fff;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .crt-open { transition: none; }
+}
+
 .crt-room, .crt-floor, .crt-bezel-light {
   pointer-events: none;
   color: rgb(var(--crt-glow));
