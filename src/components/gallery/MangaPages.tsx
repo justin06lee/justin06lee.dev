@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PanelFrame } from "@/lib/manga-layout";
 
@@ -182,21 +183,52 @@ function Panel({
           {item.title}
         </span>
       )}
-      <span
-        className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 truncate",
-          "bg-gradient-to-t from-black/90 to-transparent px-2.5 pb-1.5 pt-7",
-          "text-sm lowercase text-white opacity-0 transition-opacity duration-200",
-          "group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none",
-        )}
-      >
-        {item.title}
-      </span>
+      {/* The panel's name, and — where a thumb is reading — a chip saying the
+          panel opens something. A pointer gets this on hover and works the
+          rest out from the cursor; a touch screen has neither, so below the
+          hover breakpoint the bar is simply always on and carries the chip.
+          The media query is the exact complement of the set's TOUCH_QUERY, so
+          this page's two touch affordances appear and disappear together —
+          and it tests `hover`, not width alone, because a tablet is wide and
+          still has no pointer. Suppressed on a panel with no art: there the
+          box is already nothing but its title. */}
+      {item.src && (
+        <span
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-2",
+            "bg-gradient-to-t from-black/95 via-black/70 to-transparent px-2.5 pb-2 pt-8",
+            "text-sm lowercase text-white transition-opacity duration-200 motion-reduce:transition-none",
+            "[@media(hover:hover)_and_(min-width:768px)]:opacity-0",
+            "group-hover:opacity-100 group-focus-visible:opacity-100",
+          )}
+        >
+          {/* The chip sits *beside* the name, not pushed to the far edge: on a
+              full-width panel that put it a thousand pixels from the thing it
+              refers to, and it read as decoration rather than as the name's
+              affordance. */}
+          <span className="min-w-0 truncate">{item.title}</span>
+          {item.href && (
+            <span
+              aria-hidden
+              className={cn(
+                "grid size-6 shrink-0 place-items-center border border-white/45 bg-black/50",
+                "[@media(hover:hover)_and_(min-width:768px)]:hidden",
+              )}
+            >
+              <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
+            </span>
+          )}
+        </span>
+      )}
     </>
   );
 
   const boxClass = cn(
-    "group relative block overflow-hidden border border-white/12 bg-white/[0.02] outline-none",
+    "group relative block overflow-hidden border bg-white/[0.02] outline-none",
+    // A brighter edge where there is no cursor to change on the way in: the
+    // box has to read as something you press, not a picture that happens to
+    // be framed. A pointer gets the quiet 12% back, and the hover to go with it.
+    "border-white/30 [@media(hover:hover)_and_(min-width:768px)]:border-white/12",
     "transition-colors duration-200 hover:border-white/40 focus-visible:border-white/60",
     "motion-reduce:transition-none",
   );

@@ -117,6 +117,34 @@ describe("MangaPages content", () => {
     expect(html).toContain("no-art");
     expect(html).not.toContain("<img");
   });
+
+  it("names the panel and marks it as opening something", () => {
+    // The caption is what a thumb has instead of a hover: it is in the markup
+    // unconditionally, and the media query below decides when it shows.
+    const html = renderToStaticMarkup(
+      createElement(MangaPages, {
+        pages: [panel("named", 1, 100, 0, { href: "https://example.com", src: "/a.png" })],
+      }),
+    );
+    expect(html).toContain("[@media(hover:hover)_and_(min-width:768px)]:opacity-0");
+    expect(html).toContain("<svg");
+  });
+
+  it("keeps the arrow off a panel that opens nothing", () => {
+    const html = renderToStaticMarkup(
+      createElement(MangaPages, { pages: [panel("unlinked", 1, 100, 0, { src: "/a.png" })] }),
+    );
+    expect(html).not.toContain("<svg");
+  });
+
+  it("gives a placard no caption — the box is already its title", () => {
+    // Otherwise the name renders twice: once as the placard, once under it.
+    const html = renderToStaticMarkup(
+      createElement(MangaPages, { pages: [panel("no-art", 1, 100, 0, { href: "https://e.com" })] }),
+    );
+    expect(html.match(/no-art/g)?.length).toBe(2); // the aria-label and the placard
+    expect(html).not.toContain("bg-gradient-to-t");
+  });
 });
 
 /**
