@@ -44,6 +44,12 @@ const LINE_GAP = 1; // empty-slot beat between lines
 const FADE = 1; // per-element fade duration
 const EXIT_DURATION = 0.7;
 
+// The vertical room the skip button is given at the foot of the overlay: its
+// 3rem stand-off from the bottom edge plus its own 1.25rem line. An empty row
+// of the same height sits above the content so the content stays centred on
+// the viewport and not on the space above the button.
+const SKIP_ROW = "4.25rem";
+
 const lineIn = (i: number) => FIRST_LINE_IN + i * (FADE + LINE_HOLD + LINE_GAP);
 const lineOut = (i: number) => lineIn(i) + FADE + LINE_HOLD;
 
@@ -154,60 +160,84 @@ export function Intro({
             className,
           )}
         >
-          {hasHero && (
-            // Outer div fades the hero out at the end; inner fades it in.
-            <motion.div
-              initial={{ opacity: 1, y: 0 }}
-              animate={{ opacity: 0, y: offset }}
-              transition={{ duration: fade * 0.8, delay: t(heroOut) }}
-              className="mb-12"
-            >
+          {/* Empty twin of the skip row at the foot, so the content between the
+              two is centred on the viewport exactly as it was when the button
+              floated free of the layout. */}
+          {skippable && <div aria-hidden className="flex-1" style={{ minHeight: SKIP_ROW }} />}
+
+          {/* The hero and the lines share one shrinkable box. min-h-0 lets it
+              give way when the viewport is too short for the hero at its
+              natural size — an in-app browser's sheet leaves ~550px, not the
+              ~850 a phone's own browser does — so a tall hero is cropped
+              evenly rather than pushing the skip row off the bottom. The py-3
+              is what the fades need: every element here enters from 10px above
+              its resting place, which the clip would otherwise shave off the
+              hero's first frames. */}
+          <div className="flex min-h-0 flex-col items-center justify-center overflow-hidden py-3">
+            {hasHero && (
+              // Outer div fades the hero out at the end; inner fades it in.
               <motion.div
-                initial={{ opacity: 0, y: -offset }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: fade * 0.8, delay: t(HERO_IN) }}
+                initial={{ opacity: 1, y: 0 }}
+                animate={{ opacity: 0, y: offset }}
+                transition={{ duration: fade * 0.8, delay: t(heroOut) }}
+                // The hero is the one thing allowed to give way when the box
+                // above has to shrink: art can be cropped, the line below it
+                // is words and cannot.
+                className="mb-12 min-h-0"
               >
-                {hero}
-              </motion.div>
-            </motion.div>
-          )}
-
-          {lines.length > 0 && (
-            // Fixed slot: every line renders absolutely into the same box so
-            // they take turns without the layout shifting.
-            <div
-              className="relative min-w-64 text-center text-lg leading-tight"
-              style={{ height: "1.75em" }}
-            >
-              {lines.map((line, i) => (
                 <motion.div
-                  key={i}
-                  className="absolute inset-0 flex items-center justify-center"
-                  initial={{ opacity: 1, y: 0 }}
-                  animate={{ opacity: 0, y: offset }}
-                  transition={{ duration: fade, delay: t(lineOut(i)) }}
+                  initial={{ opacity: 0, y: -offset }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: fade * 0.8, delay: t(HERO_IN) }}
                 >
-                  <motion.div
-                    initial={{ opacity: 0, y: -offset }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: fade, delay: t(lineIn(i)) }}
-                  >
-                    {line}
-                  </motion.div>
+                  {hero}
                 </motion.div>
-              ))}
-            </div>
-          )}
+              </motion.div>
+            )}
 
+            {lines.length > 0 && (
+              // Fixed slot: every line renders absolutely into the same box so
+              // they take turns without the layout shifting.
+              <div
+                className="relative min-w-64 shrink-0 text-center text-lg leading-tight"
+                style={{ height: "1.75em" }}
+              >
+                {lines.map((line, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute inset-0 flex items-center justify-center"
+                    initial={{ opacity: 1, y: 0 }}
+                    animate={{ opacity: 0, y: offset }}
+                    transition={{ duration: fade, delay: t(lineOut(i)) }}
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, y: -offset }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: fade, delay: t(lineIn(i)) }}
+                    >
+                      {line}
+                    </motion.div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* In flow, never `fixed`: as a fixed element the button took up no
+              layout space at all, so on a short viewport the centred column
+              simply grew down over it and the last line rendered on top of the
+              word "skip". Its own row can't be encroached on. */}
           {skippable && (
-            <button
-              type="button"
-              onClick={beginExit}
-              aria-label={skipLabel}
-              className="fixed bottom-12 text-sm text-white/80 underline-offset-4 transition hover:text-white hover:underline"
-            >
-              {skipLabel}
-            </button>
+            <div className="flex flex-1 items-end justify-center pb-12">
+              <button
+                type="button"
+                onClick={beginExit}
+                aria-label={skipLabel}
+                className="text-sm text-white/80 underline-offset-4 transition hover:text-white hover:underline"
+              >
+                {skipLabel}
+              </button>
+            </div>
           )}
         </motion.div>
       )}

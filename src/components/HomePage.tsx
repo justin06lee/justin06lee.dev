@@ -124,7 +124,7 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                 </motion.div>
             </div>
 
-            <div className="h-screen flex flex-col justify-center">
+            <div className="relative h-screen flex flex-col justify-center">
                 <div className="flex flex-col gap-4">
                     <div className="xl:block hidden">
                         {config.pfp?.url && (
@@ -183,20 +183,29 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                                     gallery
                                 </Link>
                             </motion.div>
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 0.5 }}
-                                transition={{ duration: 0.8, delay: ENTER.socials }}
-                                className="md:hidden block self-center mt-120 absolute text-sm text-white"
-                            >
-                                <h1 className="mb-4">...or check out my socials.</h1>
-                                <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 scale-120 cursor-pointer" onClick={handleScroll}>
-                                    <ArrowDown />
-                                </button>
-                            </motion.div>
                         </div>
                     </div>
                 </div>
+
+                {/* Anchored to the foot of the pane, not held 480px below the
+                    gallery link by a margin: the offset was measured against a
+                    tall phone, so on a short viewport — an in-app browser's
+                    sheet leaves ~550px — it overshot the pane entirely and
+                    landed under the fixed navbar on the screen below. Sitting
+                    outside the scale-110 row it keeps that scale itself, and
+                    the pane is the containing block only because the row's
+                    transform no longer intercepts it. */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.5 }}
+                    transition={{ duration: 0.8, delay: ENTER.socials }}
+                    className="md:hidden absolute inset-x-0 bottom-12 scale-110 text-sm text-white"
+                >
+                    <h1 className="mb-4">...or check out my socials.</h1>
+                    <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 scale-120 cursor-pointer" onClick={handleScroll}>
+                        <ArrowDown />
+                    </button>
+                </motion.div>
             </div>
             {/* Last in the cascade: the socials used to mount with no entrance at
                 all and snap in under a page that was still fading. */}
