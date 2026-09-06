@@ -94,8 +94,28 @@ const ENTER = {
     cta: 0.95,
     link: 1.05,
     socials: 1.2,
+    scrollHint: 1.35,
 };
 const RISE = 10;
+
+/**
+ * The "there is more below" affordance, one definition for both panes that
+ * have something under them, so the two can't drift apart. Still, like every
+ * other control on the page: the entrance it fades in on is the movement, and
+ * a perpetual bob would be the only animation on the site that never ends.
+ */
+function ScrollArrow({ onClick, label }: { onClick: () => void; label: string }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            className="inline-flex items-center justify-center size-9 hover:bg-white/10 scale-120 cursor-pointer"
+        >
+            <ArrowDown />
+        </button>
+    );
+}
 
 export default function HomePage({ config }: { config: SiteConfig }) {
     const s = useBreakpointScale();
@@ -112,7 +132,7 @@ export default function HomePage({ config }: { config: SiteConfig }) {
 
     return (
         <div className="grid md:grid-cols-2 grid-cols-1 h-screen">
-            <div className="h-screen flex flex-col justify-center">
+            <div className="relative h-screen flex flex-col justify-center">
                 <motion.div
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -122,9 +142,22 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                         <AsciiSpinningDonut width={Math.round(BASE_W * s)} height={Math.round(BASE_H * s)} R={0.7 * s} r={0.5 * s} K={240 * s} D={7 * s} speed={0.5625} />
                     </div>
                 </motion.div>
+
+                {/* Phones get a screenful per pane, so the donut arrives with
+                    nothing on screen to say the page goes any further. Hidden
+                    from md up, where the whole page is laid out in one viewport
+                    and there is nothing to scroll to. */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.5 }}
+                    transition={{ duration: 0.8, delay: ENTER.scrollHint }}
+                    className="md:hidden absolute inset-x-0 bottom-12 flex justify-center"
+                >
+                    <ScrollArrow onClick={handleScroll} label="scroll down" />
+                </motion.div>
             </div>
 
-            <div className="h-screen flex flex-col justify-center">
+            <div className="relative h-screen flex flex-col justify-center">
                 <div className="flex flex-col gap-4">
                     <div className="xl:block hidden">
                         {config.pfp?.url && (
@@ -183,20 +216,27 @@ export default function HomePage({ config }: { config: SiteConfig }) {
                                     gallery
                                 </Link>
                             </motion.div>
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 0.5 }}
-                                transition={{ duration: 0.8, delay: ENTER.socials }}
-                                className="md:hidden block self-center mt-120 absolute text-sm text-white"
-                            >
-                                <h1 className="mb-4">...or check out my socials.</h1>
-                                <button className="inline-flex items-center justify-center size-9 hover:bg-white/10 scale-120 cursor-pointer" onClick={handleScroll}>
-                                    <ArrowDown />
-                                </button>
-                            </motion.div>
                         </div>
                     </div>
                 </div>
+
+                {/* Anchored to the foot of the pane, not held 480px below the
+                    gallery link by a margin: the offset was measured against a
+                    tall phone, so on a short viewport — an in-app browser's
+                    sheet leaves ~550px — it overshot the pane entirely and
+                    landed under the fixed navbar on the screen below. Sitting
+                    outside the scale-110 row it keeps that scale itself, and
+                    the pane is the containing block only because the row's
+                    transform no longer intercepts it. */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.5 }}
+                    transition={{ duration: 0.8, delay: ENTER.socials }}
+                    className="md:hidden absolute inset-x-0 bottom-12 scale-110 text-sm text-white"
+                >
+                    <h1 className="mb-4">...or check out my socials.</h1>
+                    <ScrollArrow onClick={handleScroll} label="scroll to my socials" />
+                </motion.div>
             </div>
             {/* Last in the cascade: the socials used to mount with no entrance at
                 all and snap in under a page that was still fading. */}

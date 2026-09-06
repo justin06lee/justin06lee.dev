@@ -123,7 +123,15 @@ function Intro({ config, onExit, onDone }: { config: SiteConfig; onExit: () => v
     <ChromeIntro
       hero={
         <div className="text-white -mt-8 mb-4">
-          <AsciiSpinningDonut />
+          {/* The grid stays 60x30 at every size — it is the char cell that
+              shrinks, so the art is the same art, just smaller. Sizing it by
+              breakpoint instead would coarsen the torus on a phone, and the
+              fixed text-xs it replaces measured 432px across: wider than a
+              393px phone, so the donut was clipped down both sides. Both terms
+              are needed — vw for a narrow screen, svh for a short one (an
+              in-app browser's sheet is both) — and 0.75rem caps it at the
+              text-xs it has always been from ~550px up. */}
+          <AsciiSpinningDonut className="font-mono text-[min(2.2vw,1.8svh,0.75rem)] leading-[1] whitespace-pre cursor-default select-none" />
         </div>
       }
       lines={["hi.", justinStep, "welcome to my website."]}
